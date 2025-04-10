@@ -1,3 +1,4 @@
+#pragma once
 #ifndef UNICODE
 #define UNICODE
 #endif
@@ -7,6 +8,7 @@
 const wchar_t CLASS_NAME[] = L"Window Class";
 const wchar_t GAME_NAME[] = L"$GAME_NAME";
 
+// this function runs every time the window receives as message
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
@@ -15,10 +17,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	window_class.lpfnWndProc = WindowProc;
 	window_class.hInstance = hInstance;
 	window_class.lpszClassName = CLASS_NAME; 
-
+	
+	// register window class to operating system
 	RegisterClass(&window_class);
 
 	HWND window_handle = CreateWindowEx(
+
+
 		0,
 		CLASS_NAME,
 		GAME_NAME,
@@ -42,17 +47,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	ShowWindow(window_handle, nCmdShow);
 	
 	MSG msg;
+	// application loop
 	while (GetMessage(&msg, NULL, 0, 0) != 0) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
-
-
+	return 0;
 }
 
 
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	switch (uMsg) {
+	switch (uMsg) { // send messages to the server here
 	case WM_SIZE:
 	{
 		int width = LOWORD(lParam); // get low order word
