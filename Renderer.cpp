@@ -12,22 +12,14 @@ inline void ThrowIfFailed(HRESULT hr)
 bool Renderer::init() {
 	UINT dxgiFactoryFlags = 0;
 #if defined(_DEBUG)
-	// Enable the debug layer (requires the Graphics Tools "optional feature").
-    // NOTE: Enabling the debug layer after device creation will invalidate the active device.
-    {
-        /*
-        if (SUCCEEDED()))
-        {
-            debugController->EnableDebugLayer();
-
-            // Enable additional debug layers.
-            dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
-        }
-        else {
-            return false;
-        }*/
-    }
-
+	// Create a Debug Controller to track errors
+	ID3D12Debug* dc;
+	if (FAILED(D3D12GetDebugInterface(IID_PPV_ARGS(&dc)))) return false;
+	if (FAILED(dc->QueryInterface(IID_PPV_ARGS(&m_debug_controller)))) return false;
+	m_debug_controller->EnableDebugLayer();
+	m_debug_controller->SetEnableGPUBasedValidation(true);
+	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+	dc->Release();
 #endif
 	
 	ComPtr<IDXGIFactory4> factory;
