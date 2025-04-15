@@ -6,6 +6,7 @@
 // this links to the directx12 dynamic library
 // we should probably set this up in the build system later
 #pragma comment(lib,"d3d12.lib")
+#pragma comment(lib,"dxgi.lib")
 
 #include "state.h"
 #define NOMINMAX

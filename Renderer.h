@@ -23,7 +23,7 @@
 // i say right now, we keep the scene and the renderer in one object 
 // and abstract as needed
 
-// using namespace DirectX;
+using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
 class Renderer {
