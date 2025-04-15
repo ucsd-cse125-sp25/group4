@@ -33,9 +33,9 @@ public:
 private:
 	static const UINT FramesInFlight = 2;
 	ComPtr<ID3D12Resource> m_renderTargets[FramesInFlight];
-	ComPtr<ID3D12Debug1> m_debugController;
 	ComPtr<ID3D12Device> m_device;
 #if defined(_DEBUG)
+	ComPtr<ID3D12Debug1> m_debugController;
 	ComPtr<ID3D12DebugDevice> m_debugDevice;
 #endif
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
