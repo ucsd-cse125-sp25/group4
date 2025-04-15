@@ -3,12 +3,18 @@
 #define UNICODE
 #endif
 
+// this links to the directx12 dynamic library
+// we should probably set this up in the build system later
+#pragma comment(lib,"d3d12.lib")
+
+#include "state.h"
+#define NOMINMAX
 #include <windows.h>
 
 const wchar_t CLASS_NAME[] = L"Window Class";
 const wchar_t GAME_NAME[] = L"$GAME_NAME";
 
-// this function runs every time the window receives as message
+// this function runs every time the window receives a message
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
@@ -20,10 +26,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	
 	// register window class to operating system
 	RegisterClass(&window_class);
-
+	
+	// initialize the state
+	State state = {};
+	if (!state.client_state.renderer.init()) {
+		printf("Failed to initalize renderer\n");
+		return 1;
+	}
 	HWND window_handle = CreateWindowEx(
-
-
 		0,
 		CLASS_NAME,
 		GAME_NAME,
@@ -37,7 +47,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		NULL, // parent window
 		NULL, // hMenu
 		hInstance, // instance handle
-		NULL // additional application data
+		&state // application data
 		);
 
 	if (window_handle == NULL) {
@@ -55,8 +65,23 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	return 0;
 }
 
+inline State *GetState(HWND window_handle) {
+	LONG_PTR ptr = GetWindowLongPtr(window_handle, GWLP_USERDATA);
+	State *state = reinterpret_cast<State *>(ptr);
+	return state;
+}
+
 
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	State *state;
+	if (uMsg == WM_CREATE) {
+		CREATESTRUCT *pCreate = reinterpret_cast<CREATESTRUCT *>(lParam);
+		state = reinterpret_cast<State *>(pCreate->lpCreateParams);
+		SetWindowLongPtr(window_handle, GWLP_USERDATA, (LONG_PTR)state);
+	}
+	else {
+		state = GetState(window_handle);
+	}
 	switch (uMsg) { // send messages to the server here
 	case WM_SIZE:
 	{
