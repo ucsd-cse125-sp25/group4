@@ -28,19 +28,27 @@ using Microsoft::WRL::ComPtr;
 
 class Renderer {
 public:
-	bool init();
+	bool init(HWND window_handle);
 private:
+	static const UINT FramesInFlight = 2;
+	ComPtr<ID3D12Resource> m_renderTargets[FramesInFlight];
 	ComPtr<ID3D12Debug1> m_debug_controller;
 	ComPtr<ID3D12Device> m_device;
 #if defined(_DEBUG)
 	ComPtr<ID3D12DebugDevice> m_debug_device;
 #endif
-	ComPtr<ID3D12CommandQueue> m_command_queue;
-	ComPtr<ID3D12CommandAllocator> m_command_allocator;
+	ComPtr<ID3D12CommandQueue> m_commandQueue;
+	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
+	ComPtr<ID3D12GraphicsCommandList> m_commandList;
+	ComPtr<IDXGISwapChain3> m_swapChain;
+	UINT m_rtvDescriptorSize;
+	ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
 
 	UINT m_frameIndex;
 	HANDLE m_fence_event;
 	ID3D12Fence* m_fence;
 	UINT64 m_fence_value;
 
+	UINT m_width = 640;
+	UINT m_height = 480;
 };

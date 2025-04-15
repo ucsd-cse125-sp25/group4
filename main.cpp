@@ -30,10 +30,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	
 	// initialize the state
 	State state = {};
-	if (!state.client_state.renderer.init()) {
-		printf("Failed to initalize renderer\n");
-		return 1;
-	}
 	HWND window_handle = CreateWindowEx(
 		0,
 		CLASS_NAME,
@@ -50,6 +46,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		hInstance, // instance handle
 		&state // application data
 		);
+
+	if (!state.client_state.renderer.init(window_handle)) {
+		printf("Failed to initalize renderer\n");
+		return 1;
+	}
 
 	if (window_handle == NULL) {
 		return 0;

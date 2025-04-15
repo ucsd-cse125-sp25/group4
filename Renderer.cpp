@@ -9,7 +9,10 @@ inline void ThrowIfFailed(HRESULT hr)
     }
 }
 
-bool Renderer::init() {
+// return false from the function if there is a failure 
+#define UNWRAP(result) if(FAILED(result)) return false
+
+bool Renderer::init(HWND window_handle) {
 	UINT dxgiFactoryFlags = 0;
 #if defined(_DEBUG)
 	// initialize debug controller 
@@ -67,13 +70,90 @@ bool Renderer::init() {
 	};
 	
 	// create command queue and allocator
-	if (FAILED(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_command_queue)))) return false;
-	if (FAILED(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-		IID_PPV_ARGS(&m_command_allocator)))) return false;
+	if (FAILED(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)))) return false;
+
 	
+	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+    swapChainDesc.BufferCount = FramesInFlight;
+    swapChainDesc.Width = m_width;
+    swapChainDesc.Height = m_height;
+    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    swapChainDesc.SampleDesc.Count = 1;
+
+
+	ComPtr<IDXGISwapChain1> swapChain;
+    ThrowIfFailed(factory->CreateSwapChainForHwnd(
+        m_commandQueue.Get(),        // Swap chain needs the queue so that it can force a flush on it.
+        window_handle,
+        &swapChainDesc,
+        nullptr,
+        nullptr,
+        &swapChain
+        ));
+	
+	// no fullscreen yet
+	if (FAILED(factory->MakeWindowAssociation(window_handle, DXGI_MWA_NO_ALT_ENTER))) return false;
+	
+	// tbh idk what this line does
+	if (FAILED(swapChain.As(&m_swapChain))) return false;
+
+	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+
+	// create descriptor heap for each swap chain buffer 
+	{
+		// describe and create a render target view (RTV) descriptor heap
+		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
+		rtvHeapDesc.NumDescriptors = FramesInFlight;
+        rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+
+		UNWRAP(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
+		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	}
+	
+	// create frame resources
+	{
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
+
+		for (UINT n = 0; n < FramesInFlight; ++n) {
+			UNWRAP(m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n])));
+			m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, rtvHandle);
+			rtvHandle.ptr += m_rtvDescriptorSize;
+		}
+	}
+	UNWRAP(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&m_commandAllocator)));
+	
+
+	// create command list
+
+	UNWRAP(m_device->CreateCommandList(
+		0,
+		D3D12_COMMAND_LIST_TYPE_DIRECT,
+		m_commandAllocator.Get(),
+		nullptr,
+		IID_PPV_ARGS(&m_commandList)));
+	
+	// we don't record any commands yet
+	UNWRAP(m_commandList->Close());
+	/*
+	// create a synchronization fence
 	if (FAILED(
 		m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence))
 	)) return false;
-
+	
+	// TODO: find out where this fits into things
+	D3D12_RESOURCE_BARRIER barrier = {
+		.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+		.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+		.Transition = {
+			.pResource = texResource,
+			.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+			.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE,
+			.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		}
+	};
+	*/
 	return true;
 } 
