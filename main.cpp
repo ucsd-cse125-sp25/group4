@@ -5,8 +5,9 @@
 
 // this links to the directx12 dynamic library
 // we should probably set this up in the build system later
-#pragma comment(lib,"d3d12.lib")
-#pragma comment(lib,"dxgi.lib")
+#pragma comment(lib,"d3d12.lib") // core DX12
+#pragma comment(lib,"dxgi.lib") // more DX12 interfacing stuff
+#pragma comment(lib,"D3DCompiler.lib") // shader compiler
 
 #include "state.h"
 #define NOMINMAX

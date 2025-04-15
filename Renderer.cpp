@@ -5,6 +5,24 @@
 #define UNWRAP(result) if(FAILED(result)) return false
 
 bool Renderer::Init(HWND window_handle) {
+
+	// ----------------------------------------------------------------------------------------------------------------
+	// initialize viewport and scissor
+	m_viewport = {
+	   .TopLeftX = 0.0f,
+	   .TopLeftY = 0.0f,
+	   .Width =  static_cast<float>(m_width),
+	   .Height = static_cast<float>(m_height),
+	   .MinDepth = D3D12_MIN_DEPTH,
+	   .MaxDepth = D3D12_MAX_DEPTH,
+	};
+	m_scissorRect = {
+		.left = 0,
+		.top = 0,
+		.right = static_cast<LONG>(m_width),
+		.bottom = static_cast<LONG>(m_height)
+	};
+
 	UINT dxgiFactoryFlags = 0;
 #if defined(_DEBUG)
 	// ----------------------------------------------------------------------------------------------------------------
@@ -163,6 +181,9 @@ bool Renderer::Init(HWND window_handle) {
 #if defined(_DEBUG)
 		compileFlags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
+
+		// --------------------------------------------------------------------
+		// shader compilation 
 		UNWRAP(D3DCompileFromFile(
 			L"shaders.hlsl",
 			nullptr,
@@ -183,11 +204,12 @@ bool Renderer::Init(HWND window_handle) {
 			"ps_5_0",
 			compileFlags,
 			0,
-			&vertexShader,
+			&pixelShader,
 			nullptr
 		));
 
-		// define vertex layout
+		// --------------------------------------------------------------------
+		// vertex layout
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
 			{
 				.SemanticName = "POSITION",
@@ -210,36 +232,15 @@ bool Renderer::Init(HWND window_handle) {
 
 		};
 		
-		D3D12_BLEND_DESC blendState = {};
-        for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) {
-            blendState.RenderTarget[ i ] = {
-				FALSE,FALSE,
-				D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-				D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-				D3D12_LOGIC_OP_NOOP,
-				D3D12_COLOR_WRITE_ENABLE_ALL,
-			};
-		}
-		
+		// --------------------------------------------------------------------
+		// describe Pipeline State Object (PSO) 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 			.pRootSignature = m_rootSignature.Get(),
-			.VS = {.pShaderBytecode = vertexShader->GetBufferPointer(), .BytecodeLength = vertexShader->GetBufferSize()},
-			.PS = {.pShaderBytecode = pixelShader->GetBufferPointer(), .BytecodeLength = pixelShader->GetBufferSize()},
-			.BlendState = blendState, 
+			.VS =  CD3DX12_SHADER_BYTECODE(vertexShader.Get()),
+			.PS =  CD3DX12_SHADER_BYTECODE(pixelShader.Get()),
+			.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT), 
 			.SampleMask = UINT_MAX,
-			.RasterizerState = {
-			   .FillMode = D3D12_FILL_MODE_SOLID,
-			   .CullMode = D3D12_CULL_MODE_BACK,
-			   .FrontCounterClockwise = FALSE,
-			   .DepthBias = D3D12_DEFAULT_DEPTH_BIAS,
-			   .DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
-			   .SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
-			   .DepthClipEnable = TRUE,
-			   .MultisampleEnable = FALSE,
-			   .AntialiasedLineEnable = FALSE,
-			   .ForcedSampleCount = 0,
-			   .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
-			},
+			.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
 			.DepthStencilState = {
 				.DepthEnable = FALSE,
 				.StencilEnable = FALSE,
@@ -257,8 +258,8 @@ bool Renderer::Init(HWND window_handle) {
 		UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------
 	// create command list
-
 	UNWRAP(m_device->CreateCommandList(
 		0,
 		D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -268,6 +269,47 @@ bool Renderer::Init(HWND window_handle) {
 	
 	// we don't record any commands yet
 	UNWRAP(m_commandList->Close());
+	
+	// ----------------------------------------------------------------------------------------------------------------
+	// create vertex buffer 
+	{
+		// Define the geometry for a triangle.
+        Vertex triangleVertices[] =
+        {
+            { { 0.0f, 0.25f * m_aspectRatio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+            { { 0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+            { { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
+        };
+		const UINT vertexBufferSize = sizeof(triangleVertices);
+		
+		D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+		// TODO: Optimize out the upload heap		
+		UNWRAP(m_device->CreateCommittedResource(
+			&heapProperties,
+			D3D12_HEAP_FLAG_NONE,
+			&bufferDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&m_vertexBuffer)
+		));
+		
+		// copy triangle to vertex buffer
+		{
+			UINT8 *pVertexDataBegin; // pointer to vertex buffer CPU
+			D3D12_RANGE readRange = { .Begin = 0, .End = 0 };
+			// initialize vertex buffer CPU pointer
+			UNWRAP(m_vertexBuffer->Map(0, &readRange, (void **)(&pVertexDataBegin))); 
+			memcpy(pVertexDataBegin, triangleVertices, vertexBufferSize);
+			m_vertexBuffer->Unmap(0, nullptr);
+		}
+
+		// initialize the vertex buffer view
+		m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+		m_vertexBufferView.StrideInBytes = sizeof(Vertex);
+		m_vertexBufferView.SizeInBytes = vertexBufferSize;
+
+	}
 	
 	// create synchronization fence
 	{
@@ -304,6 +346,12 @@ bool Renderer::Render() {
 	// should occur if and only if the command list has been executed
 	UNWRAP(m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()));
 	
+	
+	// Set necessary state
+	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+	m_commandList->RSSetViewports(1, &m_viewport);
+	m_commandList->RSSetScissorRects(1, &m_scissorRect);
+
 	// barrier BEFORE using the back buffer render target
 	D3D12_RESOURCE_BARRIER barrier_render_target = {
 		.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -315,15 +363,21 @@ bool Renderer::Render() {
 			.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET,
 		}
 	};
+	m_commandList->ResourceBarrier(1,&barrier_render_target);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
 	// WARNING: sus; might be prone to overflow
 	rtvHandle.ptr += m_frameIndex * m_rtvDescriptorSize;
+	
+	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
-	m_commandList->ResourceBarrier(1,&barrier_render_target);
 
 	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+	m_commandList->DrawInstanced(3, 1, 0, 0);
+	
 
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {

@@ -3,6 +3,7 @@
 #include <dxgi1_6.h>
 #include <D3Dcompiler.h>
 #include <DirectXMath.h>
+#include "d3dx12.h"
 
 // Should the renderer contain the scene?
 // I feel like changes to the scene should be reflected in changes to the renderer
@@ -31,6 +32,10 @@ public:
 	~Renderer();
 
 private:
+
+    D3D12_VIEWPORT m_viewport;
+    D3D12_RECT m_scissorRect;
+
 	static const UINT FramesInFlight = 2;
 	ComPtr<ID3D12Resource> m_renderTargets[FramesInFlight];
 	ComPtr<ID3D12Device> m_device;
@@ -53,8 +58,16 @@ private:
 	UINT64 m_fenceValue;
 	
 	// TODO: make these adjustable
-	UINT m_width = 640;
-	UINT m_height = 480;
+	UINT m_width = 1920;
+	UINT m_height = 1080;
+	float m_aspectRatio = 16.0f / 9.0f;
+
+	struct Vertex {
+        XMFLOAT3 position;
+        XMFLOAT4 color;
+    };
+	ComPtr<ID3D12Resource> m_vertexBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
 	bool WaitForPreviousFrame();
 };
