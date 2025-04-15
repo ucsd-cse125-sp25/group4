@@ -7,6 +7,7 @@
 bool Renderer::Init(HWND window_handle) {
 	UINT dxgiFactoryFlags = 0;
 #if defined(_DEBUG)
+	// ----------------------------------------------------------------------------------------------------------------
 	// initialize debug controller 
 	{
 		ID3D12Debug* dc;
@@ -24,7 +25,8 @@ bool Renderer::Init(HWND window_handle) {
 	ComPtr<IDXGIFactory4> factory;
 	UNWRAP(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&factory)));
 	
-	// create Adapter
+	// ----------------------------------------------------------------------------------------------------------------
+	// create adapter
     ComPtr<IDXGIAdapter1> adapter;
 	for (UINT adapterIndex = 0;
 		 DXGI_ERROR_NOT_FOUND != factory->EnumAdapters1(adapterIndex, &adapter);
@@ -47,24 +49,30 @@ bool Renderer::Init(HWND window_handle) {
 		adapter->Release();
 	}
 	
-	// get the device
+
+	// ----------------------------------------------------------------------------------------------------------------
+	// initialize devices
 	UNWRAP(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)));
-	
-	// get the debug device
 #if defined(_DEBUG)
 	UNWRAP(m_device->QueryInterface(m_debugDevice.GetAddressOf()));
 #endif
 	
+
+	// ----------------------------------------------------------------------------------------------------------------
+	// command queue and command allocator
+
 	D3D12_COMMAND_QUEUE_DESC queueDesc = {
 		.Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
 		.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
 		.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
 		.NodeMask = 0 // we only have 1 gpu with index 0
 	};
-	
+
 	// create command queue and allocator
 	UNWRAP(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)));
 
+	// ----------------------------------------------------------------------------------------------------------------
+	// swap chain 
 	
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.BufferCount = FramesInFlight;
@@ -94,7 +102,8 @@ bool Renderer::Init(HWND window_handle) {
 
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 
-	// create descriptor heap for each swap chain buffer 
+	// ----------------------------------------------------------------------------------------------------------------
+	// descriptor heaps 
 	{
 		// describe and create a render target view (RTV) descriptor heap
 		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {
@@ -108,6 +117,7 @@ bool Renderer::Init(HWND window_handle) {
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	}
 	
+	// ----------------------------------------------------------------------------------------------------------------
 	// create frame resources
 	{
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
@@ -119,6 +129,19 @@ bool Renderer::Init(HWND window_handle) {
 		}
 	}
 	UNWRAP(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&m_commandAllocator)));
+
+
+	// ----------------------------------------------------------------------------------------------------------------
+	// create empty root signature 
+	{
+		D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+		rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+		ComPtr<ID3DBlob>  signature;
+		ComPtr<ID3DBlob>  error;
+		UNWRAP(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
+		UNWRAP(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+	}
 	
 
 	// create command list

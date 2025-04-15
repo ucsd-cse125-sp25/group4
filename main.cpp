@@ -103,7 +103,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 	break;
 	case WM_CLOSE:
 	{
-		
+		// TODO: handle closing the window	
 	}
 	break;
 	} 

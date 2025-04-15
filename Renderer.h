@@ -38,6 +38,7 @@ private:
 	ComPtr<ID3D12Debug1> m_debugController;
 	ComPtr<ID3D12DebugDevice> m_debugDevice;
 #endif
+	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
 	ComPtr<ID3D12GraphicsCommandList> m_commandList;
