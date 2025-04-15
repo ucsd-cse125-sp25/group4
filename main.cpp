@@ -47,7 +47,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		&state // application data
 		);
 
-	if (!state.client_state.renderer.init(window_handle)) {
+	if (!state.client_state.renderer.Init(window_handle)) {
 		printf("Failed to initalize renderer\n");
 		return 1;
 	}
@@ -94,6 +94,16 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 		// respond to the message
 		// TODO: implement
 		// OnSize(window_handle, (UINT)wParam, width, height);
+	}
+	break;
+	case WM_PAINT:
+	{
+		bool success = state->client_state.renderer.Render();
+	}
+	break;
+	case WM_CLOSE:
+	{
+		
 	}
 	break;
 	} 
