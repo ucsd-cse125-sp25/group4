@@ -139,10 +139,123 @@ bool Renderer::Init(HWND window_handle) {
 
 		ComPtr<ID3DBlob>  signature;
 		ComPtr<ID3DBlob>  error;
-		UNWRAP(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-		UNWRAP(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+		UNWRAP(D3D12SerializeRootSignature(
+			&rootSignatureDesc,
+			D3D_ROOT_SIGNATURE_VERSION_1,
+			&signature,
+			&error
+		));
+		UNWRAP(m_device->CreateRootSignature(
+			0,
+			signature->GetBufferPointer(),
+			signature->GetBufferSize(),
+			IID_PPV_ARGS(&m_rootSignature)
+		));
 	}
 	
+	// ----------------------------------------------------------------------------------------------------------------
+	// create pipeline state 
+	{
+		ComPtr<ID3DBlob> vertexShader;
+		ComPtr<ID3DBlob> pixelShader;
+		
+		UINT compileFlags = 0;
+#if defined(_DEBUG)
+		compileFlags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+		UNWRAP(D3DCompileFromFile(
+			L"shaders.hlsl",
+			nullptr,
+			nullptr,
+			"VSMain",
+			"vs_5_0",
+			compileFlags,
+			0,
+			&vertexShader,
+			nullptr
+		));
+
+		UNWRAP(D3DCompileFromFile(
+			L"shaders.hlsl",
+			nullptr,
+			nullptr,
+			"PSMain",
+			"ps_5_0",
+			compileFlags,
+			0,
+			&vertexShader,
+			nullptr
+		));
+
+		// define vertex layout
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+			{
+				.SemanticName = "POSITION",
+				.SemanticIndex = 0,
+				.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+				.InputSlot = 0,
+				.AlignedByteOffset = 0,
+				.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+				.InstanceDataStepRate = 0,
+			},
+			{
+				.SemanticName = "COLOR",
+				.SemanticIndex = 0,
+				.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+				.InputSlot = 0,
+				.AlignedByteOffset = 12,
+				.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+				.InstanceDataStepRate = 0,
+			},
+
+		};
+		
+		D3D12_BLEND_DESC blendState = {};
+        for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) {
+            blendState.RenderTarget[ i ] = {
+				FALSE,FALSE,
+				D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+				D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+				D3D12_LOGIC_OP_NOOP,
+				D3D12_COLOR_WRITE_ENABLE_ALL,
+			};
+		}
+		
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
+			.pRootSignature = m_rootSignature.Get(),
+			.VS = {.pShaderBytecode = vertexShader->GetBufferPointer(), .BytecodeLength = vertexShader->GetBufferSize()},
+			.PS = {.pShaderBytecode = pixelShader->GetBufferPointer(), .BytecodeLength = pixelShader->GetBufferSize()},
+			.BlendState = blendState, 
+			.SampleMask = UINT_MAX,
+			.RasterizerState = {
+			   .FillMode = D3D12_FILL_MODE_SOLID,
+			   .CullMode = D3D12_CULL_MODE_BACK,
+			   .FrontCounterClockwise = FALSE,
+			   .DepthBias = D3D12_DEFAULT_DEPTH_BIAS,
+			   .DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
+			   .SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
+			   .DepthClipEnable = TRUE,
+			   .MultisampleEnable = FALSE,
+			   .AntialiasedLineEnable = FALSE,
+			   .ForcedSampleCount = 0,
+			   .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+			},
+			.DepthStencilState = {
+				.DepthEnable = FALSE,
+				.StencilEnable = FALSE,
+			},
+			.InputLayout = {inputElementDescs, _countof(inputElementDescs)},
+			.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+			.NumRenderTargets = 1,
+			.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+			.SampleDesc = {
+				.Count = 1,
+			},
+		};
+
+		// create the pipeline state object
+		UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+	}
 
 	// create command list
 
