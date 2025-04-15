@@ -35,5 +35,12 @@ private:
 #if defined(_DEBUG)
 	ComPtr<ID3D12DebugDevice> m_debug_device;
 #endif
+	ComPtr<ID3D12CommandQueue> m_command_queue;
+	ComPtr<ID3D12CommandAllocator> m_command_allocator;
+
+	UINT m_frameIndex;
+	HANDLE m_fence_event;
+	ID3D12Fence* m_fence;
+	UINT64 m_fence_value;
 
 };

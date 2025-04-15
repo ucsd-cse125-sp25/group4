@@ -58,6 +58,22 @@ bool Renderer::init() {
 #if defined(_DEBUG)
 	if (FAILED(m_device->QueryInterface(m_debug_device.GetAddressOf()))) return false;
 #endif
+	
+	D3D12_COMMAND_QUEUE_DESC queueDesc = {
+		.Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
+		.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
+		.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
+		.NodeMask = 0 // we only have 1 gpu with index 0
+	};
+	
+	// create command queue and allocator
+	if (FAILED(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_command_queue)))) return false;
+	if (FAILED(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+		IID_PPV_ARGS(&m_command_allocator)))) return false;
+	
+	if (FAILED(
+		m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence))
+	)) return false;
 
 	return true;
 } 
