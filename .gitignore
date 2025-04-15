@@ -34,3 +34,4 @@ bld/
 # Visual Studio 2017 auto generated files
 Generated\ Files/
 
+/d3dx12.h
