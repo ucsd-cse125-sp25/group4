@@ -50,8 +50,14 @@ bool Renderer::init() {
 		// Else we won't use this iteration's adapter, so release it
 		adapter->Release();
 	}
-
-
+	
+	// get the device
+	if (FAILED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)))) return false;
+	
+	// get the debug device
+#if defined(_DEBUG)
+	if (FAILED(m_device->QueryInterface(m_debug_device.GetAddressOf()))) return false;
+#endif
 
 	return true;
 } 

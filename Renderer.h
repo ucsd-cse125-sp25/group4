@@ -31,4 +31,9 @@ public:
 	bool init();
 private:
 	ComPtr<ID3D12Debug1> m_debug_controller;
+	ComPtr<ID3D12Device> m_device;
+#if defined(_DEBUG)
+	ComPtr<ID3D12DebugDevice> m_debug_device;
+#endif
+
 };
