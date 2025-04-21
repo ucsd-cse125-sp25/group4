@@ -77,7 +77,7 @@ bool Renderer::Init(HWND window_handle) {
 	
 
 	// ----------------------------------------------------------------------------------------------------------------
-	// command queue and command allocator
+	// command queue and command allocators
 
 	D3D12_COMMAND_QUEUE_DESC queueDesc = {
 		.Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -144,9 +144,11 @@ bool Renderer::Init(HWND window_handle) {
 			UNWRAP(m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n])));
 			m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, rtvHandle);
 			rtvHandle.ptr += m_rtvDescriptorSize;
+		
+			// UNWRAP(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&m_commandAllocators[n])));
+			UNWRAP(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[n])));
 		}
 	}
-	UNWRAP(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&m_commandAllocator)));
 
 
 	// ----------------------------------------------------------------------------------------------------------------
@@ -263,7 +265,7 @@ bool Renderer::Init(HWND window_handle) {
 	UNWRAP(m_device->CreateCommandList(
 		0,
 		D3D12_COMMAND_LIST_TYPE_DIRECT,
-		m_commandAllocator.Get(),
+		m_commandAllocators[m_frameIndex].Get(),
 		nullptr,
 		IID_PPV_ARGS(&m_commandList)));
 	
@@ -314,37 +316,38 @@ bool Renderer::Init(HWND window_handle) {
 	// create synchronization fence
 	{
 		UNWRAP(m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
-		m_fenceValue = 1; // TODO: wtf does this mean?
+		m_fenceValues[m_frameIndex]++; // TODO: wtf does this mean?
 
 		m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 		if (m_fenceEvent == nullptr) {
 			UNWRAP(HRESULT_FROM_WIN32(GetLastError()));
 		}
+
+		UNWRAP(WaitForGpu());
 	}
 	return true;
 }
 
-bool Renderer::WaitForPreviousFrame() {
-	const UINT64 fence = m_fenceValue;
-	UNWRAP(m_commandQueue->Signal(m_fence.Get(), fence));
-	++m_fenceValue;
+bool Renderer::WaitForGpu() {
+	// add signal to command queue
+	UNWRAP(m_commandQueue->Signal(m_fence.Get(), m_fenceValues[m_frameIndex]));
 
-	if (m_fence->GetCompletedValue() < fence) {
-		UNWRAP(m_fence->SetEventOnCompletion(fence, m_fenceEvent));
-		WaitForSingleObject(m_fenceEvent, INFINITE);
-	}
+	// wait until the fence has been processed
+	UNWRAP(m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex], m_fenceEvent));
+	WaitForSingleObjectEx(m_fenceEvent, INFINITE, FALSE);
 
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+	// increment the fence value for the current frame
+	m_fenceValues[m_frameIndex]++;
 	return true;
 }
 
 bool Renderer::Render() {
 	// CREATE A COMMAND LIST
 	// should occur after all of its command lists have executed (use fences)
-	UNWRAP(m_commandAllocator->Reset());
+	UNWRAP(m_commandAllocators[m_frameIndex]->Reset());
 
 	// should occur if and only if the command list has been executed
-	UNWRAP(m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()));
+	UNWRAP(m_commandList->Reset(m_commandAllocators[m_frameIndex].Get(), m_pipelineState.Get()));
 	
 	
 	// Set necessary state
@@ -402,12 +405,31 @@ bool Renderer::Render() {
 
 	UNWRAP(m_swapChain->Present(1, 0));
 	
-	UNWRAP(WaitForPreviousFrame());
+	UNWRAP(MoveToNextFrame());
+	return true;
+}
+
+bool Renderer::MoveToNextFrame() {
+	// schedule a signal in the command queue
+	const UINT64 currentFenceValue = m_fenceValues[m_frameIndex];
+	UNWRAP(m_commandQueue->Signal(m_fence.Get(), currentFenceValue));
+
+	// update the frame index
+	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+
+	// if the next frame is not ready to be rendered yet, wait until it is ready
+	if (m_fence->GetCompletedValue() < m_fenceValues[m_frameIndex]) {
+		UNWRAP(m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex], m_fenceEvent));
+		WaitForSingleObjectEx(m_fenceEvent, INFINITE, false);
+	}
+
+	// set fence value for the next frame
+	m_fenceValues[m_frameIndex] = currentFenceValue + 1;
 	return true;
 }
 
 Renderer::~Renderer() {
-	WaitForPreviousFrame();
+	WaitForGpu();
 	CloseHandle(m_fenceEvent);
 }
 

@@ -62,6 +62,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	MSG msg;
 	// application loop
 	while (GetMessage(&msg, NULL, 0, 0) != 0) {
+		// TODO: check for server updates and process them accordingly
+
+		// windowing messages
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
@@ -73,7 +76,6 @@ inline State *GetState(HWND window_handle) {
 	State *state = reinterpret_cast<State *>(ptr);
 	return state;
 }
-
 
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	State *state;
@@ -99,7 +101,8 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 	break;
 	case WM_PAINT:
 	{
-		bool success = state->client_state.renderer.Render();
+		bool success = state->client_state.renderer.Render(); // render function
+		// wait until next frame
 	}
 	break;
 	case WM_CLOSE:

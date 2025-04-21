@@ -45,17 +45,18 @@ private:
 #endif
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
-	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
+	ComPtr<ID3D12CommandAllocator> m_commandAllocators[FramesInFlight];
 	ComPtr<ID3D12GraphicsCommandList> m_commandList;
 	ComPtr<IDXGISwapChain3> m_swapChain;
 	UINT m_rtvDescriptorSize;
 	ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 
+	// syncrhonization objects
 	UINT m_frameIndex;
 	HANDLE m_fenceEvent;
 	ComPtr<ID3D12Fence> m_fence;
-	UINT64 m_fenceValue;
+	UINT64 m_fenceValues[FramesInFlight];
 	
 	// TODO: make these adjustable
 	UINT m_width = 1920;
@@ -69,5 +70,6 @@ private:
 	ComPtr<ID3D12Resource> m_vertexBuffer;
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
-	bool WaitForPreviousFrame();
+	bool MoveToNextFrame();
+	bool WaitForGpu();
 };
