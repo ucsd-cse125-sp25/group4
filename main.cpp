@@ -20,36 +20,26 @@ const wchar_t GAME_NAME[] = L"$GAME_NAME";
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
-	/*
-	WNDCLASS window_class = {
+
+    // Initialize the window class.
+	WNDCLASSEX windowClass = { 
+		.cbSize = sizeof(WNDCLASSEX),
 		.style = CS_HREDRAW | CS_VREDRAW,
 		.lpfnWndProc = WindowProc,
 		.hInstance = hInstance,
 		.hCursor = LoadCursor(NULL, IDC_ARROW),
-		.lpszClassName = CLASS_NAME,
+		.lpszClassName = L"DXSampleClass",
 	};
-
-	// register window class to operating system
-	RegisterClass(&window_class);*/
-
-
-    // Initialize the window class.
-    WNDCLASSEX windowClass = { 0 };
-    windowClass.cbSize = sizeof(WNDCLASSEX);
-    windowClass.style = CS_HREDRAW | CS_VREDRAW;
-    windowClass.lpfnWndProc = WindowProc;
-    windowClass.hInstance = hInstance;
-    windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-    windowClass.lpszClassName = L"DXSampleClass";
     RegisterClassEx(&windowClass);
-
+	
+	// TODO: pass this into the renderer intialization
     RECT windowRect = { 0, 0, 1920, 1080};
     AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
 
 	// initialize the state
 	State state = {};
-	HWND window_handle = CreateWindow(
+	HWND windowHandle = CreateWindow(
         windowClass.lpszClassName,
         GAME_NAME,
         WS_OVERLAPPEDWINDOW,
@@ -63,21 +53,21 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         &state);
 
 	
-	if (!window_handle) {
+	if (!windowHandle) {
 		printf("Failed to create window\n");
 		return 1;
 	}
 
-	if (!state.client_state.renderer.Init(window_handle)) {
+	if (!state.client_state.renderer.Init(windowHandle)) {
 		printf("Failed to initalize renderer\n");
 		return 1;
 	}
 
-	if (window_handle == NULL) {
+	if (windowHandle == NULL) {
 		return 0;
 	}
 
-	ShowWindow(window_handle, nCmdShow);
+	ShowWindow(windowHandle, nCmdShow);
 	
 	MSG msg = {};
 	// application loop
