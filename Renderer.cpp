@@ -531,6 +531,6 @@ void Renderer::OnUpdate() {
 	if (m_constantBufferData.offset.x > offsetBounds) {
         m_constantBufferData.offset.x = -offsetBounds;
     }
-
+	
 	memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
 }

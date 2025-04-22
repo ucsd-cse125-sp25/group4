@@ -72,14 +72,29 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	MSG msg = {};
 	// application loop
 	while (msg.message != WM_QUIT) {
-		// TODO: check for server updates and process them accordingly
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
         {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
 		}
 		else {
+			// ---------------------------------------------------------------	
+			// MAIN LOOP CODE GOES HERE
+
+			if (GetKeyState('W') & 0x8000) {
+				state.client_state.renderer.m_constantBufferData.offset.y += 0.015f;
+			}
+			else if (GetKeyState('S') & 0x8000) {
+				state.client_state.renderer.m_constantBufferData.offset.y -= 0.015f;
+			}
+
+
+			// TODO: check for server updates and process them accordingly
+
+			// copy new data to the GPU
 			state.client_state.renderer.OnUpdate();
+			// render the frame
+			// this will block if 2 frames have been sent to the GPU and none have been drawn 
 			bool success = state.client_state.renderer.Render(); // render function
 		}
 	}
@@ -102,7 +117,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 	else {
 		state = GetState(window_handle);
 	}
-	switch (uMsg) { // send messages to the server here
+	switch (uMsg) { 
 	case WM_SIZE:
 	{
 		int width = LOWORD(lParam); // get low order word
@@ -119,7 +134,6 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 		// this is NOT called every frame
 		state->client_state.renderer.OnUpdate();
 		bool success = state->client_state.renderer.Render(); // render function
-		// if we want to wait for the next frame, do it here
 
 	}
 	break;

@@ -24,6 +24,11 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
+struct SceneConstantBuffer {
+	XMFLOAT4 offset;
+	float padding[60]; // padding so that the buffer is 256-byte aligned
+};
+static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant buffer must be 256-byte aligned");
 class Renderer {
 public:
 	bool Init(HWND window_handle);
@@ -32,6 +37,8 @@ public:
 	void OnUpdate();
 	~Renderer();
 
+	SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
+	
 private:
 
     D3D12_VIEWPORT m_viewport;
@@ -71,15 +78,9 @@ private:
 	ComPtr<ID3D12Resource> m_vertexBuffer;
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
-	struct SceneConstantBuffer {
-		XMFLOAT4 offset;
-		float padding[60]; // padding so that the buffer is 256-byte aligned
-	};
-	static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant buffer must be 256-byte aligned");
 
 	ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
 	ComPtr<ID3D12Resource> m_constantBuffer; // references the concept of the plan of the concept buffer or something
-	SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
 	UINT8 *m_pCbvDataBegin; // virtual address of the constant buffer memory
 
 	bool MoveToNextFrame();
