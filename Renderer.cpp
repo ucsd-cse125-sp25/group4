@@ -133,6 +133,14 @@ bool Renderer::Init(HWND window_handle) {
 
 		UNWRAP(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+		// create constant buffer view (CBV) descriptor heap
+		D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {
+			.NumDescriptors = 1,
+			.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, // descriptor heap should be bound to the pipeline
+			.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, // descriptor heap can be referenced by a root table
+		};
+		UNWRAP(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
 	}
 	
 	// ----------------------------------------------------------------------------------------------------------------
@@ -152,10 +160,47 @@ bool Renderer::Init(HWND window_handle) {
 
 
 	// ----------------------------------------------------------------------------------------------------------------
-	// create empty root signature 
+	// create root signature 
 	{
-		D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
-		rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+		D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {
+			.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1,
+		};
+		
+		// fall back to older version of root signature featureset if 1.1 is not available
+		if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
+			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+		}
+		
+		D3D12_DESCRIPTOR_RANGE1 ranges[1] = { {
+			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+			.NumDescriptors = 1,
+			.BaseShaderRegister = 0,
+			.RegisterSpace = 0,
+			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC,
+			.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+		} };
+
+		D3D12_ROOT_PARAMETER1 rootParameters[1] = { {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+			.DescriptorTable = {
+				.NumDescriptorRanges = 1,
+				.pDescriptorRanges = &ranges[0],
+			},
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX,
+		} };
+
+		D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
+			.NumParameters = __countof(rootParameters),
+			.pParameters = rootParameters,
+			.NumStaticSamplers = 0,
+			.pStaticSamplers = nullptr,
+			.Flags = 
+				D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+				D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+				D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+				D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+				D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS,
+		};
 
 		ComPtr<ID3DBlob>  signature;
 		ComPtr<ID3DBlob>  error;
@@ -283,10 +328,13 @@ bool Renderer::Init(HWND window_handle) {
             { { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
         };
 		const UINT vertexBufferSize = sizeof(triangleVertices);
-		
-		D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+
 		// TODO: Optimize out the upload heap		
+		// upload heaps have CPU access optimized for writing
+		// they have less bandwidth for shader reads
+		D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD); 
+		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+		// allocates memory on the GPU for the data
 		UNWRAP(m_device->CreateCommittedResource(
 			&heapProperties,
 			D3D12_HEAP_FLAG_NONE,
@@ -298,10 +346,11 @@ bool Renderer::Init(HWND window_handle) {
 		
 		// copy triangle to vertex buffer
 		{
-			UINT8 *pVertexDataBegin; // pointer to vertex buffer CPU
+			UINT8 *pVertexDataBegin; // pointer to vertex buffer in CPU-visible GPU heap memory 
 			D3D12_RANGE readRange = { .Begin = 0, .End = 0 };
 			// initialize vertex buffer CPU pointer
 			UNWRAP(m_vertexBuffer->Map(0, &readRange, (void **)(&pVertexDataBegin))); 
+			// with the magic of virtual memory, this actually copies data to the GPU
 			memcpy(pVertexDataBegin, triangleVertices, vertexBufferSize);
 			m_vertexBuffer->Unmap(0, nullptr);
 		}
@@ -310,7 +359,35 @@ bool Renderer::Init(HWND window_handle) {
 		m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
 		m_vertexBufferView.StrideInBytes = sizeof(Vertex);
 		m_vertexBufferView.SizeInBytes = vertexBufferSize;
+	}
+		
+	// ----------------------------------------------------------------------------------------------------------------
+	// create constant buffer 
+	{
+		const UINT constantBufferSize = sizeof(SceneConstantBuffer);
+		D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD); 
+		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
+		UNWRAP(m_device->CreateCommittedResource(
+				&heapProperties,
+				D3D12_HEAP_FLAG_NONE,
+				&bufferDesc,
+				D3D12_RESOURCE_STATE_GENERIC_READ,
+				nullptr,
+				IID_PPV_ARGS(&m_constantBuffer)
+		));
 
+		// create constant buffer view
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
+			.BufferLocation = m_constantBuffer->GetGPUVirtualAddress(),
+			.SizeInBytes = constantBufferSize,
+		};
+		m_device->CreateConstantBufferView(&cbvDesc, m_cbvHeap->GetCPUDescriptorHandleForHeapStart());
+		
+		// initialize constant buffer
+		// we don't unmap until the app closes
+		D3D12_RANGE readRange = { 0, 0 };
+		UNWRAP(m_constantBuffer->Map(0, &readRange, (void **)(&m_pCbvDataBegin)));
+		memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
 	}
 	
 	// create synchronization fence
