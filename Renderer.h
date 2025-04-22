@@ -29,6 +29,7 @@ public:
 	bool Init(HWND window_handle);
 
 	bool Render();
+	void OnUpdate();
 	~Renderer();
 
 private:

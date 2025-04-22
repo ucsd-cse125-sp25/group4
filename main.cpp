@@ -20,33 +20,53 @@ const wchar_t GAME_NAME[] = L"$GAME_NAME";
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
-	WNDCLASS window_class = {};
+	/*
+	WNDCLASS window_class = {
+		.style = CS_HREDRAW | CS_VREDRAW,
+		.lpfnWndProc = WindowProc,
+		.hInstance = hInstance,
+		.hCursor = LoadCursor(NULL, IDC_ARROW),
+		.lpszClassName = CLASS_NAME,
+	};
 
-	window_class.lpfnWndProc = WindowProc;
-	window_class.hInstance = hInstance;
-	window_class.lpszClassName = CLASS_NAME; 
-	
 	// register window class to operating system
-	RegisterClass(&window_class);
-	
+	RegisterClass(&window_class);*/
+
+
+    // Initialize the window class.
+    WNDCLASSEX windowClass = { 0 };
+    windowClass.cbSize = sizeof(WNDCLASSEX);
+    windowClass.style = CS_HREDRAW | CS_VREDRAW;
+    windowClass.lpfnWndProc = WindowProc;
+    windowClass.hInstance = hInstance;
+    windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
+    windowClass.lpszClassName = L"DXSampleClass";
+    RegisterClassEx(&windowClass);
+
+    RECT windowRect = { 0, 0, 1920, 1080};
+    AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
+
+
 	// initialize the state
 	State state = {};
-	HWND window_handle = CreateWindowEx(
-		0,
-		CLASS_NAME,
-		GAME_NAME,
-		WS_OVERLAPPEDWINDOW, // window style; may need to be changed later because this has a title bar and system menu
-		// size and position
-		CW_USEDEFAULT,
-		CW_USEDEFAULT,
-		CW_USEDEFAULT,
-		CW_USEDEFAULT,
+	HWND window_handle = CreateWindow(
+        windowClass.lpszClassName,
+        GAME_NAME,
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        windowRect.right - windowRect.left,
+        windowRect.bottom - windowRect.top,
+        nullptr,        // We have no parent window.
+        nullptr,        // We aren't using menus.
+        hInstance,
+        &state);
 
-		NULL, // parent window
-		NULL, // hMenu
-		hInstance, // instance handle
-		&state // application data
-		);
+	
+	if (!window_handle) {
+		printf("Failed to create window\n");
+		return 1;
+	}
 
 	if (!state.client_state.renderer.Init(window_handle)) {
 		printf("Failed to initalize renderer\n");
@@ -59,14 +79,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 	ShowWindow(window_handle, nCmdShow);
 	
-	MSG msg;
+	MSG msg = {};
 	// application loop
-	while (GetMessage(&msg, NULL, 0, 0) != 0) {
+	while (msg.message != WM_QUIT) {
 		// TODO: check for server updates and process them accordingly
-
-		// windowing messages
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+		}
+		else {
+			state.client_state.renderer.OnUpdate();
+			bool success = state.client_state.renderer.Render(); // render function
+		}
 	}
 	return 0;
 }
@@ -101,8 +126,11 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 	break;
 	case WM_PAINT:
 	{
+		// this is NOT called every frame
+		state->client_state.renderer.OnUpdate();
 		bool success = state->client_state.renderer.Render(); // render function
-		// wait until next frame
+		// if we want to wait for the next frame, do it here
+
 	}
 	break;
 	case WM_CLOSE:

@@ -2,8 +2,9 @@
 #include "Renderer.h"
 
 // return false from the function if there is a failure 
-#define UNWRAP(result) if(FAILED(result)) return false
+#define UNWRAP(result) if(FAILED(result)) {printf("unwrap at %d", __LINE__); return false;} __UNUSED = 0 
 
+int __UNUSED;
 bool Renderer::Init(HWND window_handle) {
 
 	// ----------------------------------------------------------------------------------------------------------------
@@ -92,14 +93,17 @@ bool Renderer::Init(HWND window_handle) {
 	// ----------------------------------------------------------------------------------------------------------------
 	// swap chain 
 	
-	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-    swapChainDesc.BufferCount = FramesInFlight;
-    swapChainDesc.Width = m_width;
-    swapChainDesc.Height = m_height;
-    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    swapChainDesc.SampleDesc.Count = 1;
+	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {
+		.Width = m_width,
+		.Height = m_height,
+		.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+		.SampleDesc = {
+			.Count = 1,
+		},
+		.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
+		.BufferCount = FramesInFlight,
+		.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
+	};
 
 
 	ComPtr<IDXGISwapChain1> swapChain;
@@ -136,9 +140,9 @@ bool Renderer::Init(HWND window_handle) {
 
 		// create constant buffer view (CBV) descriptor heap
 		D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {
+			.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, // descriptor heap can be referenced by a root table
 			.NumDescriptors = 1,
 			.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, // descriptor heap should be bound to the pipeline
-			.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, // descriptor heap can be referenced by a root table
 		};
 		UNWRAP(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
 	}
@@ -179,7 +183,6 @@ bool Renderer::Init(HWND window_handle) {
 			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC,
 			.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
 		} };
-
 		D3D12_ROOT_PARAMETER1 rootParameters[1] = { {
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
 			.DescriptorTable = {
@@ -189,24 +192,27 @@ bool Renderer::Init(HWND window_handle) {
 			.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX,
 		} };
 
-		D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
-			.NumParameters = __countof(rootParameters),
-			.pParameters = rootParameters,
-			.NumStaticSamplers = 0,
-			.pStaticSamplers = nullptr,
-			.Flags = 
-				D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS,
+		D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {
+			.Version = D3D_ROOT_SIGNATURE_VERSION_1_1,
+			.Desc_1_1 = {
+				.NumParameters = _countof(rootParameters),
+				.pParameters = rootParameters,
+				.NumStaticSamplers = 0,
+				.pStaticSamplers = nullptr,
+				.Flags = 
+					D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+					D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+					D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+					D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+					D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS,
+			}
 		};
-
+ 
 		ComPtr<ID3DBlob>  signature;
 		ComPtr<ID3DBlob>  error;
-		UNWRAP(D3D12SerializeRootSignature(
+		UNWRAP(D3DX12SerializeVersionedRootSignature(
 			&rootSignatureDesc,
-			D3D_ROOT_SIGNATURE_VERSION_1,
+			featureData.HighestVersion,
 			&signature,
 			&error
 		));
@@ -415,6 +421,7 @@ bool Renderer::WaitForGpu() {
 
 	// increment the fence value for the current frame
 	m_fenceValues[m_frameIndex]++;
+
 	return true;
 }
 
@@ -429,6 +436,12 @@ bool Renderer::Render() {
 	
 	// Set necessary state
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+	
+	// set heaps for constant buffer
+	ID3D12DescriptorHeap *ppHeaps[] = {m_cbvHeap.Get()};
+	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
+
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
@@ -510,3 +523,14 @@ Renderer::~Renderer() {
 	CloseHandle(m_fenceEvent);
 }
 
+void Renderer::OnUpdate() {
+	const float translationSpeed = 0.015f;
+	const float offsetBounds = 1.25f;
+
+	m_constantBufferData.offset.x += translationSpeed;
+	if (m_constantBufferData.offset.x > offsetBounds) {
+        m_constantBufferData.offset.x = -offsetBounds;
+    }
+
+	memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
+}
