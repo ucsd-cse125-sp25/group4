@@ -54,6 +54,10 @@ struct GameStatePayload {
 	*/
 };
 
+typedef struct GameState {
+	float position[4];
+};
+
 struct MovePayload {
 	char direction;
 	float yaw, pitch;
