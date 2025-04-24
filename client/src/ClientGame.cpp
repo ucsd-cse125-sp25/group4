@@ -118,7 +118,7 @@ void ClientGame::update() {
 
 	
 	// ---------------------------------------------------------------	
-	// MAIN LOOP CODE GOES HERE
+	// Client Input Handling 
 
 	float positionDelta[4] = {};
 	bool isUpdate = false;
@@ -139,6 +139,8 @@ void ClientGame::update() {
 
 	// TODO: check for server updates and process them accordingly
 
+	// ---------------------------------------------------------------	
+	// Update GPU data and render 
 	// copy new data to the GPU
 	renderer.OnUpdate();
 	// render the frame
