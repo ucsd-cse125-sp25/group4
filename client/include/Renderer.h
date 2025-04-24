@@ -5,28 +5,43 @@
 #include <DirectXMath.h>
 #include "d3dx12.h"
 
-// Should the renderer contain the scene?
-// I feel like changes to the scene should be reflected in changes to the renderer
-// Changing a scene means that you would have to copy new memory to the GPU
-// Okay what data need to be changed?
-// each frame the players move around
-// so we need to update their global transform matrices
-// each frame the players poses also get updated
-// so we need to update pose transform matrices for skinning
-// across most frames, the number of objects remains the same
-// but what if we want to add a new object?
-// then we would have to copy it to the GPU memory
-// so the scene and the renderer are deeply tied
-// but do we need to worry about that yet?
-// i say right now, we keep the scene and the renderer in one object 
-// and abstract as needed
-
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
+/*
+import bpy
+import mathutils
+
+scene = bpy.data.scenes[0]
+
+cube = scene.objects.get("Cube")
+cubemesh = cube.data
+verts = cubemesh.vertices
+scenevertices = []
+for tri in cubemesh.loop_triangles:
+    for vidx in tri.vertices:
+        vertex = verts[vidx]
+        position_local = mathutils.Vector((vertex.co.x, vertex.co.y, vertex.co.z, 1)) 
+        position_global =  cube.matrix_world @ position_local
+        scenevertices.append([position_global.x, position_global.y, position_global.z])
+print(scenevertices)
+*/
+
+const int NUM_VERTS = 12;
+const float cubeverts[NUM_VERTS][3] = {
+-1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0
+};
+
+
 struct SceneConstantBuffer {
-	XMFLOAT4 offset;
-	float padding[60]; // padding so that the buffer is 256-byte aligned
+	struct Frame {
+		XMMATRIX view;
+		XMMATRIX projection;
+	};
+	struct Tick {
+		XMFLOAT4 offset;
+	};
+	float padding[28];
 };
 static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant buffer must be 256-byte aligned");
 class Renderer {
