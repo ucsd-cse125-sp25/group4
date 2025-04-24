@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <cstring>
 
-#define MAX_PACKET_SIZE 1000000
+#define MAX_PACKET_SIZE 1000
 
 enum class PacketType : uint32_t {
 	INIT_CONNECTION = 0,

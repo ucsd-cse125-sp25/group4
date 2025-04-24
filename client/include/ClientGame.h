@@ -26,6 +26,6 @@ public:
 	Renderer renderer;
 private:
 	ClientNetwork* network;
-	char network_data[MAX_PACKET_SIZE];
+	char network_data[MAX_PACKET_SIZE]; //todo this should change once we define the packet sizes
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);
