@@ -84,35 +84,37 @@ void ClientGame::sendGameStatePacket(float posDelta[4]) {
 
 void ClientGame::update() {
 	int len = network->receivePackets(network_data);
-	if (len <= 0) return;
+	if (len > 0) {
+		// here, network_data should contain the game state packet
+		PacketHeader* hdr = (PacketHeader*)network_data;
+		switch (hdr->type) {
+		case PacketType::GAME_STATE: 
+		{
+			//GameStatePayload* game_state = (GameStatePayload*)(network_data + HDR_SIZE);
+			//printf("received update for tick %llu \n", game_state->tick);
+			//// add logic here
+			//if (game_state->tick % (uint64_t)64 == 0) {
+			//	sendDebugPacket(game_state->tick);
+			//}
+			GameState* state = (GameState*)(network_data + HDR_SIZE);
+			char msgbuf[1000];
+			// printf(msgbuf, "Packet received y=%f \n", state->position[1]);
 
-	// here, network_data should contain the game state packet
-	PacketHeader* hdr = (PacketHeader*)network_data;
-	switch (hdr->type) {
-	case PacketType::GAME_STATE: 
-	{
-		//GameStatePayload* game_state = (GameStatePayload*)(network_data + HDR_SIZE);
-		//printf("received update for tick %llu \n", game_state->tick);
-		//// add logic here
-		//if (game_state->tick % (uint64_t)64 == 0) {
-		//	sendDebugPacket(game_state->tick);
-		//}
-		GameState* state = (GameState*)(network_data + HDR_SIZE);
-		char msgbuf[1000];
-		printf(msgbuf, "Packet received y=%f \n", state->position[1]);
+			renderer.m_constantBufferData.offset.y = state->position[1];
 
-		renderer.m_constantBufferData.offset.y = state->position[1];
+			break;
+		}
+		case PacketType::DEBUG: 
+		{
+			break;
+		}
+		default:
+			// printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
+			break;
+		}
 
-		break;
 	}
-	case PacketType::DEBUG: 
-	{
-		break;
-	}
-	default:
-		printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
-		break;
-	}
+
 
 	
 	// ---------------------------------------------------------------	

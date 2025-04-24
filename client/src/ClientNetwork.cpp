@@ -83,6 +83,7 @@ int ClientNetwork::receivePackets(char* recvbuf) {
 
 	return iResult;
 	*/
+	if (!NetworkServices::checkMessage(ConnectSocket)) return 0;
 
 	int r = NetworkServices::recvAll(ConnectSocket, recvbuf, HDR_SIZE);
 	if (r != HDR_SIZE) return r; // error/socket closed
