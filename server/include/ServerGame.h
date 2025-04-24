@@ -23,4 +23,6 @@ private:
 	uint64_t tick_count = 0;
 	ServerNetwork* network;
 	char network_data[MAX_PACKET_SIZE];
+
+	GameState* state;
 };

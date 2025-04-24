@@ -49,7 +49,7 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow) {
 	}
 
 	if (!renderer.Init(windowHandle)) {
-		printf("Failed to initalize renderer\n");
+		OutputDebugString(L"Failed to initalize renderer\n");
 		exit(1);
 	}
 
@@ -69,6 +69,19 @@ void ClientGame::sendDebugPacket(uint64_t tick) {
 	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(DebugPayload));
 }
 
+void ClientGame::sendGameStatePacket(float posDelta[4]) {
+	GameState* state = new GameState{ {0} };
+	//sprintf_s(state.position, sizeof(state.position), "debug: tick %llu", tick);
+	for (int i = 0; i < 4; i++) {
+		state->position[i] = posDelta[i];
+	}
+
+	char packet_data[HDR_SIZE + sizeof(GameState)];
+	NetworkServices::buildPacket<GameState>(PacketType::MOVE, *state, packet_data);
+	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(DebugPayload));
+	delete state;
+}
+
 void ClientGame::update() {
 	int len = network->receivePackets(network_data);
 	if (len <= 0) return;
@@ -78,12 +91,18 @@ void ClientGame::update() {
 	switch (hdr->type) {
 	case PacketType::GAME_STATE: 
 	{
-		GameStatePayload* game_state = (GameStatePayload*)(network_data + HDR_SIZE);
-		printf("received update for tick %llu \n", game_state->tick);
-		// add logic here
-		if (game_state->tick % (uint64_t)64 == 0) {
-			sendDebugPacket(game_state->tick);
-		}
+		//GameStatePayload* game_state = (GameStatePayload*)(network_data + HDR_SIZE);
+		//printf("received update for tick %llu \n", game_state->tick);
+		//// add logic here
+		//if (game_state->tick % (uint64_t)64 == 0) {
+		//	sendDebugPacket(game_state->tick);
+		//}
+		GameState* state = (GameState*)(network_data + HDR_SIZE);
+		char msgbuf[1000];
+		printf(msgbuf, "Packet received y=%f \n", state->position[1]);
+
+		renderer.m_constantBufferData.offset.y = state->position[1];
+
 		break;
 	}
 	case PacketType::DEBUG: 
@@ -94,6 +113,36 @@ void ClientGame::update() {
 		printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
 		break;
 	}
+
+	
+	// ---------------------------------------------------------------	
+	// MAIN LOOP CODE GOES HERE
+
+	float positionDelta[4] = {};
+	bool isUpdate = false;
+
+	if (GetKeyState('W') & 0x8000) {
+		positionDelta[1] += 0.015f;
+		isUpdate = true;
+	}
+	else if (GetKeyState('S') & 0x8000) {
+		positionDelta[1] -= 0.015f;
+		isUpdate = true;
+	}
+
+	if (isUpdate) {
+		sendGameStatePacket(positionDelta);
+	}
+
+
+	// TODO: check for server updates and process them accordingly
+
+	// copy new data to the GPU
+	renderer.OnUpdate();
+	// render the frame
+	// this will block if 2 frames have been sent to the GPU and none have been drawn 
+	bool success = renderer.Render(); // render function
+
 }
 
 ClientGame::~ClientGame() {

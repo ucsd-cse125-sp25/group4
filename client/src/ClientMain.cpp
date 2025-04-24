@@ -6,5 +6,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     ClientGame client(hInstance, nCmdShow);
 
     // set up window
-    while (true) client.update();
+
+	MSG msg = {};
+	// application loop
+	while (msg.message != WM_QUIT) {
+		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+		else {
+			client.update();
+		}
+	}
 }

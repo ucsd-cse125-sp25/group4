@@ -20,6 +20,7 @@ public:
 	~ClientGame(void);
 
 	void sendDebugPacket(uint64_t);
+	void sendGameStatePacket(float[4]);
 	void update();
 
 	GameState gameState;

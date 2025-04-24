@@ -5,6 +5,8 @@ unsigned int ServerGame::client_id;
 ServerGame::ServerGame(void) {
 	client_id = 0;
 	network = new ServerNetwork();
+
+	state = new GameState{ {0} };
 }
 
 void ServerGame::update() {
@@ -55,6 +57,15 @@ void ServerGame::receiveFromClients() {
 				printf("[CLIENT %d] DEBUG: %s\n", id, dbg->message);
 				break;
 			}
+			case PacketType::MOVE:
+			{
+				GameState* newState = (GameState*)&(network_data[i + HDR_SIZE]);
+				for (int i = 0; i < 4; i++) {
+					state->position[i] += newState->position[i];
+				}
+				printf("[CLIENT %d] MOVE: %f\n", id, newState->position[1]);
+				break;
+			}
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
 				break;
@@ -67,15 +78,20 @@ void ServerGame::receiveFromClients() {
 }
 
 void ServerGame::sendUpdates() {
-	GameStatePayload game_state{};  // this should probably be a variable in the servergame 
-	game_state.tick = tick_count;
-	char packet_data[HDR_SIZE + sizeof(GameStatePayload)];
+	//GameStatePayload game_state{};  // this should probably be a variable in the servergame 
+	//game_state.tick = tick_count;
+	//char packet_data[HDR_SIZE + sizeof(GameStatePayload)];
 
-	NetworkServices::buildPacket<GameStatePayload>(PacketType::GAME_STATE, game_state, packet_data);
+	//NetworkServices::buildPacket<GameStatePayload>(PacketType::GAME_STATE, game_state, packet_data);
+
+	char packet_data[HDR_SIZE + sizeof(GameState)];
+
+	NetworkServices::buildPacket<GameState>(PacketType::GAME_STATE, *state, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameStatePayload));
 }
 
 ServerGame::~ServerGame() {
 	delete network;
+	delete state;
 }
