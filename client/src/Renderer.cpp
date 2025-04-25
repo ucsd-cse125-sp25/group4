@@ -306,6 +306,7 @@ bool Renderer::Init(HWND window_handle) {
 				.Count = 1,
 			},
 		};
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
 
 		// create the pipeline state object
 		UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
@@ -440,8 +441,8 @@ XMMATRIX Renderer::computeViewProject(XMVECTOR pos, LookDir lookDir) {
 	XMVECTOR lookVec = { 0, 0, -1, 0}; // start by looking down
 	lookVec = XMVector3Transform(lookVec, XMMatrixRotationX(lookDir.pitch)); // look up/down
 	lookVec = XMVector3Transform(lookVec, XMMatrixRotationZ(lookDir.yaw)); // look left/right
-	const XMVECTOR up = { 0, 0, 1, 0 };
-	return XMMatrixPerspectiveFovRH(m_fov, m_aspectRatio, 0.01, 100) * XMMatrixLookToRH(pos, lookVec, up);
+	const XMVECTOR up = { 0, 0, 1, 0 }; // Z is up
+	return XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100) * XMMatrixLookToRH(pos, lookVec, up);
 }
 
 bool Renderer::Render() {

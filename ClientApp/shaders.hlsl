@@ -16,8 +16,9 @@ PSInput VSMain(float3 position : POSITION)
     
     // TODO unpack position once we have a more compressed format 
     float4 position_homogeneous = float4(position, 1);
-    result.position = mul(viewProject, position_homogeneous); // offset is visible outside of the struct
+    result.position = mul(position_homogeneous, viewProject); // offset is visible outside of the struct
     // result.color = color;
+    // TODO: read this becase DX12 is fucking bullshit https://www.braynzarsoft.net/viewtutorial/q16390-transformations-and-world-view-projection-space-matrices
 
     return result;
 }

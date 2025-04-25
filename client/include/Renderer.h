@@ -59,10 +59,10 @@ public:
 	// TODO: have a constant buffer for each frame
 	SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
 	TEMPPlayerState playerState = {
-		.pos = {6, -6, 2.5},
+		.pos = {6, -6, 2.5, 1},
 		.lookDir = {
-			.pitch = XMConvertToRadians(73),
-			.yaw = XMConvertToRadians(45),
+			.pitch = XMConvertToRadians(-73),
+			.yaw = XMConvertToRadians(-45),
 		},
 	};
 private:
