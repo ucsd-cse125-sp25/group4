@@ -8,7 +8,8 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-/*
+
+/* Blender Import Script
 import bpy
 import mathutils
 
@@ -27,21 +28,26 @@ for tri in cubemesh.loop_triangles:
 print(scenevertices)
 */
 
+struct TEMPPlayerState {
+	XMFLOAT3 pos;
+	float lookPitch;
+	float lookYaw;
+};
+
 const int NUM_VERTS = 12;
 const float cubeverts[NUM_VERTS][3] = {
 -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0
 };
 
+// TODO: have 2 constant buffers
+// 1 is updated per-frame
+// 1 is updated per-tick
+// maybe a 3rd is updated sporadically
 
 struct SceneConstantBuffer {
-	struct Frame {
-		XMMATRIX view;
-		XMMATRIX projection;
-	};
-	struct Tick {
-		XMFLOAT4 offset;
-	};
-	float padding[28];
+    XMMATRIX view;
+    XMMATRIX project;
+	float padding[32];
 };
 static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant buffer must be 256-byte aligned");
 class Renderer {
@@ -51,7 +57,7 @@ public:
 	bool Render();
 	void OnUpdate();
 	~Renderer();
-
+	// TODO: have a constant buffer for each frame
 	SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
 	
 private:

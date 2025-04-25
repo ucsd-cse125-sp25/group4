@@ -524,13 +524,5 @@ Renderer::~Renderer() {
 }
 
 void Renderer::OnUpdate() {
-	const float translationSpeed = 0.015f;
-	const float offsetBounds = 1.25f;
-
-	m_constantBufferData.offset.x += translationSpeed;
-	if (m_constantBufferData.offset.x > offsetBounds) {
-        m_constantBufferData.offset.x = -offsetBounds;
-    }
-	
 	memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
 }

@@ -1,7 +1,7 @@
 cbuffer SceneConstantBuffer : register(b0) // b0 is the "virtual register" where the constant buffer is stored
 {
-    float4 offset; // 16 bytes
-    float4 padding[15]; // 240 bytes; explicitly pad buffer to 256 bytes (not required)
+    float4x4 view;
+    float4x4 project;
 };
 
 
@@ -14,8 +14,10 @@ struct PSInput
 PSInput VSMain(float4 position : POSITION, float4 color : COLOR)
 {
     PSInput result;
-
-    result.position = position + offset; // offset is visible outside of the struct
+    
+    // TODO unpack position once we have a more compressed format 
+    
+    result.position = mul(project, mul(view, position)); // offset is visible outside of the struct
     result.color = color;
 
     return result;
