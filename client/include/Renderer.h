@@ -28,15 +28,14 @@ for tri in cubemesh.loop_triangles:
 print(scenevertices)
 */
 
-struct TEMPPlayerState {
-	XMFLOAT3 pos;
-	float lookPitch;
-	float lookYaw;
+struct LookDir {
+	// pitch and yaw match Blender's camera x and z rotations respectively
+	float pitch; // (0, pi), with pi/2 on the plane z=0
+	float yaw; // (-pi, pi], with 0 on the plane x=0
 };
-
-const int NUM_VERTS = 12;
-const float cubeverts[NUM_VERTS][3] = {
--1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0
+struct TEMPPlayerState {
+	XMVECTOR pos;
+	LookDir lookDir;
 };
 
 // TODO: have 2 constant buffers
@@ -44,10 +43,10 @@ const float cubeverts[NUM_VERTS][3] = {
 // 1 is updated per-tick
 // maybe a 3rd is updated sporadically
 
+
 struct SceneConstantBuffer {
-    XMMATRIX view;
-    XMMATRIX project;
-	float padding[32];
+    XMMATRIX viewProject;
+	float padding[48];
 };
 static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant buffer must be 256-byte aligned");
 class Renderer {
@@ -59,7 +58,13 @@ public:
 	~Renderer();
 	// TODO: have a constant buffer for each frame
 	SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
-	
+	TEMPPlayerState playerState = {
+		.pos = {6, -6, 2.5},
+		.lookDir = {
+			.pitch = XMConvertToRadians(73),
+			.yaw = XMConvertToRadians(45),
+		},
+	};
 private:
 
     D3D12_VIEWPORT m_viewport;
@@ -91,10 +96,10 @@ private:
 	UINT m_width = 1920;
 	UINT m_height = 1080;
 	float m_aspectRatio = 16.0f / 9.0f;
-
+	float m_fov = XMConvertToRadians(40); 
 	struct Vertex {
         XMFLOAT3 position;
-        XMFLOAT4 color;
+        // XMFLOAT4 color;
     };
 	ComPtr<ID3D12Resource> m_vertexBuffer;
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
@@ -106,4 +111,6 @@ private:
 
 	bool MoveToNextFrame();
 	bool WaitForGpu();
+
+	XMMATRIX computeViewProject(XMVECTOR pos, LookDir lookDir);
 };

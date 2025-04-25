@@ -54,7 +54,7 @@ struct GameStatePayload {
 	*/
 };
 
-typedef struct GameState {
+struct GameState {
 	float position[4];
 };
 

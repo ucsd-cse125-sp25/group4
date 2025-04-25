@@ -100,7 +100,7 @@ void ClientGame::update() {
 			char msgbuf[1000];
 			// printf(msgbuf, "Packet received y=%f \n", state->position[1]);
 
-			renderer.m_constantBufferData.offset.y = state->position[1];
+			// renderer.m_constantBufferData.offset.y = state->position[1];
 
 			break;
 		}

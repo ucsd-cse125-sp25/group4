@@ -2,7 +2,7 @@
 #include "Renderer.h"
 
 // return false from the function if there is a failure 
-#define UNWRAP(result) if(FAILED(result)) {printf("unwrap at %d", __LINE__); return false;} __UNUSED = 0 
+#define UNWRAP(result) if(FAILED(result)) return false 
 
 int __UNUSED;
 bool Renderer::Init(HWND window_handle) {
@@ -273,15 +273,15 @@ bool Renderer::Init(HWND window_handle) {
 				.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
 				.InstanceDataStepRate = 0,
 			},
-			{
-				.SemanticName = "COLOR",
-				.SemanticIndex = 0,
-				.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
-				.InputSlot = 0,
-				.AlignedByteOffset = 12,
-				.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-				.InstanceDataStepRate = 0,
-			},
+		 // {
+		 // 	.SemanticName = "COLOR",
+		 // 	.SemanticIndex = 0,
+		 // 	.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+		 // 	.InputSlot = 0,
+		 // 	.AlignedByteOffset = 12,
+		 // 	.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+		 // 	.InstanceDataStepRate = 0,
+		 // },
 
 		};
 		
@@ -327,13 +327,22 @@ bool Renderer::Init(HWND window_handle) {
 	// create vertex buffer 
 	{
 		// Define the geometry for a triangle.
-        Vertex triangleVertices[] =
-        {
-            { { 0.0f, 0.25f * m_aspectRatio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-            { { 0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-            { { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
-        };
-		const UINT vertexBufferSize = sizeof(triangleVertices);
+		
+		// 6 faces
+		// 2 triangles per face
+		// 3 vertices per triangle
+		// 3 floats per vertex
+		const Vertex cubeverts[6 * 2 * 3] = {
+			{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } }
+		};
+
+        // Vertex triangleVertices[] =
+        // {
+        //     { { 0.0f, 0.25f * m_aspectRatio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+        //     { { 0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+        //     { { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
+        // };
+		const UINT vertexBufferSize = sizeof(cubeverts);
 
 		// TODO: Optimize out the upload heap		
 		// upload heaps have CPU access optimized for writing
@@ -357,7 +366,7 @@ bool Renderer::Init(HWND window_handle) {
 			// initialize vertex buffer CPU pointer
 			UNWRAP(m_vertexBuffer->Map(0, &readRange, (void **)(&pVertexDataBegin))); 
 			// with the magic of virtual memory, this actually copies data to the GPU
-			memcpy(pVertexDataBegin, triangleVertices, vertexBufferSize);
+			memcpy(pVertexDataBegin, cubeverts, vertexBufferSize);
 			m_vertexBuffer->Unmap(0, nullptr);
 		}
 
@@ -370,6 +379,8 @@ bool Renderer::Init(HWND window_handle) {
 	// ----------------------------------------------------------------------------------------------------------------
 	// create constant buffer 
 	{
+		m_constantBufferData.viewProject = computeViewProject(playerState.pos, playerState.lookDir);
+
 		const UINT constantBufferSize = sizeof(SceneConstantBuffer);
 		D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD); 
 		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
@@ -425,6 +436,14 @@ bool Renderer::WaitForGpu() {
 	return true;
 }
 
+XMMATRIX Renderer::computeViewProject(XMVECTOR pos, LookDir lookDir) {
+	XMVECTOR lookVec = { 0, 0, -1, 0}; // start by looking down
+	lookVec = XMVector3Transform(lookVec, XMMatrixRotationX(lookDir.pitch)); // look up/down
+	lookVec = XMVector3Transform(lookVec, XMMatrixRotationZ(lookDir.yaw)); // look left/right
+	const XMVECTOR up = { 0, 0, 1, 0 };
+	return XMMatrixPerspectiveFovRH(m_fov, m_aspectRatio, 0.01, 100) * XMMatrixLookToRH(pos, lookVec, up);
+}
+
 bool Renderer::Render() {
 	// CREATE A COMMAND LIST
 	// should occur after all of its command lists have executed (use fences)
@@ -469,7 +488,7 @@ bool Renderer::Render() {
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-	m_commandList->DrawInstanced(3, 1, 0, 0);
+	m_commandList->DrawInstanced(36, 1, 0, 0);
 	
 
 	// barrier BEFORE presenting the back buffer 
@@ -524,5 +543,6 @@ Renderer::~Renderer() {
 }
 
 void Renderer::OnUpdate() {
+	m_constantBufferData.viewProject = computeViewProject(playerState.pos, playerState.lookDir);
 	memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
 }
