@@ -43,12 +43,22 @@ struct TEMPPlayerState {
 // 1 is updated per-tick
 // maybe a 3rd is updated sporadically
 
-
 struct SceneConstantBuffer {
     XMMATRIX viewProject;
 	float padding[48];
 };
 static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant buffer must be 256-byte aligned");
+
+struct Vertex {
+	XMFLOAT3 position;
+};
+
+struct Buffer {
+	ComPtr<ID3D12Resource> gpuBuffer;
+	UINT numElems;
+	Vertex *data;
+};
+
 class Renderer {
 public:
 	bool Init(HWND window_handle);
@@ -98,9 +108,6 @@ private:
 	UINT m_height = 1080;
 	float m_aspectRatio = 16.0f / 9.0f;
 	float m_fov = XMConvertToRadians(40 * (9.0/16.0)); 
-	struct Vertex {
-        XMFLOAT3 position;
-    };
 	ComPtr<ID3D12Resource> m_vertexBuffer;
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 	
@@ -118,3 +125,4 @@ private:
 	ComPtr<ID3D12DescriptorHeap> m_depthStencilDescriptorHeap;
 	
 };
+

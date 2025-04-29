@@ -493,7 +493,7 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	lookVec = XMVector3Transform(lookVec, XMMatrixRotationX(lookDir.pitch)); // look up/down
 	lookVec = XMVector3Transform(lookVec, XMMatrixRotationZ(lookDir.yaw)); // look left/right
 	const XMVECTOR up = XMVECTORF32{ 0, 0, 1, 0 }; // Z is up
-	// return XMMatrixLookToLH(pos, XMVector3Normalize(-pos), up) * XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100);
+
 	XMMATRIX view = XMMatrixLookAtLH(pos, XMVectorZero(), up);
 	XMMATRIX projected = view * XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100);
 	XMMATRIX transposed = XMMatrixTranspose(projected);
