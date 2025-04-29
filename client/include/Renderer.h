@@ -65,6 +65,7 @@ public:
 			.yaw = XMConvertToRadians(-45),
 		},
 	};
+	int dbg_NumTrisToDraw = 3;
 private:
 
     D3D12_VIEWPORT m_viewport;
@@ -96,14 +97,13 @@ private:
 	UINT m_width = 1920;
 	UINT m_height = 1080;
 	float m_aspectRatio = 16.0f / 9.0f;
-	float m_fov = XMConvertToRadians(40); 
+	float m_fov = XMConvertToRadians(40 * (9.0/16.0)); 
 	struct Vertex {
         XMFLOAT3 position;
-        // XMFLOAT4 color;
     };
 	ComPtr<ID3D12Resource> m_vertexBuffer;
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
-
+	
 
 	ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
 	ComPtr<ID3D12Resource> m_constantBuffer; // references the concept of the plan of the concept buffer or something
@@ -113,4 +113,8 @@ private:
 	bool WaitForGpu();
 
 	XMMATRIX computeViewProject(XMVECTOR pos, LookDir lookDir);
+	
+	ComPtr<ID3D12Resource> m_depthStencilBuffer;
+	ComPtr<ID3D12DescriptorHeap> m_depthStencilDescriptorHeap;
+	
 };

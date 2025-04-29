@@ -131,6 +131,9 @@ void ClientGame::update() {
 		positionDelta[1] -= 0.015f;
 		isUpdate = true;
 	}
+	else if ((VK_DOWN)) {
+		
+	}
 
 	if (isUpdate) {
 		sendGameStatePacket(positionDelta);
@@ -194,6 +197,16 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 		// TODO: handle closing the window	
 	}
 	break;
+	case WM_KEYDOWN:
+	{
+		if (wParam == VK_DOWN) {
+			state->renderer.dbg_NumTrisToDraw -= 3;
+		}
+		if (wParam == VK_UP) {
+			state->renderer.dbg_NumTrisToDraw += 3;
+		}
+		break;
+	}
 	} 
 
 	return DefWindowProc(window_handle, uMsg, wParam, lParam);

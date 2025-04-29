@@ -145,6 +145,14 @@ bool Renderer::Init(HWND window_handle) {
 			.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, // descriptor heap should be bound to the pipeline
 		};
 		UNWRAP(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
+
+		// create Depth Stencil View (DSV) descriptor heap
+		D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {
+			.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+			.NumDescriptors = 1,
+			.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+		};
+		UNWRAP(m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_depthStencilDescriptorHeap)));
 	}
 	
 	// ----------------------------------------------------------------------------------------------------------------
@@ -289,13 +297,15 @@ bool Renderer::Init(HWND window_handle) {
 		// describe Pipeline State Object (PSO) 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 			.pRootSignature = m_rootSignature.Get(),
-			.VS =  CD3DX12_SHADER_BYTECODE(vertexShader.Get()),
-			.PS =  CD3DX12_SHADER_BYTECODE(pixelShader.Get()),
-			.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT), 
+			.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get()),
+			.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get()),
+			.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
 			.SampleMask = UINT_MAX,
 			.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
 			.DepthStencilState = {
-				.DepthEnable = FALSE,
+				.DepthEnable = TRUE,
+				.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+				.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
 				.StencilEnable = FALSE,
 			},
 			.InputLayout = {inputElementDescs, _countof(inputElementDescs)},
@@ -333,9 +343,12 @@ bool Renderer::Init(HWND window_handle) {
 		// 2 triangles per face
 		// 3 vertices per triangle
 		// 3 floats per vertex
-		const Vertex cubeverts[6 * 2 * 3] = {
-			{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } }
-		};
+	    const Vertex cubeverts[6 * 2 * 3] = {
+	    	{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } }
+	    };
+	    // const Vertex cubeverts[6] = {
+	    // 	{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } }
+	    // };
 
         // Vertex triangleVertices[] =
         // {
@@ -407,6 +420,44 @@ bool Renderer::Init(HWND window_handle) {
 		UNWRAP(m_constantBuffer->Map(0, &readRange, (void **)(&m_pCbvDataBegin)));
 		memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
 	}
+	// ----------------------------------------------------------------------------------------------------------------
+	// create depth stencil buffer 
+	{
+		D3D12_DEPTH_STENCIL_VIEW_DESC depthStencilDesc = {
+			.Format = DXGI_FORMAT_D32_FLOAT,
+			.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+			.Flags = D3D12_DSV_FLAG_NONE,
+		};
+
+		D3D12_CLEAR_VALUE depthOptimizedClearValue = {
+			.Format = DXGI_FORMAT_D32_FLOAT,
+			.DepthStencil = {
+				.Depth = 1.0f,
+				.Stencil = 0,
+			}
+		};
+
+		D3D12_HEAP_PROPERTIES depthStencilHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+		D3D12_RESOURCE_DESC depthStencilBufferResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+			DXGI_FORMAT_D32_FLOAT, m_width, m_height,
+			1, 0,
+			1, 0,
+			D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+
+		UNWRAP(m_device->CreateCommittedResource(
+			&depthStencilHeapProperties,
+			D3D12_HEAP_FLAG_NONE,
+			&depthStencilBufferResourceDesc,
+			D3D12_RESOURCE_STATE_DEPTH_WRITE, &depthOptimizedClearValue, 
+			IID_PPV_ARGS(&m_depthStencilBuffer)
+		));
+		m_depthStencilDescriptorHeap->SetName(L"Depth/Stencil Resource Heap");
+		m_device->CreateDepthStencilView(
+			m_depthStencilBuffer.Get(),
+			&depthStencilDesc,
+			m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart()
+		);
+	}
 	
 	// create synchronization fence
 	{
@@ -437,12 +488,16 @@ bool Renderer::WaitForGpu() {
 	return true;
 }
 
-XMMATRIX Renderer::computeViewProject(XMVECTOR pos, LookDir lookDir) {
-	XMVECTOR lookVec = { 0, 0, -1, 0}; // start by looking down
+XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
+	XMVECTOR lookVec = XMVECTORF32{0, 0, -1, 0}; // start by looking down
 	lookVec = XMVector3Transform(lookVec, XMMatrixRotationX(lookDir.pitch)); // look up/down
 	lookVec = XMVector3Transform(lookVec, XMMatrixRotationZ(lookDir.yaw)); // look left/right
-	const XMVECTOR up = { 0, 0, 1, 0 }; // Z is up
-	return XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100) * XMMatrixLookToRH(pos, lookVec, up);
+	const XMVECTOR up = XMVECTORF32{ 0, 0, 1, 0 }; // Z is up
+	// return XMMatrixLookToLH(pos, XMVector3Normalize(-pos), up) * XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100);
+	XMMATRIX view = XMMatrixLookAtLH(pos, XMVectorZero(), up);
+	XMMATRIX projected = view * XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100);
+	XMMATRIX transposed = XMMatrixTranspose(projected);
+	return transposed;
 }
 
 bool Renderer::Render() {
@@ -485,11 +540,17 @@ bool Renderer::Render() {
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
 
+	// clear buffers
 	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	m_commandList->ClearDepthStencilView(m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-	m_commandList->DrawInstanced(36, 1, 0, 0);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+	m_commandList->DrawInstanced(dbg_NumTrisToDraw, 1, 0, 0);
 	
 
 	// barrier BEFORE presenting the back buffer 
