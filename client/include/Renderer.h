@@ -54,9 +54,11 @@ struct Vertex {
 };
 
 struct Buffer {
-	ComPtr<ID3D12Resource> gpuBuffer;
-	UINT numElems;
+	ComPtr<ID3D12Resource> resource;
+	UINT size; // in bytes
 	Vertex *data;
+	void *cpu_ptr;
+	D3D12_GPU_VIRTUAL_ADDRESS gpu_ptr;
 };
 
 class Renderer {
