@@ -42,6 +42,13 @@ struct TEMPPlayerState {
 	LookDir lookDir;
 };
 
+// we do not use a scoped enum because those cannot be implicitly cast to ints
+constexpr enum RootParameters : UINT8 {
+	ROOT_PARAMETERS_DESCRIPTOR_TABLE,
+	ROOT_PARAMETERS_CONSTANT_MODEL_VIEW_PROJECT,
+	ROOT_PARAMETERS_COUNT
+};
+
 // TODO: have 2 constant buffers
 // 1 is updated per-frame
 // 1 is updated per-tick

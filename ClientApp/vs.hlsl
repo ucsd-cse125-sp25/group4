@@ -20,8 +20,7 @@ struct Mat4
     float4x4 mat;
 };
 
-ConstantBuffer<Mat4> modelMatrix : register(b1);
-ConstantBuffer<Mat4> viewProjectMatrix : register(b2);
+ConstantBuffer<Mat4> modelViewProject : register(b1);
 
 
 PSInput VSMain(uint vid : SV_VertexID)
@@ -29,7 +28,7 @@ PSInput VSMain(uint vid : SV_VertexID)
     StructuredBuffer<Vertex> vbuffer = ResourceDescriptorHeap[1];
     float4 position_homogeneous = float4(vbuffer[vid].position, 1);
     PSInput result;
-    result.position = mul(mul(position_homogeneous, modelMatrix.mat), viewProjectMatrix.mat); // offset is visible outside of the struct
+    result.position = mul(position_homogeneous, modelViewProject.mat); // offset is visible outside of the struct
 
     return result;
     
