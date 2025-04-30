@@ -1,3 +1,4 @@
+#pragma once
 #include <wrl.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -61,12 +62,15 @@ struct DX12Descriptor {
 	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
 };
 
+
 template<typename T>
 struct Slice {
 	T* ptr;
-	UINT len; // num_elements
+	UINT len;
 
-	UINT numBytes();
+	inline UINT numBytes() {
+		return len * sizeof(T);
+	}
 };
 
 template<typename T>
@@ -151,11 +155,6 @@ private:
 	
 };
 
-template<typename T>
-inline UINT Slice<T>::numBytes()
-{
-	return len * sizeof(T);
-}
 
 template<typename T>
 inline bool Buffer<T>::Init(ID3D12Device* device, Slice<T> data, const wchar_t *debugName)

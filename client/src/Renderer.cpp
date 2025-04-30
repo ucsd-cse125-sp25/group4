@@ -229,8 +229,6 @@ bool Renderer::Init(HWND window_handle) {
 	// ----------------------------------------------------------------------------------------------------------------
 	// create pipeline state 
 	{
-		ComPtr<ID3DBlob> vertexShader;
-		ComPtr<ID3DBlob> pixelShader;
 		
 		UINT compileFlags = 0;
 #if defined(_DEBUG)
@@ -241,8 +239,8 @@ bool Renderer::Init(HWND window_handle) {
 		// describe Pipeline State Object (PSO) 
 		
 		// TODO: use slices instead
-		auto vertexShaderBytecode = DX::ReadData(L"vs.cso");
-		auto pixelShaderBytecode = DX::ReadData(L"ps.cso");
+		std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs.cso");
+		std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps.cso");
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 			.pRootSignature = m_rootSignature.Get(),

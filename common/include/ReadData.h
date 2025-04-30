@@ -19,7 +19,6 @@
 #include <stdexcept>
 #include <system_error>
 #include <vector>
-#include <windows.h>
 
 
 namespace DX
