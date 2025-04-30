@@ -15,12 +15,21 @@ struct PSInput
     // float4 color : COLOR;
 };
 
+struct Mat4 
+{
+    float4x4 mat;
+};
+
+ConstantBuffer<Mat4> modelMatrix : register(b1);
+ConstantBuffer<Mat4> viewProjectMatrix : register(b2);
+
+
 PSInput VSMain(uint vid : SV_VertexID)
 {
     StructuredBuffer<Vertex> vbuffer = ResourceDescriptorHeap[1];
     float4 position_homogeneous = float4(vbuffer[vid].position, 1);
     PSInput result;
-    result.position = mul(position_homogeneous, viewProject); // offset is visible outside of the struct
+    result.position = mul(mul(position_homogeneous, modelMatrix.mat), viewProjectMatrix.mat); // offset is visible outside of the struct
 
     return result;
     

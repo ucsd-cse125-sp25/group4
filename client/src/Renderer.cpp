@@ -189,14 +189,33 @@ bool Renderer::Init(HWND window_handle) {
 			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC,
 			.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
 		} };
-		D3D12_ROOT_PARAMETER1 rootParameters[1] = { {
+		// todo: parameterize these better
+		D3D12_ROOT_PARAMETER1 rootParameters[3] = { {
 				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
 				.DescriptorTable = {
 					.NumDescriptorRanges = 1,
 					.pDescriptorRanges = &ranges[0],
 				},
 				.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX,
+			}, 
+			// model matrix
+			{
+				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+				.Constants = {
+					.ShaderRegister = 1,
+					.RegisterSpace = 0,
+					.Num32BitValues = 16, 
+				}
 			},
+			// view project matrix
+			{
+				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+				.Constants = {
+					.ShaderRegister = 2,
+					.RegisterSpace = 0,
+					.Num32BitValues = 16, 
+				}
+			}
 		};
 
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {
@@ -487,6 +506,15 @@ bool Renderer::Render() {
 
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+	
+	// set model matrix
+	XMMATRIX identityMatrix = XMMatrixIdentity();
+	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &identityMatrix, 0);
+
+	// set viewproject matrix 
+	XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
+	m_commandList->SetGraphicsRoot32BitConstants(2, 16, &viewProject, 0);
+
 	m_commandList->DrawInstanced(dbg_NumTrisToDraw, 1, 0, 0);
 	
 
