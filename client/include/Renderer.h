@@ -42,6 +42,14 @@ struct TEMPPlayerState {
 	LookDir lookDir;
 };
 
+struct PlayerRenderState {
+	XMFLOAT3 pos;
+	LookDir lookDir;
+};
+struct CurrPlayerRenderState {
+	UINT8 playerId;
+};
+
 // we do not use a scoped enum because those cannot be implicitly cast to ints
 constexpr enum RootParameters : UINT8 {
 	ROOT_PARAMETERS_DESCRIPTOR_TABLE,
@@ -102,6 +110,7 @@ public:
 	~Renderer();
 	// TODO: have a constant buffer for each frame
 	SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
+
 	TEMPPlayerState playerState = {
 		.pos = {6, -6, 2.5, 1},
 		.lookDir = {
@@ -109,6 +118,37 @@ public:
 			.yaw = XMConvertToRadians(-45),
 		},
 	};
+	PlayerRenderState players[4] = {
+		{
+			.pos = {-4, -4, 0},
+			.lookDir = {
+				.pitch = XMConvertToRadians(0),
+				.yaw = XMConvertToRadians(-10),
+			},
+		},
+		{
+			.pos = {4, -4, 0},
+			.lookDir = {
+				.pitch = XMConvertToRadians(0),
+				.yaw = XMConvertToRadians(-20),
+			},
+		},
+		{
+			.pos = {-4, 4, 0},
+			.lookDir = {
+				.pitch = XMConvertToRadians(0),
+				.yaw = XMConvertToRadians(-30),
+			},
+		},
+		{
+			.pos = {4, 4, 0},
+			.lookDir = {
+				.pitch = XMConvertToRadians(0),
+				.yaw = XMConvertToRadians(-45),
+			},
+		}
+	};
+	CurrPlayerRenderState currPlayer = { 0 };
 	int dbg_NumTrisToDraw = 3;
 private:
 
@@ -156,6 +196,7 @@ private:
 	bool WaitForGpu();
 
 	XMMATRIX computeViewProject(FXMVECTOR pos, LookDir lookDir);
+	XMMATRIX computeModelMatrix(PlayerRenderState &playerRenderState);
 	
 	ComPtr<ID3D12Resource> m_depthStencilBuffer;
 	ComPtr<ID3D12DescriptorHeap> m_depthStencilDescriptorHeap;
@@ -166,6 +207,10 @@ private:
 template<typename T>
 inline bool Buffer<T>::Init(ID3D12Device* device, Slice<T> data, const wchar_t *debugName)
 {
+	this->data = {
+		data.ptr,
+		data.len
+	};
 	D3D12_HEAP_PROPERTIES heapProperties = {.Type = D3D12_HEAP_TYPE_UPLOAD};
 	D3D12_RESOURCE_DESC resourceDesc = {
 		.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
@@ -182,7 +227,7 @@ inline bool Buffer<T>::Init(ID3D12Device* device, Slice<T> data, const wchar_t *
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
-		D3D12_RESOURCE_STATE_COMMON,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&resource)
 	));

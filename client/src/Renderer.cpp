@@ -437,6 +437,7 @@ bool Renderer::WaitForGpu() {
 }
 
 XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
+	/*
 	XMVECTOR lookVec = XMVECTORF32{0, 0, -1, 0}; // start by looking down
 	lookVec = XMVector3Transform(lookVec, XMMatrixRotationX(lookDir.pitch)); // look up/down
 	lookVec = XMVector3Transform(lookVec, XMMatrixRotationZ(lookDir.yaw)); // look left/right
@@ -446,6 +447,17 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	XMMATRIX projected = view * XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100);
 	XMMATRIX transposed = XMMatrixTranspose(projected);
 	return transposed;
+	*/
+	return XMMatrixTranspose(
+		XMMatrixLookAtLH(XMVECTORF32{ 0, 0, 33, 1 }, XMVectorZero(), XMVECTORF32{ 0, 1, 0, 0 })
+		* XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100)
+	);
+}
+
+XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
+	XMMATRIX rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw);
+	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z);
+	return XMMatrixTranspose(rotate * translate);
 }
 
 bool Renderer::Render() {
@@ -499,10 +511,13 @@ bool Renderer::Render() {
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 	
 	XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
-	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
 
-	m_commandList->DrawInstanced(dbg_NumTrisToDraw, 1, 0, 0);
-	
+	for (UINT8 i = 0; i < 4; ++i) {
+		XMMATRIX modelMatrix = computeModelMatrix(players[i]);
+		XMMATRIX modelViewProjectMatrix = viewProject * modelMatrix;
+		m_commandList->SetGraphicsRoot32BitConstants(1, 16, &modelViewProjectMatrix, 0);
+		m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
+	}
 
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {
