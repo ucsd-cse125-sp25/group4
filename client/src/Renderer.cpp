@@ -1,8 +1,7 @@
 #pragma once
 #include "Renderer.h"
+#include "ReadData.h"
 
-// return false from the function if there is a failure 
-#define UNWRAP(result) if(FAILED(result)) return false 
 
 int __UNUSED;
 bool Renderer::Init(HWND window_handle) {
@@ -75,7 +74,6 @@ bool Renderer::Init(HWND window_handle) {
 #if defined(_DEBUG)
 	UNWRAP(m_device->QueryInterface(m_debugDevice.GetAddressOf()));
 #endif
-	
 
 	// ----------------------------------------------------------------------------------------------------------------
 	// command queue and command allocators
@@ -141,7 +139,7 @@ bool Renderer::Init(HWND window_handle) {
 		// create constant buffer view (CBV) descriptor heap
 		D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {
 			.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, // descriptor heap can be referenced by a root table
-			.NumDescriptors = 1,
+			.NumDescriptors = 2,
 			.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, // descriptor heap should be bound to the pipeline
 		};
 		UNWRAP(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
@@ -192,13 +190,14 @@ bool Renderer::Init(HWND window_handle) {
 			.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
 		} };
 		D3D12_ROOT_PARAMETER1 rootParameters[1] = { {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-			.DescriptorTable = {
-				.NumDescriptorRanges = 1,
-				.pDescriptorRanges = &ranges[0],
+				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+				.DescriptorTable = {
+					.NumDescriptorRanges = 1,
+					.pDescriptorRanges = &ranges[0],
+				},
+				.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX,
 			},
-			.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX,
-		} };
+		};
 
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {
 			.Version = D3D_ROOT_SIGNATURE_VERSION_1_1,
@@ -207,7 +206,7 @@ bool Renderer::Init(HWND window_handle) {
 				.pParameters = rootParameters,
 				.NumStaticSamplers = 0,
 				.pStaticSamplers = nullptr,
-				.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED,
+				.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
 			}
 		};
  
@@ -239,61 +238,22 @@ bool Renderer::Init(HWND window_handle) {
 #endif
 
 		// --------------------------------------------------------------------
-		// shader compilation 
-		UNWRAP(D3DCompileFromFile(
-			L"shaders.hlsl",
-			nullptr,
-			nullptr,
-			"VSMain",
-			"vs_5_0",
-			compileFlags,
-			0,
-			&vertexShader,
-			nullptr
-		));
-
-		UNWRAP(D3DCompileFromFile(
-			L"shaders.hlsl",
-			nullptr,
-			nullptr,
-			"PSMain",
-			"ps_5_0",
-			compileFlags,
-			0,
-			&pixelShader,
-			nullptr
-		));
-
-		// --------------------------------------------------------------------
-		// vertex layout
-		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-			{
-				.SemanticName = "POSITION",
-				.SemanticIndex = 0,
-				.Format = DXGI_FORMAT_R32G32B32_FLOAT,
-				.InputSlot = 0,
-				.AlignedByteOffset = 0,
-				.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-				.InstanceDataStepRate = 0,
-			},
-		 // {
-		 // 	.SemanticName = "COLOR",
-		 // 	.SemanticIndex = 0,
-		 // 	.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
-		 // 	.InputSlot = 0,
-		 // 	.AlignedByteOffset = 12,
-		 // 	.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-		 // 	.InstanceDataStepRate = 0,
-		 // },
-
-		};
-		
-		// --------------------------------------------------------------------
 		// describe Pipeline State Object (PSO) 
+		
+		// TODO: use slices instead
+		auto vertexShaderBytecode = DX::ReadData(L"vs.cso");
+		auto pixelShaderBytecode = DX::ReadData(L"ps.cso");
+
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 			.pRootSignature = m_rootSignature.Get(),
-			.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get()),
-			.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get()),
+			.VS = {
+				.pShaderBytecode = vertexShaderBytecode.data(),
+				.BytecodeLength = vertexShaderBytecode.size(),
+			},
+			.PS = {
+				.pShaderBytecode = pixelShaderBytecode.data(),
+				.BytecodeLength  = pixelShaderBytecode.size(),
+			},
 			.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
 			.SampleMask = UINT_MAX,
 			.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
@@ -303,7 +263,8 @@ bool Renderer::Init(HWND window_handle) {
 				.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
 				.StencilEnable = FALSE,
 			},
-			.InputLayout = {inputElementDescs, _countof(inputElementDescs)},
+			// .InputLayout = {inputElementDescs, _countof(inputElementDescs)},
+			.InputLayout = {},
 			.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 			.NumRenderTargets = 1,
 			.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
@@ -338,51 +299,35 @@ bool Renderer::Init(HWND window_handle) {
 		// 2 triangles per face
 		// 3 vertices per triangle
 		// 3 floats per vertex
-	    const Vertex cubeverts[6 * 2 * 3] = {
+	    Vertex cubeverts[6 * 2 * 3] = {
 	    	{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } }
 	    };
-	    // const Vertex cubeverts[6] = {
-	    // 	{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } }
-	    // };
-
-        // Vertex triangleVertices[] =
-        // {
-        //     { { 0.0f, 0.25f * m_aspectRatio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-        //     { { 0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-        //     { { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
-        // };
-		const UINT vertexBufferSize = sizeof(cubeverts);
-
-		// TODO: Optimize out the upload heap		
-		// upload heaps have CPU access optimized for writing
-		// they have less bandwidth for shader reads
-		D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD); 
-		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-		// allocates memory on the GPU for the data
-		UNWRAP(m_device->CreateCommittedResource(
-			&heapProperties,
-			D3D12_HEAP_FLAG_NONE,
-			&bufferDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(&m_vertexBuffer)
-		));
-		
-		// copy triangle to vertex buffer
+		// TEST: bindless vertex buffer
 		{
-			UINT8 *pVertexDataBegin; // pointer to vertex buffer in CPU-visible GPU heap memory 
-			D3D12_RANGE readRange = { .Begin = 0, .End = 0 };
-			// initialize vertex buffer CPU pointer
-			UNWRAP(m_vertexBuffer->Map(0, &readRange, (void **)(&pVertexDataBegin))); 
-			// with the magic of virtual memory, this actually copies data to the GPU
-			memcpy(pVertexDataBegin, cubeverts, vertexBufferSize);
-			m_vertexBuffer->Unmap(0, nullptr);
-		}
+			const Slice<Vertex> cubeVertsSlice = {
+				.ptr = cubeverts,
+				.len = _countof(cubeverts),
+			};
 
-		// initialize the vertex buffer view
-		m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-		m_vertexBufferView.StrideInBytes = sizeof(Vertex);
-		m_vertexBufferView.SizeInBytes = vertexBufferSize;
+			m_vertexBufferBindless.Init(m_device.Get(), cubeVertsSlice, L"Bindless Vertex Buffer");
+
+			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+				.Format = DXGI_FORMAT_UNKNOWN,
+				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.Buffer = {
+					.FirstElement = 0,
+					.NumElements = cubeVertsSlice.len,
+					.StructureByteStride = sizeof(Vertex)
+}
+			};
+
+			// TODO: Refactor holy shit this is awful
+	        D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle(m_cbvHeap->GetCPUDescriptorHandleForHeapStart());
+			UINT cbvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			D3D12_CPU_DESCRIPTOR_HANDLE vertexBufferBindlessDescriptorCPUHandle = { cbvHandle.ptr + cbvDescriptorSize };
+			m_device->CreateShaderResourceView(m_vertexBufferBindless.resource.Get(), &desc, vertexBufferBindlessDescriptorCPUHandle);
+		}
 	}
 		
 	// ----------------------------------------------------------------------------------------------------------------
@@ -541,7 +486,6 @@ bool Renderer::Render() {
 	m_commandList->ClearDepthStencilView(m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);

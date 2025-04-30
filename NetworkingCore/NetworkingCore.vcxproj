@@ -24,6 +24,7 @@
   <ItemGroup>
     <ClInclude Include="..\common\include\NetworkData.h" />
     <ClInclude Include="..\common\include\NetworkServices.h" />
+    <ClInclude Include="..\common\include\ReadData.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

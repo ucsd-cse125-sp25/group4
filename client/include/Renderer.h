@@ -9,6 +9,9 @@ using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
 
+// return false from the function if there is a failure 
+#define UNWRAP(result) if(FAILED(result)) return false 
+
 /* Blender Import Script
 import bpy
 import mathutils
@@ -53,13 +56,31 @@ struct Vertex {
 	XMFLOAT3 position;
 };
 
-struct Buffer {
-	ComPtr<ID3D12Resource> resource;
-	UINT size; // in bytes
-	Vertex *data;
-	void *cpu_ptr;
-	D3D12_GPU_VIRTUAL_ADDRESS gpu_ptr;
+struct DX12Descriptor {
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
+	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
 };
+
+template<typename T>
+struct Slice {
+	T* ptr;
+	UINT len; // num_elements
+
+	UINT numBytes();
+};
+
+template<typename T>
+struct Buffer {
+	Slice<T> data;
+	ComPtr<ID3D12Resource> resource;
+	void *shared_ptr; 
+	D3D12_GPU_VIRTUAL_ADDRESS gpu_ptr;
+	// uint32_t offset;
+
+	bool Init(ID3D12Device* device, Slice<T> data, const wchar_t* debugName);
+	void Release();
+};
+
 
 class Renderer {
 public:
@@ -110,8 +131,10 @@ private:
 	UINT m_height = 1080;
 	float m_aspectRatio = 16.0f / 9.0f;
 	float m_fov = XMConvertToRadians(40 * (9.0/16.0)); 
-	ComPtr<ID3D12Resource> m_vertexBuffer;
-	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
+	// ComPtr<ID3D12Resource> m_vertexBuffer;
+	// D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
+
+	Buffer<Vertex> m_vertexBufferBindless;
 	
 
 	ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
@@ -121,10 +144,55 @@ private:
 	bool MoveToNextFrame();
 	bool WaitForGpu();
 
-	XMMATRIX computeViewProject(XMVECTOR pos, LookDir lookDir);
+	XMMATRIX computeViewProject(FXMVECTOR pos, LookDir lookDir);
 	
 	ComPtr<ID3D12Resource> m_depthStencilBuffer;
 	ComPtr<ID3D12DescriptorHeap> m_depthStencilDescriptorHeap;
 	
 };
 
+template<typename T>
+inline UINT Slice<T>::numBytes()
+{
+	return len * sizeof(T);
+}
+
+template<typename T>
+inline bool Buffer<T>::Init(ID3D12Device* device, Slice<T> data, const wchar_t *debugName)
+{
+	D3D12_HEAP_PROPERTIES heapProperties = {.Type = D3D12_HEAP_TYPE_UPLOAD};
+	D3D12_RESOURCE_DESC resourceDesc = {
+		.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
+		.Width            = data.numBytes(),
+		.Height           = 1,
+		.DepthOrArraySize = 1,
+		.MipLevels        = 1,
+		.Format           = DXGI_FORMAT_UNKNOWN,
+		.SampleDesc       = { .Count = 1, .Quality = 0 },
+		.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+	};
+
+	UNWRAP(device->CreateCommittedResource(
+		&heapProperties,
+		D3D12_HEAP_FLAG_NONE,
+		&resourceDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		nullptr,
+		IID_PPV_ARGS(&resource)
+	));
+	resource->SetName(debugName);
+	
+	D3D12_RANGE nullRange = {};
+	UNWRAP(
+		resource->Map(0, &nullRange, &shared_ptr)
+	);
+	memcpy(shared_ptr, data.ptr, data.numBytes());
+	return true;
+}
+
+template<typename T>
+inline void Buffer<T>::Release()
+{
+	resource->Unmap(0, nullptr);
+	resource->Release();
+}
