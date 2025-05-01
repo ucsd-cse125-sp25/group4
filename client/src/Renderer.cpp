@@ -253,6 +253,19 @@ bool Renderer::Init(HWND window_handle) {
 		std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs.cso");
 		std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps.cso");
 
+		D3D12_FEATURE_DATA_SHADER_MODEL shaderModel{
+			D3D_SHADER_MODEL_6_6
+		};
+
+		if (FAILED(m_device->CheckFeatureSupport(
+			D3D12_FEATURE_SHADER_MODEL,
+			&shaderModel,
+			sizeof(shaderModel)
+		))) {
+			printf("shader model 6.6 not supported\n");
+			return false;
+		}
+
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 			.pRootSignature = m_rootSignature.Get(),
 			.VS = {
