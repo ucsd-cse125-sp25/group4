@@ -132,6 +132,18 @@ void ServerNetwork::sendToAll(char* packets, int totalSize) {
 	}
 }
 
+void ServerNetwork::sendToClient(unsigned int client_id, char* packets, int totalSize) {
+	int iResult;
+	if (sessions.find(client_id) != sessions.end()) {
+		SOCKET curSocket = sessions[client_id];
+		iResult = NetworkServices::sendMessage(curSocket, packets, totalSize);
+		if (iResult == SOCKET_ERROR) {
+			printf("send failed with error: %d\n", WSAGetLastError());
+			closesocket(curSocket);
+		}
+	}
+}
+
 ServerNetwork::~ServerNetwork() {
 	for (auto& [id, sock] : sessions) {
 		if (sock != INVALID_SOCKET) {

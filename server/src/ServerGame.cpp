@@ -6,7 +6,13 @@ ServerGame::ServerGame(void) {
 	client_id = 0;
 	network = new ServerNetwork();
 
-	state = new GameState{ {0} };
+	state = new GameState{
+		{
+			{2.0f, 2.0f, 0.0f},
+			{-2.0f, 2.0f, 0.0f},
+			{2.0f, -2.0f, 0.0f},
+			{-2.0f, -2.0f, 0.0f}
+		} };
 }
 
 void ServerGame::update() {
@@ -49,6 +55,11 @@ void ServerGame::receiveFromClients() {
 			case PacketType::INIT_CONNECTION:
 			{
 				printf("[CLIENT %d] INIT\n", id);
+				char packet_data[HDR_SIZE + sizeof(IDPayload)];
+
+				NetworkServices::buildPacket<IDPayload>(PacketType::IDENTIFICATION, { id }, packet_data);
+
+				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
 				break;
 			}
 			case PacketType::DEBUG:
@@ -60,10 +71,8 @@ void ServerGame::receiveFromClients() {
 			case PacketType::MOVE:
 			{
 				GameState* newState = (GameState*)&(network_data[i + HDR_SIZE]);
-				for (int i = 0; i < 4; i++) {
-					state->position[i] += newState->position[i];
-				}
-				printf("[CLIENT %d] MOVE: %f\n", id, newState->position[1]);
+				updateClientPositionWithCollision(id, newState);
+				printf("[CLIENT %d] MOVE: %f, %f\n", id, newState->position[id][0], newState->position[id][1]);
 				break;
 			}
 			default:
@@ -77,18 +86,69 @@ void ServerGame::receiveFromClients() {
 
 }
 
-void ServerGame::sendUpdates() {
-	//GameStatePayload game_state{};  // this should probably be a variable in the servergame 
-	//game_state.tick = tick_count;
-	//char packet_data[HDR_SIZE + sizeof(GameStatePayload)];
+void ServerGame::updateClientPositionWithCollision(unsigned int clientId, GameState* newState) {
+	// Update the position with collision detection
+	float newPosition[3] = { 0 };
+	for (int i = 0; i < 3; i++) {
+		newPosition[i] = newState->position[clientId][i];
 
-	//NetworkServices::buildPacket<GameStatePayload>(PacketType::GAME_STATE, game_state, packet_data);
+		bool isColliding = false;
+
+		// Check for collisions against other players
+		for (int c = 0; c < 4; c++) {
+			if (c == (int)clientId) {
+				continue;
+			}
+
+			float temp = 1.0f;
+			// Bounding box for the current client
+			float minBoundCurrent[2] = {
+				state->position[clientId][0] + newPosition[0] - temp, // x - 0.5
+				state->position[clientId][1] + newPosition[1] - temp  // y - 0.5
+			};
+			float maxBoundCurrent[2] = {
+				state->position[clientId][0] + newPosition[0] + temp, // x + 0.5
+				state->position[clientId][1] + newPosition[1] + temp  // y + 0.5
+			};
+
+			// Bounding box for the other client
+			float minBoundOther[2] = {
+				state->position[c][0] - temp, // x - 0.5
+				state->position[c][1] - temp  // y - 0.5
+			};
+			float maxBoundOther[2] = {
+				state->position[c][0] + temp, // x + 0.5
+				state->position[c][1] + temp  // y + 0.5
+			};
+
+			// Check for overlap in both x and y directions
+			isColliding = isColliding || ((minBoundCurrent[0] <= maxBoundOther[0] && maxBoundCurrent[0] >= minBoundOther[0]) &&
+				(minBoundCurrent[1] <= maxBoundOther[1] && maxBoundCurrent[1] >= minBoundOther[1]));
+
+			if (isColliding) {
+				printf("Collision detected between client %d and client %d, %d\n", clientId, c, i);
+				newPosition[i] = 0; //reset position in this direction
+				break; // don't need to check other clients
+			}
+			else {
+				//printf("no collision %d\n", i);
+			}
+		}
+	}
+	for (int i = 0; i < 3; i++) {
+		state->position[clientId][i] += newPosition[i];	
+	}
+	
+	
+}
+
+void ServerGame::sendUpdates() {
 
 	char packet_data[HDR_SIZE + sizeof(GameState)];
 
 	NetworkServices::buildPacket<GameState>(PacketType::GAME_STATE, *state, packet_data);
 
-	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameStatePayload));
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
 }
 
 ServerGame::~ServerGame() {
