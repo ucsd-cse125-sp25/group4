@@ -29,4 +29,5 @@ public:
 	bool acceptNewClient(unsigned int& id);
 	int receiveData(unsigned int client_id, char* recvbuf);
 	void sendToAll(char* packets, int totalSize);
+	void sendToClient(unsigned int client_id, char* packets, int totalSize);
 };

@@ -13,6 +13,8 @@ public:
 	void update();
 	void receiveFromClients();
 	void sendUpdates();
+	void updateClientPositionWithCollision(unsigned int clientId, GameState* newState);
+
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;

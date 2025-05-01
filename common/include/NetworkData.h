@@ -9,6 +9,7 @@ enum class PacketType : uint32_t {
 	DEBUG = 1,
 	GAME_STATE = 2,
 	MOVE = 3,
+	IDENTIFICATION = 4,
 	// add more here
 };
 
@@ -55,7 +56,11 @@ struct GameStatePayload {
 };
 
 struct GameState {
-	float position[4];
+	float position[4][3]; // x y z
+};
+
+typedef struct IDPayload {
+	unsigned int id;
 };
 
 struct MovePayload {

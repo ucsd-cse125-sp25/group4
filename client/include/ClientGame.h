@@ -19,13 +19,15 @@ public:
 	ClientGame(HINSTANCE hInstance,  int nCmdShow);
 	~ClientGame(void);
 
-	void sendDebugPacket(uint64_t);
+	void sendDebugPacket(const char*);
 	void sendGameStatePacket(float[4]);
 	void update();
+	void handleInput();
 
 	GameState gameState;
 	Renderer renderer;
 private:
+	unsigned int id;
 	ClientNetwork* network;
 	char network_data[MAX_PACKET_SIZE]; //todo this should change once we define the packet sizes
 };

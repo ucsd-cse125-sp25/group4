@@ -60,9 +60,9 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow) {
 	ShowWindow(windowHandle, nCmdShow);
 }
 
-void ClientGame::sendDebugPacket(uint64_t tick) {
+void ClientGame::sendDebugPacket(const char* message) {
 	DebugPayload dbg{};
-	sprintf_s(dbg.message, sizeof(dbg.message), "debug: tick %llu", tick);
+	sprintf_s(dbg.message, sizeof(dbg.message), message);
 
 	char packet_data[HDR_SIZE + sizeof(DebugPayload)];
 	NetworkServices::buildPacket<DebugPayload>(PacketType::DEBUG, dbg, packet_data);
@@ -73,12 +73,12 @@ void ClientGame::sendGameStatePacket(float posDelta[4]) {
 	GameState* state = new GameState{ {0} };
 	//sprintf_s(state.position, sizeof(state.position), "debug: tick %llu", tick);
 	for (int i = 0; i < 4; i++) {
-		state->position[i] = posDelta[i];
+		state->position[id][i] = posDelta[i];
 	}
 
 	char packet_data[HDR_SIZE + sizeof(GameState)];
 	NetworkServices::buildPacket<GameState>(PacketType::MOVE, *state, packet_data);
-	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(DebugPayload));
+	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(GameState));
 	delete state;
 }
 
@@ -101,11 +101,30 @@ void ClientGame::update() {
 			// printf(msgbuf, "Packet received y=%f \n", state->position[1]);
 
 			// renderer.m_constantBufferData.offset.y = state->position[1];
+			for (int i = 0; i < 4; i++) {
+				renderer.players[i].pos.x = state->position[i][0];
+				renderer.players[i].pos.y = state->position[i][1];
+				renderer.players[i].pos.z = state->position[i][2];
+			}
 
 			break;
 		}
 		case PacketType::DEBUG: 
 		{
+			break;
+		}
+		case PacketType::IDENTIFICATION:
+		{
+			IDPayload* idPayload = (IDPayload*)(network_data + HDR_SIZE);
+
+			id = idPayload->id;
+			char message[128];
+
+			strcpy_s(message, std::to_string(id).c_str());
+			strcat_s(message, " is my ID");
+
+			sendDebugPacket(message);
+
 			break;
 		}
 		default:
@@ -120,24 +139,7 @@ void ClientGame::update() {
 	// ---------------------------------------------------------------	
 	// Client Input Handling 
 
-	float positionDelta[4] = {};
-	bool isUpdate = false;
-
-	if (GetKeyState('W') & 0x8000) {
-		positionDelta[1] += 0.015f;
-		isUpdate = true;
-	}
-	else if (GetKeyState('S') & 0x8000) {
-		positionDelta[1] -= 0.015f;
-		isUpdate = true;
-	}
-	else if ((VK_DOWN)) {
-		
-	}
-
-	if (isUpdate) {
-		sendGameStatePacket(positionDelta);
-	}
+	handleInput();
 
 
 	// TODO: check for server updates and process them accordingly
@@ -154,6 +156,48 @@ void ClientGame::update() {
 
 ClientGame::~ClientGame() {
 	delete network;
+}
+
+void ClientGame::handleInput() {
+	float positionDelta[4] = {};
+	bool isUpdate = false;
+
+	if ((GetKeyState('W') & 0x8000) && id == 0) {
+		positionDelta[1] += 0.015f;
+		isUpdate = true;
+	}
+	if ((GetKeyState('S') & 0x8000) && id == 0) {
+		positionDelta[1] -= 0.015f;
+		isUpdate = true;
+	}
+	if ((GetKeyState('A') & 0x8000) && id == 0) {
+		positionDelta[0] += 0.015f;
+		isUpdate = true;
+	}
+	if ((GetKeyState('D') & 0x8000) && id == 0) {
+		positionDelta[0] -= 0.015f;
+		isUpdate = true;
+	}
+	if ((GetKeyState(VK_LEFT) & 0x8000) && id == 1) {
+		positionDelta[0] += 0.015f;
+		isUpdate = true;
+	}
+	if ((GetKeyState(VK_RIGHT) & 0x8000) && id == 1) {
+		positionDelta[0] -= 0.015f;
+		isUpdate = true;
+	}
+	if ((GetKeyState(VK_UP) & 0x8000) && id == 1) {
+		positionDelta[1] += 0.015f;
+		isUpdate = true;
+	}
+	if ((GetKeyState(VK_DOWN) & 0x8000) && id == 1) {
+		positionDelta[1] -= 0.015f;
+		isUpdate = true;
+	}
+
+	if (isUpdate) {
+		sendGameStatePacket(positionDelta);
+	}
 }
 
 inline ClientGame *GetState(HWND window_handle) {
@@ -193,8 +237,9 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 	}
 	break;
 	case WM_CLOSE:
+	case WM_DESTROY:
 	{
-		// TODO: handle closing the window	
+		PostQuitMessage(0);
 	}
 	break;
 	case WM_KEYDOWN:
