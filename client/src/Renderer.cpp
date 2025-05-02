@@ -81,7 +81,7 @@ bool Renderer::Init(HWND window_handle) {
 
 	// ----------------------------------------------------------------------------------------------------------------
 	// initialize devices
-	UNWRAP(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)));
+	UNWRAP(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&m_device)));
 #if defined(_DEBUG)
 	UNWRAP(m_device->QueryInterface(m_debugDevice.GetAddressOf()));
 #endif
