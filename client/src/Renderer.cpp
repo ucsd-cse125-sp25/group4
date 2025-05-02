@@ -46,6 +46,7 @@ bool Renderer::Init(HWND window_handle) {
 	// ----------------------------------------------------------------------------------------------------------------
 	// create adapter
     ComPtr<IDXGIAdapter1> adapter;
+	ComPtr<ID3D12Device> tempDevice;
 	for (UINT adapterIndex = 0;
 		 DXGI_ERROR_NOT_FOUND != factory->EnumAdapters1(adapterIndex, &adapter);
 		 ++adapterIndex)
@@ -58,9 +59,20 @@ bool Renderer::Init(HWND window_handle) {
 
 		// Check if the adapter supports Direct3D 12, and use that for the rest
 		// of the application
-		if (SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0,
-										_uuidof(ID3D12Device), nullptr)))
+		if (SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&tempDevice))))
 		{
+			printf("device found\n");
+			D3D12_FEATURE_DATA_SHADER_MODEL shaderModel{D3D_SHADER_MODEL_6_6};
+
+			if (FAILED(tempDevice->CheckFeatureSupport(
+				D3D12_FEATURE_SHADER_MODEL,
+				&shaderModel,
+				sizeof(shaderModel)
+			))) {
+				printf("Device does not support SM 6.6. Searching for other devices... \n");
+				continue;
+			}
+			
 			break;
 		}
 		// Else we won't use this iteration's adapter, so release it
@@ -253,18 +265,6 @@ bool Renderer::Init(HWND window_handle) {
 		std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs.cso");
 		std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps.cso");
 
-		D3D12_FEATURE_DATA_SHADER_MODEL shaderModel{
-			D3D_SHADER_MODEL_6_6
-		};
-
-		if (FAILED(m_device->CheckFeatureSupport(
-			D3D12_FEATURE_SHADER_MODEL,
-			&shaderModel,
-			sizeof(shaderModel)
-		))) {
-			printf("shader model 6.6 not supported\n");
-			return false;
-		}
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 			.pRootSignature = m_rootSignature.Get(),
