@@ -5,6 +5,7 @@
 #include <D3Dcompiler.h>
 #include <DirectXMath.h>
 #include "d3dx12.h"
+#include "ReadData.h"
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -68,16 +69,6 @@ struct SceneConstantBuffer {
 };
 static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant buffer must be 256-byte aligned");
 
-struct Vertex {
-	XMFLOAT3 position;
-};
-
-struct DX12Descriptor {
-	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
-	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
-};
-
-
 template<typename T>
 struct Slice {
 	T* ptr;
@@ -100,6 +91,40 @@ struct Buffer {
 	void Release();
 };
 
+struct Vertex {
+	XMFLOAT3 position;
+};
+
+// TODO: unify both vertex structs; this is just for development velocity
+struct SceneVertex {
+	XMFLOAT3 position;
+};
+
+struct Scene {
+	// Slice<BYTE> buf;
+	Buffer<SceneVertex> vertexBuffer;
+
+	bool Init(ID3D12Device* device, const wchar_t *filename) {
+		Slice<SceneVertex> tmp{};
+		// slurp data from file 
+		tmp.len = DX::ReadDataToPtr(filename, reinterpret_cast<BYTE**>( & tmp.ptr));
+		if (tmp.len <= 0) {
+			// something went wrong
+			return false;
+		}
+		vertexBuffer.Init(device, tmp, L"Scene Vertex Buffer");
+	};
+	void Release() {
+		if (vertexBuffer.data.ptr != nullptr) {
+			free(vertexBuffer.data.ptr);
+		}
+	}
+};
+
+struct DX12Descriptor {
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
+	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
+};
 
 class Renderer {
 public:

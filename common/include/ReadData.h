@@ -19,6 +19,7 @@
 #include <stdexcept>
 #include <system_error>
 #include <vector>
+#include <windows.h>
 
 
 namespace DX
@@ -69,5 +70,54 @@ namespace DX
         inFile.close();
 
         return blob;
+    }
+
+
+    inline UINT ReadDataToPtr(_In_z_ const wchar_t* name, BYTE** ptr_to_dest)
+    {
+        std::ifstream inFile(name, std::ios::in | std::ios::binary | std::ios::ate);
+
+#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY == WINAPI_FAMILY_DESKTOP_APP)
+        if (!inFile)
+        {
+            wchar_t moduleName[_MAX_PATH] = {};
+            if (!GetModuleFileNameW(nullptr, moduleName, _MAX_PATH))
+                throw std::system_error(std::error_code(static_cast<int>(GetLastError()), std::system_category()), "GetModuleFileNameW");
+
+            wchar_t drive[_MAX_DRIVE];
+            wchar_t path[_MAX_PATH];
+
+            if (_wsplitpath_s(moduleName, drive, _MAX_DRIVE, path, _MAX_PATH, nullptr, 0, nullptr, 0))
+                throw std::runtime_error("_wsplitpath_s");
+
+            wchar_t filename[_MAX_PATH];
+            if (_wmakepath_s(filename, _MAX_PATH, drive, path, name, nullptr))
+                throw std::runtime_error("_wmakepath_s");
+
+            inFile.open(filename, std::ios::in | std::ios::binary | std::ios::ate);
+        }
+#endif
+
+        if (!inFile)
+            throw std::runtime_error("ReadData");
+
+        const std::streampos len = inFile.tellg();
+        if (!inFile)
+            throw std::runtime_error("ReadData");
+
+        // blob.resize(size_t(len));
+        *ptr_to_dest = (BYTE *)malloc(len);
+
+        inFile.seekg(0, std::ios::beg);
+        if (!inFile)
+            throw std::runtime_error("ReadData");
+
+        inFile.read(reinterpret_cast<char*>(*ptr_to_dest), len);
+        if (!inFile)
+            throw std::runtime_error("ReadData");
+
+        inFile.close();
+
+        return len;
     }
 }
