@@ -19,10 +19,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\server\include\Parson.h" />
     <ClInclude Include="..\server\include\ServerGame.h" />
     <ClInclude Include="..\server\include\ServerNetwork.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\server\src\Parson.cpp" />
     <ClCompile Include="..\server\src\ServerGame.cpp" />
     <ClCompile Include="..\server\src\ServerMain.cpp" />
     <ClCompile Include="..\server\src\ServerNetwork.cpp" />
@@ -31,6 +33,12 @@
     <ProjectReference Include="..\NetworkingCore\NetworkingCore.vcxproj">
       <Project>{d6e7700a-3a55-4087-a663-3890633ec806}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\server\src\bb#_bboxes.json">
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

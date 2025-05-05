@@ -1,5 +1,9 @@
-#include "ServerGame.h"
-
+﻿#include "ServerGame.h"
+#include "Parson.h"
+#include <random>
+#include <vector>
+#include <iostream>
+using namespace std;
 unsigned int ServerGame::client_id;
 
 ServerGame::ServerGame(void) {
@@ -8,11 +12,15 @@ ServerGame::ServerGame(void) {
 
 	state = new GameState{
 		{
-			{2.0f, 2.0f, 0.0f},
+			{4.0f, 4.0f, 0.0f},
 			{-2.0f, 2.0f, 0.0f},
 			{2.0f, -2.0f, 0.0f},
 			{-2.0f, -2.0f, 0.0f}
 		} };
+	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
+	//vector<vector<float>> boxes2d;
+	//// colors2d[i][0..3] = R, G, B, A (0–255)
+	//vector<vector<int>> colors2d;
 }
 
 void ServerGame::update() {
@@ -99,9 +107,8 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, GameSt
 			if (c == (int)clientId) {
 				continue;
 			}
-
-			float temp = 1.0f;
 			// Bounding box for the current client
+			float temp = 1.0f;
 			float minBoundCurrent[2] = {
 				state->position[clientId][0] + newPosition[0] - temp, // x - 0.5
 				state->position[clientId][1] + newPosition[1] - temp  // y - 0.5
@@ -134,12 +141,38 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, GameSt
 				//printf("no collision %d\n", i);
 			}
 		}
+		for (size_t b = 0; b < boxes2d.size(); ++b) {
+			// Bounding box for the current client
+			float temp = 1.0f;
+			float minBoundCurrent[2] = {
+				state->position[clientId][0] + newPosition[0] - temp, // x - 0.5
+				state->position[clientId][1] + newPosition[1] - temp  // y - 0.5
+			};
+			float maxBoundCurrent[2] = {
+				state->position[clientId][0] + newPosition[0] + temp, // x + 0.5
+				state->position[clientId][1] + newPosition[1] + temp  // y + 0.5
+			};
+			auto& box = boxes2d[b];
+			float staticMinX = box[0];
+			float staticMinY = box[1];
+			float staticMaxX = box[3];
+			float staticMaxY = box[4];
+
+			// simple AABB overlap test in 2D (X vs X, Y vs Y)
+			if (minBoundCurrent[0] <= staticMaxX && maxBoundCurrent[0] >= staticMinX &&
+				minBoundCurrent[1] <= staticMaxY && maxBoundCurrent[1] >= staticMinY)
+			{
+				// collision! cancel movement on this axis
+				isColliding = true;
+				printf("Collision detected between client %d and collision box %d, %d\n", clientId, b, i);
+				newPosition[i] = 0;
+				break;
+			}
+		}
 	}
 	for (int i = 0; i < 3; i++) {
 		state->position[clientId][i] += newPosition[i];	
-	}
-	
-	
+	}	
 }
 
 void ServerGame::sendUpdates() {
@@ -149,6 +182,58 @@ void ServerGame::sendUpdates() {
 	NetworkServices::buildPacket<GameState>(PacketType::GAME_STATE, *state, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+}
+
+void ServerGame::readBoundingBoxes() {
+	static std::random_device rd;                                    // seed source
+	static std::mt19937       gen(rd());                             // mersenne twister engine
+	static std::uniform_int_distribution<int> distRGBA(150, 255);    // for R,G,B
+	const char* fileAddr = "bb#_bboxes.json";
+
+	JSON_Value* rootVal = json_parse_file(fileAddr);
+	if (!rootVal) { fprintf(stderr, "Cannot parse %s\n", fileAddr); }
+	else {printf("Parsed %s\n", fileAddr);}
+	JSON_Object* rootObj = json_value_get_object(rootVal);
+	size_t       boxCnt = json_object_get_count(rootObj);
+
+
+	for (size_t i = 0; i < boxCnt; i++) {
+		const char* name = json_object_get_name(rootObj, i);
+		JSON_Object* o = json_object_get_object(rootObj, name);
+		JSON_Array* mn = json_object_get_array(o, "min");
+		JSON_Array* mx = json_object_get_array(o, "max");
+
+		// read raw Blender coords
+		float bx0 = (float)json_array_get_number(mn, 0);
+		float by0 = (float)json_array_get_number(mn, 1);
+		float bz0 = (float)json_array_get_number(mn, 2);
+
+		float bx1 = (float)json_array_get_number(mx, 0);
+		float by1 = (float)json_array_get_number(mx, 1);
+		float bz1 = (float)json_array_get_number(mx, 2);
+
+		// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
+		vector<float> box2d;
+		// convert to Raylib coords in boxes2d
+		box2d.push_back(bx0);  // min.x
+		box2d.push_back(by0);  // min.y  blender Z
+		box2d.push_back(bz0);  // min.z  -blender Y
+		box2d.push_back(bx1);   // max.x
+		box2d.push_back(by1);   // max.y
+		box2d.push_back(bz1);   // max.z
+		boxes2d.push_back(box2d);
+		//cout << "box2d: " << box2d[0] << ", " << box2d[1] << ", " << box2d[2] << ", " << box2d[3] << ", " << box2d[4] << ", " << box2d[5] << endl;
+
+		// colors2d[i][0..3] = R, G, B, A (0–255)
+		vector<int> color2d;
+		// pick a random Color in colors2d
+		color2d.push_back(static_cast<unsigned char>(distRGBA(gen)));  // R
+		color2d.push_back(static_cast<unsigned char>(distRGBA(gen)));  // G
+		color2d.push_back(static_cast<unsigned char>(distRGBA(gen)));  // B
+		color2d.push_back(200);                       // A
+		colors2d.push_back(color2d);
+	}
+	json_value_free(rootVal);
 }
 
 ServerGame::~ServerGame() {
