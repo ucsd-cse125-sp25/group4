@@ -81,10 +81,10 @@ struct Slice {
 
 template<typename T>
 struct Buffer {
-	Slice<T> data;
-	ComPtr<ID3D12Resource> resource;
-	void *shared_ptr; 
-	D3D12_GPU_VIRTUAL_ADDRESS gpu_ptr;
+	Slice<T>                   data;
+	ComPtr<ID3D12Resource>     resource;
+	void                      *shared_ptr; 
+	D3D12_GPU_VIRTUAL_ADDRESS  gpu_ptr;
 	// uint32_t offset;
 
 	bool Init(ID3D12Device* device, Slice<T> data, const wchar_t* debugName);
@@ -96,28 +96,74 @@ struct Vertex {
 };
 
 // TODO: unify both vertex structs; this is just for development velocity
-struct SceneVertex {
-	XMFLOAT3 position;
+
+struct SceneHeader {
+	uint32_t version;
+	uint32_t numTriangles;
+	uint32_t firstTriangle;
 };
 
+struct VertexShadingData {
+	XMFLOAT3 normal;
+	XMFLOAT2 texcoord;
+};
+
+struct Triangles {
+	int                len;
+	XMFLOAT3          *vertPositions[3];
+	VertexShadingData *shadingData[3];
+	uint8_t           *materialId;
+};
+
+constexpr uint32_t SCENE_VERSION = 000'000'000;
 struct Scene {
-	// Slice<BYTE> buf;
+	// this slice owns its data
+	Slice<BYTE> data;
+
+	// no other references to it do
+	Triangles triangles;
 	Buffer<SceneVertex> vertexBuffer;
 
 	bool Init(ID3D12Device* device, const wchar_t *filename) {
-		Slice<SceneVertex> tmp{};
+		// ------------------------------------------------------------------------------------------------------------
 		// slurp data from file 
-		tmp.len = DX::ReadDataToPtr(filename, reinterpret_cast<BYTE**>( & tmp.ptr));
-		if (tmp.len <= 0) {
-			// something went wrong
+		data.len = DX::ReadDataToPtr(filename, &data.ptr);
+		if (data.len <= 0) {
+			printf("ERROR: failed to read scene file\n");
 			return false;
 		}
-		vertexBuffer.Init(device, tmp, L"Scene Vertex Buffer");
+		assert(data.ptr != nullptr);
+
+		SceneHeader header = (SceneHeader)data.ptr;
+		if (header.version != SCENE_VERSION) {
+			printf("ERROR: version of scene file does not match parser\n");
+			return false;
+		}
+		if (header.numTriangles == 0) {
+			printf("ERROR: scene has no triangles\n");
+			return false;
+		}
+		/*
+		if (header.firstTriangle + numTriangles >= data.len) {
+			printf("ERROR: described triangle buffer is out of bounds\n");
+			return false;
+		}*/
+		
+		triangles = Triangles{
+			.len = header.numTriangles,
+			.vertPositions = &data[header.firstTriangle],
+		};
+		// ------------------------------------------------------------------------------------------------------------
+		// create vertex buffer
+		{
+			vertexBuffer.Init(device, vertexBufferSlice, L"Scene Vertex Buffer");
+		}
 	};
 	void Release() {
-		if (vertexBuffer.data.ptr != nullptr) {
-			free(vertexBuffer.data.ptr);
+		if (data.ptr != nullptr) {
+			free(data.ptr);
 		}
+		memset(this, 0, sizeof(this));
 	}
 };
 
