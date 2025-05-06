@@ -69,6 +69,7 @@ void ClientGame::sendDebugPacket(const char* message) {
 	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(DebugPayload));
 }
 
+/*
 void ClientGame::sendGameStatePacket(float posDelta[4]) {
 	GameState* state = new GameState{ {0} };
 	//sprintf_s(state.position, sizeof(state.position), "debug: tick %llu", tick);
@@ -80,6 +81,18 @@ void ClientGame::sendGameStatePacket(float posDelta[4]) {
 	NetworkServices::buildPacket<GameState>(PacketType::MOVE, *state, packet_data);
 	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(GameState));
 	delete state;
+}
+*/
+
+void ClientGame::sendMovePacket(char dir, float yaw, float pitch) {
+	MovePayload mv{};
+	mv.direction = dir;
+	mv.yaw = yaw;
+	mv.pitch = pitch;
+
+	char packet_data [HDR_SIZE + sizeof(MovePayload)];
+	NetworkServices::buildPacket<MovePayload>(PacketType::MOVE, mv, packet_data);
+	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(MovePayload));
 }
 
 void ClientGame::update() {
@@ -102,9 +115,9 @@ void ClientGame::update() {
 
 			// renderer.m_constantBufferData.offset.y = state->position[1];
 			for (int i = 0; i < 4; i++) {
-				renderer.players[i].pos.x = state->position[i][0];
-				renderer.players[i].pos.y = state->position[i][1];
-				renderer.players[i].pos.z = state->position[i][2];
+				renderer.players[i].pos.x = state->players[i].x;
+				renderer.players[i].pos.y = state->players[i].y;
+				renderer.players[i].pos.z = state->players[i].z;
 			}
 
 			break;
@@ -159,25 +172,26 @@ ClientGame::~ClientGame() {
 }
 
 void ClientGame::handleInput() {
-	float positionDelta[4] = {};
 	bool isUpdate = false;
+	char dir;
 
 	if ((GetKeyState('W') & 0x8000) && id == 0) {
-		positionDelta[1] += 0.015f;
+		dir = 'W';
 		isUpdate = true;
 	}
 	if ((GetKeyState('S') & 0x8000) && id == 0) {
-		positionDelta[1] -= 0.015f;
+		dir = 'S';
 		isUpdate = true;
 	}
 	if ((GetKeyState('A') & 0x8000) && id == 0) {
-		positionDelta[0] += 0.015f;
+		dir = 'A';
 		isUpdate = true;
 	}
 	if ((GetKeyState('D') & 0x8000) && id == 0) {
-		positionDelta[0] -= 0.015f;
+		dir = 'D';
 		isUpdate = true;
 	}
+	/*
 	if ((GetKeyState(VK_LEFT) & 0x8000) && id == 1) {
 		positionDelta[0] += 0.015f;
 		isUpdate = true;
@@ -194,9 +208,11 @@ void ClientGame::handleInput() {
 		positionDelta[1] -= 0.015f;
 		isUpdate = true;
 	}
+	*/
 
+	// TODO: implement camera logic here...
 	if (isUpdate) {
-		sendGameStatePacket(positionDelta);
+		sendMovePacket(dir, 0, 0);
 	}
 }
 

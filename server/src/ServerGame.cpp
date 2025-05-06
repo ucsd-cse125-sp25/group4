@@ -11,12 +11,16 @@ ServerGame::ServerGame(void) {
 	network = new ServerNetwork();
 
 	state = new GameState{
-		{
-			{4.0f, 4.0f, 0.0f},
-			{-2.0f, 2.0f, 0.0f},
-			{2.0f, -2.0f, 0.0f},
-			{-2.0f, -2.0f, 0.0f}
-		} };
+		.tick = 0,
+		//x, y, z, yaw, pitch, speed, coins, isHunter
+		.players = {
+			{ 4.0f,  4.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, false},
+			{-2.0f,  2.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, false},
+			{ 2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, false},
+			{-2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, true },
+		}
+	};
+
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
 	//// colors2d[i][0..3] = R, G, B, A (0–255)
@@ -29,15 +33,15 @@ void ServerGame::update() {
 		std::this_thread::sleep_for(next_tick - now);
 	}
 	next_tick = std::chrono::steady_clock::now() + TICK_DURATION;
-	++tick_count;
+	++state->tick;
 
 	if (network->acceptNewClient(client_id)) {
-		printf("client %d has connected to the server (tick %llu)\n", client_id, tick_count);
+		printf("client %d has connected to the server (tick %llu)\n", client_id, state->tick);
 		client_id++;
 	}
 
 	receiveFromClients();
-
+	applyMovements();
 	sendUpdates();
 }
 
@@ -78,9 +82,10 @@ void ServerGame::receiveFromClients() {
 			}
 			case PacketType::MOVE:
 			{
-				GameState* newState = (GameState*)&(network_data[i + HDR_SIZE]);
-				updateClientPositionWithCollision(id, newState);
-				printf("[CLIENT %d] MOVE: %f, %f\n", id, newState->position[id][0], newState->position[id][1]);
+				MovePayload* mv = (MovePayload*)&(network_data[i + HDR_SIZE]);
+				// register the latest movement, but do not update yet
+				latestMovement[id] = *mv;
+				//printf("[CLIENT %d] MOVE: %f, %f\n", id, newState->position[id][0], newState->position[id][1]);
 				break;
 			}
 			default:
@@ -94,12 +99,41 @@ void ServerGame::receiveFromClients() {
 
 }
 
-void ServerGame::updateClientPositionWithCollision(unsigned int clientId, GameState* newState) {
-	// Update the position with collision detection
-	float newPosition[3] = { 0 };
-	for (int i = 0; i < 3; i++) {
-		newPosition[i] = newState->position[clientId][i];
+void ServerGame::applyMovements() {
+	for (auto& [id, mv] : latestMovement) {
 
+		// update direction regardless of collision
+		state->players[id].yaw = mv.yaw;
+		state->players[id].pitch = mv.pitch; 
+
+
+		// convert intent + yaw into 2d vector
+		float dx = 0, dy = 0;
+		const float cy = cosf(mv.yaw);
+		const float sy = sinf(mv.yaw);
+
+		switch (mv.direction)
+		{
+		case 'W':  dx = cy; dy = sy; break;
+		case 'S':  dx = -cy; dy = -sy; break;
+		case 'A':  dx = -sy; dy = cy; break;
+		case 'D':  dx = sy; dy = -cy; break;
+		default: break;
+		}
+
+		dx *= state->players[id].speed;
+		dy *= state->players[id].speed;
+
+		updateClientPositionWithCollision(id, dx, dy);
+	}
+
+	latestMovement.clear(); // consume the movement, don't keep for next tick
+}
+
+void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy) {
+	// Update the position with collision detection
+	float delta[3] = { dx, dy, 0.0f };
+	for (int i = 0; i < 3; i++) {
 		bool isColliding = false;
 
 		// Check for collisions against other players
@@ -108,24 +142,24 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, GameSt
 				continue;
 			}
 			// Bounding box for the current client
-			float temp = 1.0f;
+			float temp = 1.0f; // radius of player
 			float minBoundCurrent[2] = {
-				state->position[clientId][0] + newPosition[0] - temp, // x - 0.5
-				state->position[clientId][1] + newPosition[1] - temp  // y - 0.5
+				state->players[clientId].x + delta[0] - temp, // x - 0.5
+				state->players[clientId].y + delta[1] - temp  // y - 0.5
 			};
 			float maxBoundCurrent[2] = {
-				state->position[clientId][0] + newPosition[0] + temp, // x + 0.5
-				state->position[clientId][1] + newPosition[1] + temp  // y + 0.5
+				state->players[clientId].x + delta[0] + temp, // x + 0.5
+				state->players[clientId].y + delta[1] + temp  // y + 0.5
 			};
 
 			// Bounding box for the other client
 			float minBoundOther[2] = {
-				state->position[c][0] - temp, // x - 0.5
-				state->position[c][1] - temp  // y - 0.5
+				state->players[c].x - temp, // x - 0.5
+				state->players[c].y - temp  // y - 0.5
 			};
 			float maxBoundOther[2] = {
-				state->position[c][0] + temp, // x + 0.5
-				state->position[c][1] + temp  // y + 0.5
+				state->players[c].x + temp, // x + 0.5
+				state->players[c].y + temp  // y + 0.5
 			};
 
 			// Check for overlap in both x and y directions
@@ -134,7 +168,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, GameSt
 
 			if (isColliding) {
 				printf("Collision detected between client %d and client %d, %d\n", clientId, c, i);
-				newPosition[i] = 0; //reset position in this direction
+				delta[i] = 0; //reset position in this direction
 				break; // don't need to check other clients
 			}
 			else {
@@ -145,13 +179,14 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, GameSt
 			// Bounding box for the current client
 			float temp = 1.0f;
 			float minBoundCurrent[2] = {
-				state->position[clientId][0] + newPosition[0] - temp, // x - 0.5
-				state->position[clientId][1] + newPosition[1] - temp  // y - 0.5
+				state->players[clientId].x + delta[0] - temp, // x - 0.5
+				state->players[clientId].y + delta[1] - temp  // y - 0.5
 			};
 			float maxBoundCurrent[2] = {
-				state->position[clientId][0] + newPosition[0] + temp, // x + 0.5
-				state->position[clientId][1] + newPosition[1] + temp  // y + 0.5
+				state->players[clientId].x + delta[0] + temp, // x + 0.5
+				state->players[clientId].y + delta[1] + temp  // y + 0.5
 			};
+
 			auto& box = boxes2d[b];
 			float staticMinX = box[0];
 			float staticMinY = box[1];
@@ -165,14 +200,14 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, GameSt
 				// collision! cancel movement on this axis
 				isColliding = true;
 				printf("Collision detected between client %d and collision box %d, %d\n", clientId, b, i);
-				newPosition[i] = 0;
+				delta[i] = 0;
 				break;
 			}
 		}
 	}
-	for (int i = 0; i < 3; i++) {
-		state->position[clientId][i] += newPosition[i];	
-	}	
+	state->players[clientId].x += delta[0];
+	state->players[clientId].y += delta[1];
+	state->players[clientId].z += delta[2];
 }
 
 void ServerGame::sendUpdates() {

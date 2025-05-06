@@ -32,13 +32,13 @@ struct DebugPayload {
 
 struct PlayerState {
 	float x, y, z;
+	float yaw, pitch;
+	float speed;
 	uint8_t coins;
-	bool dead;
+	bool isHunter;
+//	bool dead;
 };
-struct HunterState {
-	float x, y, z;
-	uint8_t coins;
-};
+
 struct EntityState { // this is for traps or placed objects
 	float    x, y, z;
 	bool placed;
@@ -56,7 +56,9 @@ struct GameStatePayload {
 };
 
 struct GameState {
-	float position[4][3]; // x y z
+	uint64_t tick;
+	// float position[4][3]; // x y z
+	PlayerState players[4];
 };
 
 typedef struct IDPayload {

@@ -5,6 +5,7 @@
 #include <thread>
 #include <cstdint>、
 #include <vector>
+#include <unordered_map>
 
 class ServerGame {
 public:
@@ -14,7 +15,8 @@ public:
 	void update();
 	void receiveFromClients();
 	void sendUpdates();
-	void updateClientPositionWithCollision(unsigned int clientId, GameState* newState);
+	void applyMovements();
+	void updateClientPositionWithCollision(unsigned int, float, float);
 	void readBoundingBoxes();
 
 
@@ -24,12 +26,16 @@ private:
 	static unsigned int client_id;
 
 	std::chrono::steady_clock::time_point next_tick = std::chrono::steady_clock::now();
-	uint64_t tick_count = 0;
 	ServerNetwork* network;
 	char network_data[MAX_PACKET_SIZE];
+
+	/* Collision */
 	// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	vector<vector<float>> boxes2d;
 	// colors2d[i][0..3] = R, G, B, A (0–255)
 	vector<vector<int>> colors2d;
+
+	/* State */
 	GameState* state;
+	std::unordered_map<uint8_t, MovePayload> latestMovement;
 };
