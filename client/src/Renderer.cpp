@@ -151,7 +151,7 @@ bool Renderer::Init(HWND window_handle) {
 		m_resourceDescriptorAllocator.Init(
 			m_device.Get(),
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-			SCENE_BUFFER_TYPE_COUNT + 2,
+			SCENE_BUFFER_TYPE_COUNT + 1,
 			L"Resource Descriptor Heap");
 
 		// create Depth Stencil View (DSV) descriptor heap
@@ -290,6 +290,7 @@ bool Renderer::Init(HWND window_handle) {
 			.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 			.NumRenderTargets = 1,
 			.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+			.DSVFormat = DXGI_FORMAT_D32_FLOAT,
 			.SampleDesc = {
 				.Count = 1,
 			},
@@ -341,7 +342,7 @@ bool Renderer::Init(HWND window_handle) {
 					.FirstElement = 0,
 					.NumElements = cubeVertsSlice.len,
 					.StructureByteStride = sizeof(Vertex)
-}
+				}
 			};
 
 			m_vertexBufferDescriptor = m_resourceDescriptorAllocator.Allocate();

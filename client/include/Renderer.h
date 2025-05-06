@@ -238,8 +238,29 @@ struct Scene {
 		// copy scene to GPU
 		memcpy(shared_ptr, SceneBuffers.ptr, SceneBuffers.len);
 		
+		uint32_t bufferLengths[SCENE_BUFFER_TYPE_COUNT];
+		uint32_t bufferOffsets[SCENE_BUFFER_TYPE_COUNT];
+		bufferLengths[SCENE_BUFFER_TYPE_VERTEX_POSITION] = triangles.len;
+		bufferOffsets[SCENE_BUFFER_TYPE_VERTEX_POSITION] = 0;
+		bufferLengths[SCENE_BUFFER_TYPE_VERTEX_SHADING] = triangles.len;
+		bufferOffsets[SCENE_BUFFER_TYPE_VERTEX_SHADING] = 0; // CHANGE LATER
+		bufferLengths[SCENE_BUFFER_TYPE_MATERIAL_ID] = triangles.len;
+		bufferOffsets[SCENE_BUFFER_TYPE_MATERIAL_ID] = 0; // CHANGE LATER
+
 		for (unsigned int i = 0; i < SCENE_BUFFER_TYPE_COUNT; ++i) {
 			descriptors[i] = descriptorAllocator->Allocate();
+			
+			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+				.Format = DXGI_FORMAT_UNKNOWN,
+				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.Buffer = {
+					.FirstElement = bufferOffsets[i],
+					.NumElements = bufferLengths[i],
+					.StructureByteStride = sizeof(Vertex)
+				}
+			};
+			device->CreateShaderResourceView(resource.Get(), &desc, descriptors[i].cpu);
 		}
 	}
 	void Release() {
