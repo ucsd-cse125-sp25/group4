@@ -14,15 +14,22 @@ mesh.vertices.foreach_get("co", verts)
 indices = np.zeros(3 * len(mesh.loop_triangles), dtype=np.int32)
 mesh.loop_triangles.foreach_get("vertices", indices)
 
+verts = verts.reshape(-1, 3)
 verts = verts[indices]
+verts = verts.flatten()
 
 with open('scene.jj', 'wb') as f:
     # write header 
+    # version
     f.write(pack("I", 0))
-    f.write(pack("I", len(mesh.vertices)))
-    f.write(pack("I", 3)) # 3 byte offset
+    # number of triangles
+    f.write(pack("I", len(mesh.loop_triangles) * 3))
+    # index of first triangle
+    f.write(pack("I", 0))
+
+    # write data
     f.write(pack("f" * len(verts), *verts))
 
 print("File written successfully")
-# "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe"
-#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" suzanne.blend --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\ClientApp\exporter.py"
+# use this to write "scene.jj" into your working directory
+#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" H:\CSE125\suzanne.blend --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\ClientApp\exporter.py"

@@ -323,6 +323,8 @@ public:
 	CurrPlayerRenderState currPlayer = { 0 };
 	int dbg_NumTrisToDraw = 3;
 private:
+	std::vector<XMMATRIX> dbg_cubes;
+	void DBG_DrawCube(XMFLOAT3 min, XMFLOAT3 max);
 
     D3D12_VIEWPORT m_viewport;
     D3D12_RECT m_scissorRect;

@@ -523,6 +523,10 @@ bool Renderer::Render() {
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 	
 	XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
+
+	// draw debug cubes
+
+
 	// draw scene
 	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
 	uint32_t vertexPositionsIndex = m_scene.descriptors[SCENE_BUFFER_TYPE_VERTEX_POSITION].index;
