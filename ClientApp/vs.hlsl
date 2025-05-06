@@ -15,20 +15,21 @@ struct PSInput
     // float4 color : COLOR;
 };
 
-struct Mat4 
+struct PerDrawConstants 
 {
-    float4x4 mat;
+    float4x4 modelViewProject;
+    uint vbuffer_idx;
 };
 
-ConstantBuffer<Mat4> modelViewProject : register(b1);
+ConstantBuffer<PerDrawConstants> drawConstants : register(b1);
 
 
 PSInput VSMain(uint vid : SV_VertexID)
 {
-    StructuredBuffer<Vertex> vbuffer = ResourceDescriptorHeap[1];
+    StructuredBuffer<Vertex> vbuffer = ResourceDescriptorHeap[drawConstants.vbuffer_idx];
     float4 position_homogeneous = float4(vbuffer[vid].position, 1);
     PSInput result;
-    result.position = mul(position_homogeneous, modelViewProject.mat); // offset is visible outside of the struct
+    result.position = mul(position_homogeneous, drawConstants.modelViewProject); // offset is visible outside of the struct
 
     return result;
     

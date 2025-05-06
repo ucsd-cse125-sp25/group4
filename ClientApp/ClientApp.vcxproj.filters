@@ -46,9 +46,16 @@
     <FxCompile Include="vs.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
-    <FxCompile Include="ps.hlsl" />
+    <FxCompile Include="ps.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="exporter.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="..\Assets\scene.jj">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

@@ -54,7 +54,7 @@ struct CurrPlayerRenderState {
 // we do not use a scoped enum because those cannot be implicitly cast to ints
 constexpr enum RootParameters : UINT8 {
 	ROOT_PARAMETERS_DESCRIPTOR_TABLE,
-	ROOT_PARAMETERS_CONSTANT_MODEL_VIEW_PROJECT,
+	ROOT_PARAMETERS_CONSTANT_PER_CALL,
 	ROOT_PARAMETERS_COUNT
 };
 
@@ -98,9 +98,9 @@ struct Vertex {
 // TODO: unify both vertex structs; this is just for development velocity
 
 struct SceneHeader {
-	uint32_t version;
-	uint32_t numTriangles;
-	uint32_t firstTriangle;
+	int32_t version;
+	int32_t numTriangles;
+	int32_t firstTriangle;
 };
 
 struct VertexShadingData {
@@ -110,21 +110,76 @@ struct VertexShadingData {
 
 struct Triangles {
 	int                len;
-	XMFLOAT3          *vertPositions[3];
+	XMFLOAT3          (*vertPositions)[3];
 	VertexShadingData *shadingData[3];
 	uint8_t           *materialId;
 };
 
+struct Descriptor {
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
+	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
+	uint32_t index;
+};
+
+// based off of https://github.com/TheSandvichMaker/HelloBindlessD3D12/blob/main/hello_bindless.cpp#L389
+struct DescriptorAllocator {
+	ComPtr<ID3D12DescriptorHeap> heap;
+	D3D12_DESCRIPTOR_HEAP_TYPE type;
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu_base;
+	D3D12_GPU_DESCRIPTOR_HANDLE gpu_base;
+	uint32_t stride;
+	uint32_t at;
+	uint32_t capacity;
+
+	bool Init(ID3D12Device *device, D3D12_DESCRIPTOR_HEAP_TYPE inputType, uint32_t inputCapacity, const wchar_t *name) {
+		at = 0;
+		type = inputType;
+		capacity = inputCapacity;
+		D3D12_DESCRIPTOR_HEAP_DESC desc = {
+			.Type = type,
+			.NumDescriptors = capacity, 
+			.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+		};
+		UNWRAP(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&heap)));
+		heap->SetName(name);
+
+		cpu_base = heap->GetCPUDescriptorHandleForHeapStart();
+		gpu_base = heap->GetGPUDescriptorHandleForHeapStart();
+		stride = device->GetDescriptorHandleIncrementSize(type);
+	}
+
+	Descriptor Allocate() {
+		assert(at < capacity);
+		uint32_t index = at;
+		at++;
+		return Descriptor{
+			.cpu = { cpu_base.ptr + stride * index},
+			.gpu = { gpu_base.ptr + stride * index},
+			.index = index,
+		};
+	}
+};
+
+
 constexpr uint32_t SCENE_VERSION = 000'000'000;
+enum SceneBufferType {
+	SCENE_BUFFER_TYPE_VERTEX_POSITION,
+	SCENE_BUFFER_TYPE_VERTEX_SHADING,
+	SCENE_BUFFER_TYPE_MATERIAL_ID,
+	SCENE_BUFFER_TYPE_COUNT
+};
 struct Scene {
 	// this slice owns its data
 	Slice<BYTE> data;
-
-	// no other references to it do
+	// CPU data
 	Triangles triangles;
-	Buffer<SceneVertex> vertexBuffer;
+	// GPU heap
+	ComPtr<ID3D12Resource> resource;
+	void *shared_ptr;
+	// GPU Descriptors
+	Descriptor descriptors[SCENE_BUFFER_TYPE_COUNT];
 
-	bool Init(ID3D12Device* device, const wchar_t *filename) {
+	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *filename) {
 		// ------------------------------------------------------------------------------------------------------------
 		// slurp data from file 
 		data.len = DX::ReadDataToPtr(filename, &data.ptr);
@@ -133,13 +188,13 @@ struct Scene {
 			return false;
 		}
 		assert(data.ptr != nullptr);
-
-		SceneHeader header = (SceneHeader)data.ptr;
-		if (header.version != SCENE_VERSION) {
+		
+		SceneHeader* header = reinterpret_cast<SceneHeader*>(data.ptr);
+		if (header->version != SCENE_VERSION) {
 			printf("ERROR: version of scene file does not match parser\n");
 			return false;
 		}
-		if (header.numTriangles == 0) {
+		if (header->numTriangles == 0) {
 			printf("ERROR: scene has no triangles\n");
 			return false;
 		}
@@ -148,18 +203,47 @@ struct Scene {
 			printf("ERROR: described triangle buffer is out of bounds\n");
 			return false;
 		}*/
-		
-		triangles = Triangles{
-			.len = header.numTriangles,
-			.vertPositions = &data[header.firstTriangle],
+
+		// contains scene data but not the header	
+		Slice<BYTE> SceneBuffers = {
+			.ptr = data.ptr + sizeof(SceneHeader),
+			.len = data.len - sizeof(SceneHeader)
 		};
-		// ------------------------------------------------------------------------------------------------------------
-		// create vertex buffer
-		{
-			vertexBuffer.Init(device, vertexBufferSlice, L"Scene Vertex Buffer");
+
+		triangles = Triangles{
+			.len = header->numTriangles,
+			.vertPositions = reinterpret_cast<XMFLOAT3(*)[3]>(&SceneBuffers.ptr[header->firstTriangle]),
+			.shadingData = nullptr,
+			.materialId = nullptr,
+		};
+
+		D3D12_HEAP_PROPERTIES heapProperties = { .Type = D3D12_HEAP_TYPE_UPLOAD };
+		CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(SceneBuffers.len);
+		
+		// allocate GPU memory for the whole scene
+		UNWRAP(device->CreateCommittedResource(
+			&heapProperties,
+			D3D12_HEAP_FLAG_NONE,
+			&resourceDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&resource)
+		));
+		resource->SetName(L"Scene Buffers");
+
+		D3D12_RANGE nullRange = {};
+		UNWRAP(
+			resource->Map(0, &nullRange, &shared_ptr)
+		);
+		// copy scene to GPU
+		memcpy(shared_ptr, SceneBuffers.ptr, SceneBuffers.len);
+		
+		for (unsigned int i = 0; i < SCENE_BUFFER_TYPE_COUNT; ++i) {
+			descriptors[i] = descriptorAllocator->Allocate();
 		}
-	};
+	}
 	void Release() {
+		resource->Unmap(0, nullptr);
 		if (data.ptr != nullptr) {
 			free(data.ptr);
 		}
@@ -167,10 +251,6 @@ struct Scene {
 	}
 };
 
-struct DX12Descriptor {
-	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
-	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
-};
 
 class Renderer {
 public:
@@ -180,7 +260,7 @@ public:
 	void OnUpdate();
 	~Renderer();
 	// TODO: have a constant buffer for each frame
-	SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
+	// SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
 
 	TEMPPlayerState playerState = {
 		.pos = {6, -6, 2.5, 1},
@@ -256,11 +336,14 @@ private:
 	// ComPtr<ID3D12Resource> m_vertexBuffer;
 	// D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
+	Descriptor m_vertexBufferDescriptor;
 	Buffer<Vertex> m_vertexBufferBindless;
+	Scene m_scene;
 	
 
-	ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
-	ComPtr<ID3D12Resource> m_constantBuffer; // references the concept of the plan of the concept buffer or something
+	// ComPtr<ID3D12DescriptorHeap> m_resourceHeap;
+	DescriptorAllocator m_resourceDescriptorAllocator;
+	// ComPtr<ID3D12Resource> m_constantBuffer; // references the concept of the plan of the concept buffer or something
 	UINT8 *m_pCbvDataBegin; // virtual address of the constant buffer memory
 
 	bool MoveToNextFrame();

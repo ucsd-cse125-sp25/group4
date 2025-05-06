@@ -146,14 +146,13 @@ bool Renderer::Init(HWND window_handle) {
 
 		UNWRAP(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-		// create constant buffer view (CBV) descriptor heap
-		D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {
-			.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, // descriptor heap can be referenced by a root table
-			.NumDescriptors = 2,
-			.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, // descriptor heap should be bound to the pipeline
-		};
-		UNWRAP(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
+		
+		// all resource descriptors go here
+		m_resourceDescriptorAllocator.Init(
+			m_device.Get(),
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+			SCENE_BUFFER_TYPE_COUNT + 2,
+			L"Resource Descriptor Heap");
 
 		// create Depth Stencil View (DSV) descriptor heap
 		D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {
@@ -163,7 +162,10 @@ bool Renderer::Init(HWND window_handle) {
 		};
 		UNWRAP(m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_depthStencilDescriptorHeap)));
 	}
-	
+	// initialize scene 
+	{
+		m_scene.Init(m_device.Get(), &m_resourceDescriptorAllocator, L"scene.jj");
+	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// create frame resources
 	{
@@ -193,8 +195,8 @@ bool Renderer::Init(HWND window_handle) {
 		}
 		
 		D3D12_DESCRIPTOR_RANGE1 ranges[1] = { {
-			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-			.NumDescriptors = 1,
+			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+			.NumDescriptors = m_resourceDescriptorAllocator.capacity,
 			.BaseShaderRegister = 0,
 			.RegisterSpace = 0,
 			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC,
@@ -202,7 +204,6 @@ bool Renderer::Init(HWND window_handle) {
 		} };
 
 		D3D12_ROOT_PARAMETER1 parameters[ROOT_PARAMETERS_COUNT] = {};
-		// currently, this descriptor table is not used
 		parameters[ROOT_PARAMETERS_DESCRIPTOR_TABLE] = {
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
 			.DescriptorTable = {
@@ -212,12 +213,12 @@ bool Renderer::Init(HWND window_handle) {
 			.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX,
 		};
 		// modelViewProject matrix
-		parameters[ROOT_PARAMETERS_CONSTANT_MODEL_VIEW_PROJECT] = {
+		parameters[ROOT_PARAMETERS_CONSTANT_PER_CALL] = {
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
 			.Constants = {
 				.ShaderRegister = 1,
 				.RegisterSpace = 0,
-				.Num32BitValues = 16,
+				.Num32BitValues = 17,
 			}
 		};
 		// may add more parameters in the future for indices of resources
@@ -343,44 +344,41 @@ bool Renderer::Init(HWND window_handle) {
 }
 			};
 
-			// TODO: Refactor holy shit this is awful
-	        D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle(m_cbvHeap->GetCPUDescriptorHandleForHeapStart());
-			UINT cbvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			D3D12_CPU_DESCRIPTOR_HANDLE vertexBufferBindlessDescriptorCPUHandle = { cbvHandle.ptr + cbvDescriptorSize };
-			m_device->CreateShaderResourceView(m_vertexBufferBindless.resource.Get(), &desc, vertexBufferBindlessDescriptorCPUHandle);
+			m_vertexBufferDescriptor = m_resourceDescriptorAllocator.Allocate();
+			m_device->CreateShaderResourceView(m_vertexBufferBindless.resource.Get(), &desc, m_vertexBufferDescriptor.cpu);
 		}
 	}
 		
 	// ----------------------------------------------------------------------------------------------------------------
 	// create constant buffer 
-	{
-		m_constantBufferData.viewProject = computeViewProject(playerState.pos, playerState.lookDir);
-
-		const UINT constantBufferSize = sizeof(SceneConstantBuffer);
-		D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD); 
-		D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
-		UNWRAP(m_device->CreateCommittedResource(
-				&heapProperties,
-				D3D12_HEAP_FLAG_NONE,
-				&bufferDesc,
-				D3D12_RESOURCE_STATE_GENERIC_READ,
-				nullptr,
-				IID_PPV_ARGS(&m_constantBuffer)
-		));
-
-		// create constant buffer view
-		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-			.BufferLocation = m_constantBuffer->GetGPUVirtualAddress(),
-			.SizeInBytes = constantBufferSize,
-		};
-		m_device->CreateConstantBufferView(&cbvDesc, m_cbvHeap->GetCPUDescriptorHandleForHeapStart());
-		
-		// initialize constant buffer
-		// we don't unmap until the app closes
-		D3D12_RANGE readRange = { 0, 0 };
-		UNWRAP(m_constantBuffer->Map(0, &readRange, (void **)(&m_pCbvDataBegin)));
-		memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
-	}
+    // {
+    // 	m_constantBufferData.viewProject = computeViewProject(playerState.pos, playerState.lookDir);
+    // 
+    // 	const UINT constantBufferSize = sizeof(SceneConstantBuffer);
+    // 	D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD); 
+    // 	D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
+    // 	UNWRAP(m_device->CreateCommittedResource(
+    // 			&heapProperties,
+    // 			D3D12_HEAP_FLAG_NONE,
+    // 			&bufferDesc,
+    // 			D3D12_RESOURCE_STATE_GENERIC_READ,
+    // 			nullptr,
+    // 			IID_PPV_ARGS(&m_constantBuffer)
+    // 	));
+    // 
+    // 	// create constant buffer view
+    // 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
+    // 		.BufferLocation = m_constantBuffer->GetGPUVirtualAddress(),
+    // 		.SizeInBytes = constantBufferSize,
+    // 	};
+    // 	m_device->CreateConstantBufferView(&cbvDesc, m_resourceHeap->GetCPUDescriptorHandleForHeapStart());
+    // 	
+    // 	// initialize constant buffer
+    // 	// we don't unmap until the app closes
+    // 	D3D12_RANGE readRange = { 0, 0 };
+    // 	UNWRAP(m_constantBuffer->Map(0, &readRange, (void **)(&m_pCbvDataBegin)));
+    // 	memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
+    // }
 	// ----------------------------------------------------------------------------------------------------------------
 	// create depth stencil buffer 
 	{
@@ -486,9 +484,9 @@ bool Renderer::Render() {
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 	
 	// set heaps for constant buffer
-	ID3D12DescriptorHeap *ppHeaps[] = {m_cbvHeap.Get()};
+	ID3D12DescriptorHeap *ppHeaps[] = {m_resourceDescriptorAllocator.heap.Get()};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
+	m_commandList->SetGraphicsRootDescriptorTable(0, m_resourceDescriptorAllocator.gpu_base);
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
@@ -524,11 +522,19 @@ bool Renderer::Render() {
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 	
 	XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
+	// draw scene
+	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
+	uint32_t vertexPositionsIndex = m_scene.descriptors[SCENE_BUFFER_TYPE_VERTEX_POSITION].index;
+	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
+	m_commandList->DrawInstanced(3 * m_scene.triangles.len, 1, 0, 0);
 
+	// draw players
 	for (UINT8 i = 0; i < 4; ++i) {
 		XMMATRIX modelMatrix = computeModelMatrix(players[i]);
 		XMMATRIX modelViewProjectMatrix = viewProject * modelMatrix;
 		m_commandList->SetGraphicsRoot32BitConstants(1, 16, &modelViewProjectMatrix, 0);
+		vertexPositionsIndex = m_vertexBufferDescriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
 		m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
 	}
 
@@ -584,6 +590,6 @@ Renderer::~Renderer() {
 }
 
 void Renderer::OnUpdate() {
-	m_constantBufferData.viewProject = computeViewProject(playerState.pos, playerState.lookDir);
-	memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
+	// m_constantBufferData.viewProject = computeViewProject(playerState.pos, playerState.lookDir);
+	// memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
 }
