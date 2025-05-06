@@ -58,6 +58,8 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow) {
 	}
 
 	ShowWindow(windowHandle, nCmdShow);
+
+	hwnd = windowHandle;
 }
 
 void ClientGame::sendDebugPacket(const char* message) {
@@ -172,22 +174,26 @@ ClientGame::~ClientGame() {
 }
 
 void ClientGame::handleInput() {
+	// if game window is not focused, don't register input
+	if (GetForegroundWindow() != hwnd) 
+		return;
+
 	bool isUpdate = false;
 	char dir;
 
-	if ((GetKeyState('W') & 0x8000) && id == 0) {
+	if (GetAsyncKeyState('W') & 0x8000) {
 		dir = 'W';
 		isUpdate = true;
 	}
-	if ((GetKeyState('S') & 0x8000) && id == 0) {
+	if (GetAsyncKeyState('S') & 0x8000) {
 		dir = 'S';
 		isUpdate = true;
 	}
-	if ((GetKeyState('A') & 0x8000) && id == 0) {
+	if (GetAsyncKeyState('A') & 0x8000) {
 		dir = 'A';
 		isUpdate = true;
 	}
-	if ((GetKeyState('D') & 0x8000) && id == 0) {
+	if (GetAsyncKeyState('D') & 0x8000) {
 		dir = 'D';
 		isUpdate = true;
 	}

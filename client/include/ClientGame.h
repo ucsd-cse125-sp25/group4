@@ -28,6 +28,7 @@ public:
 	GameState gameState;
 	Renderer renderer;
 private:
+	HWND hwnd;
 	unsigned int id;
 	ClientNetwork* network;
 	char network_data[MAX_PACKET_SIZE]; //todo this should change once we define the packet sizes
