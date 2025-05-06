@@ -251,54 +251,98 @@ bool Renderer::Init(HWND window_handle) {
 	}
 	
 	// ----------------------------------------------------------------------------------------------------------------
-	// create pipeline state 
+	// create pipeline states
 	{
 		
 		UINT compileFlags = 0;
 #if defined(_DEBUG)
 		compileFlags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
+		{
+			// --------------------------------------------------------------------
+			// describe Main Pipeline State Object (PSO) 
+			
+			// TODO: use slices instead
+			std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs.cso");
+			std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps.cso");
 
-		// --------------------------------------------------------------------
-		// describe Pipeline State Object (PSO) 
-		
-		// TODO: use slices instead
-		std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs.cso");
-		std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps.cso");
+
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
+				.pRootSignature = m_rootSignature.Get(),
+				.VS = {
+					.pShaderBytecode = vertexShaderBytecode.data(),
+					.BytecodeLength = vertexShaderBytecode.size(),
+				},
+				.PS = {
+					.pShaderBytecode = pixelShaderBytecode.data(),
+					.BytecodeLength  = pixelShaderBytecode.size(),
+				},
+				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+				.SampleMask = UINT_MAX,
+				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+				.DepthStencilState = {
+					.DepthEnable = TRUE,
+					.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+					.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+					.StencilEnable = FALSE,
+				},
+				.InputLayout = {},
+				.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+				.NumRenderTargets = 1,
+				.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+				.DSVFormat = DXGI_FORMAT_D32_FLOAT,
+				.SampleDesc = {
+					.Count = 1,
+				},
+			};
+			psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
+
+			// create the pipeline state object
+			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+		}
+		{
+			// --------------------------------------------------------------------
+			// describe Debug Pipeline State Object (PSO) 
+			
+			// TODO: use slices instead
+			std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"dbg_cube_vs.cso");
+			std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"dbg_cube_ps.cso");
 
 
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
-			.pRootSignature = m_rootSignature.Get(),
-			.VS = {
-				.pShaderBytecode = vertexShaderBytecode.data(),
-				.BytecodeLength = vertexShaderBytecode.size(),
-			},
-			.PS = {
-				.pShaderBytecode = pixelShaderBytecode.data(),
-				.BytecodeLength  = pixelShaderBytecode.size(),
-			},
-			.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
-			.SampleMask = UINT_MAX,
-			.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
-			.DepthStencilState = {
-				.DepthEnable = TRUE,
-				.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-				.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
-				.StencilEnable = FALSE,
-			},
-			.InputLayout = {},
-			.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-			.NumRenderTargets = 1,
-			.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
-			.DSVFormat = DXGI_FORMAT_D32_FLOAT,
-			.SampleDesc = {
-				.Count = 1,
-			},
-		};
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
+				.pRootSignature = m_rootSignature.Get(),
+				.VS = {
+					.pShaderBytecode = vertexShaderBytecode.data(),
+					.BytecodeLength = vertexShaderBytecode.size(),
+				},
+				.PS = {
+					.pShaderBytecode = pixelShaderBytecode.data(),
+					.BytecodeLength  = pixelShaderBytecode.size(),
+				},
+				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+				.SampleMask = UINT_MAX,
+				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+				.DepthStencilState = {
+					.DepthEnable = TRUE,
+					.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+					.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+					.StencilEnable = FALSE,
+				},
+				.InputLayout = {},
+				.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+				.NumRenderTargets = 1,
+				.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+				.DSVFormat = DXGI_FORMAT_D32_FLOAT,
+				.SampleDesc = {
+					.Count = 1,
+				},
+			};
+			psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
 
-		// create the pipeline state object
-		UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+			// create the pipeline state object
+			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------
@@ -524,7 +568,6 @@ bool Renderer::Render() {
 	
 	XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
 
-	// draw debug cubes
 
 
 	// draw scene
@@ -543,6 +586,18 @@ bool Renderer::Render() {
 		m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
 	}
 
+	// draw debug cubes
+	m_commandList->SetPipelineState(&m_pipelineStateDebug);
+	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
+	vertexPositionsIndex = indices of cube vertex buffer;
+	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
+	m_commandList->DrawInstanced(m_cubeVertexBuffer, m_dbgCubes.size(), 0, 0);
+	// TODO: create cube vertex buffer
+	// create descriptor
+	// create the SRV
+	// upload it to the heap
+	// create vertex and fragment shaders
+	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {
 		.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -597,4 +652,15 @@ Renderer::~Renderer() {
 void Renderer::OnUpdate() {
 	// m_constantBufferData.viewProject = computeViewProject(playerState.pos, playerState.lookDir);
 	// memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
+}
+
+void Renderer::DBG_DrawCube(XMFLOAT3 inMin, XMFLOAT3 inMax)
+{
+	XMVECTOR min = XMLoadFloat3(&inMin);
+	XMVECTOR max = XMLoadFloat3(&inMax);
+	XMVECTOR scale = 0.5 * (max - min);
+	XMVECTOR origin = 0.5 * (max + min);
+
+	XMMATRIX transform = XMMatrixScalingFromVector(scale) * XMMatrixTranslationFromVector(origin);
+	dbg_cubes.push_back(transform);
 }

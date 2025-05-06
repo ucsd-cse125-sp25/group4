@@ -14,29 +14,9 @@ using Microsoft::WRL::ComPtr;
 // return false from the function if there is a failure 
 #define UNWRAP(result) if(FAILED(result)) return false 
 
-/* Blender Import Script
-import bpy
-import mathutils
-
-scene = bpy.data.scenes[0]
-
-cube = scene.objects.get("Cube")
-cubemesh = cube.data
-verts = cubemesh.vertices
-scenevertices = []
-for tri in cubemesh.loop_triangles:
-    for vidx in tri.vertices:
-        vertex = verts[vidx]
-        position_local = mathutils.Vector((vertex.co.x, vertex.co.y, vertex.co.z, 1)) 
-        position_global =  cube.matrix_world @ position_local
-        scenevertices.append([position_global.x, position_global.y, position_global.z])
-print(scenevertices)
-*/
-
 struct LookDir {
-	// pitch and yaw match Blender's camera x and z rotations respectively
-	float pitch; // (0, pi), with pi/2 on the plane z=0
-	float yaw; // (-pi, pi], with 0 on the plane x=0
+	float pitch; 
+	float yaw; 
 };
 struct TEMPPlayerState {
 	XMVECTOR pos;
@@ -62,12 +42,6 @@ constexpr enum RootParameters : UINT8 {
 // 1 is updated per-frame
 // 1 is updated per-tick
 // maybe a 3rd is updated sporadically
-
-struct SceneConstantBuffer {
-    XMMATRIX viewProject;
-	float padding[48];
-};
-static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant buffer must be 256-byte aligned");
 
 template<typename T>
 struct Slice {
@@ -344,6 +318,9 @@ private:
 	UINT m_rtvDescriptorSize;
 	ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
+
+	// for debug drawing
+	ComPtr<ID3D12PipelineState> m_pipelineStateDebug;
 
 	// syncrhonization objects
 	UINT m_frameIndex;
