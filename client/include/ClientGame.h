@@ -20,7 +20,8 @@ public:
 	~ClientGame(void);
 
 	void sendDebugPacket(const char*);
-	void sendGameStatePacket(float[4]);
+	// void sendGameStatePacket(float[4]);
+	void sendMovePacket(char, float, float);
 	void update();
 	void handleInput();
 
