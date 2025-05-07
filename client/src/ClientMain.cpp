@@ -4,9 +4,10 @@
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
 
     ClientGame client(hInstance, nCmdShow);
-
+	
+	client.renderer.DBG_DrawCube(XMFLOAT3{ -2, -2, -1 }, XMFLOAT3{ 0, 0, 1 });
+	client.renderer.DBG_DrawCube(XMFLOAT3{ 0, 0, -1 }, XMFLOAT3{ 2, 2, 1 });
     // set up window
-
 	MSG msg = {};
 	// application loop
 	while (msg.message != WM_QUIT) {

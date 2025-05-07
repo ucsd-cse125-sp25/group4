@@ -151,7 +151,7 @@ bool Renderer::Init(HWND window_handle) {
 		m_resourceDescriptorAllocator.Init(
 			m_device.Get(),
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-			SCENE_BUFFER_TYPE_COUNT + 1,
+			SCENE_BUFFER_TYPE_COUNT + 3,
 			L"Resource Descriptor Heap");
 
 		// create Depth Stencil View (DSV) descriptor heap
@@ -194,14 +194,16 @@ bool Renderer::Init(HWND window_handle) {
 			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 		}
 		
-		D3D12_DESCRIPTOR_RANGE1 ranges[1] = { {
+		D3D12_DESCRIPTOR_RANGE1 ranges[1] = {
+			{
 			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
 			.NumDescriptors = m_resourceDescriptorAllocator.capacity,
 			.BaseShaderRegister = 0,
 			.RegisterSpace = 0,
 			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC,
 			.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-		} };
+			}
+		};
 
 		D3D12_ROOT_PARAMETER1 parameters[ROOT_PARAMETERS_COUNT] = {};
 		parameters[ROOT_PARAMETERS_DESCRIPTOR_TABLE] = {
@@ -219,6 +221,14 @@ bool Renderer::Init(HWND window_handle) {
 				.ShaderRegister = 1,
 				.RegisterSpace = 0,
 				.Num32BitValues = 17,
+			}
+		};
+		parameters[ROOT_PARAMETERS_CONSTANT_DEBUG_CUBE_MATRICES] = {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+			.Constants = {
+				.ShaderRegister = 2,
+				.RegisterSpace = 0,
+				.Num32BitValues = 1,
 			}
 		};
 		// may add more parameters in the future for indices of resources
@@ -340,7 +350,7 @@ bool Renderer::Init(HWND window_handle) {
 			psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
 
 			// create the pipeline state object
-			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateDebug)));
 
 		}
 	}
@@ -358,7 +368,7 @@ bool Renderer::Init(HWND window_handle) {
 	UNWRAP(m_commandList->Close());
 	
 	// ----------------------------------------------------------------------------------------------------------------
-	// create vertex buffer 
+	// create vertex buffer for player
 	{
 		// Define the geometry for a triangle.
 		
@@ -369,7 +379,6 @@ bool Renderer::Init(HWND window_handle) {
 	    Vertex cubeverts[6 * 2 * 3] = {
 	    	{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } }
 	    };
-		// TEST: bindless vertex buffer
 		{
 			const Slice<Vertex> cubeVertsSlice = {
 				.ptr = cubeverts,
@@ -392,6 +401,11 @@ bool Renderer::Init(HWND window_handle) {
 			m_vertexBufferDescriptor = m_resourceDescriptorAllocator.Allocate();
 			m_device->CreateShaderResourceView(m_vertexBufferBindless.resource.Get(), &desc, m_vertexBufferDescriptor.cpu);
 		}
+	}
+	// ----------------------------------------------------------------------------------------------------------------
+	// create vertex buffer for player
+	{
+		debugCubes.Init(m_device.Get(), &m_resourceDescriptorAllocator);
 	}
 		
 	// ----------------------------------------------------------------------------------------------------------------
@@ -587,16 +601,15 @@ bool Renderer::Render() {
 	}
 
 	// draw debug cubes
-	m_commandList->SetPipelineState(&m_pipelineStateDebug);
+	m_commandList->SetPipelineState(m_pipelineStateDebug.Get());
 	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
-	vertexPositionsIndex = indices of cube vertex buffer;
-	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
-	m_commandList->DrawInstanced(m_cubeVertexBuffer, m_dbgCubes.size(), 0, 0);
-	// TODO: create cube vertex buffer
-	// create descriptor
-	// create the SRV
-	// upload it to the heap
-	// create vertex and fragment shaders
+	vertexPositionsIndex = debugCubes.vertexBufferDescriptor.index;
+	// index of vertex buffer
+	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &debugCubes.vertexBufferDescriptor.index, 16);
+	// index of transforms 
+    m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
+	m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, debugCubes.transforms.size(), 0, 0);
+	// m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {
@@ -656,11 +669,14 @@ void Renderer::OnUpdate() {
 
 void Renderer::DBG_DrawCube(XMFLOAT3 inMin, XMFLOAT3 inMax)
 {
+	assert(debugCubes.transforms.size() < debugCubes.transforms.max_size());
 	XMVECTOR min = XMLoadFloat3(&inMin);
 	XMVECTOR max = XMLoadFloat3(&inMax);
 	XMVECTOR scale = 0.5 * (max - min);
 	XMVECTOR origin = 0.5 * (max + min);
 
 	XMMATRIX transform = XMMatrixScalingFromVector(scale) * XMMatrixTranslationFromVector(origin);
-	dbg_cubes.push_back(transform);
+	XMMATRIX transposed = XMMatrixTranspose(transform);
+	debugCubes.transforms.push_back(transposed);
+	debugCubes.UpdateGPUSide();
 }

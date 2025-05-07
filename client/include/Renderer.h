@@ -35,6 +35,7 @@ struct CurrPlayerRenderState {
 constexpr enum RootParameters : UINT8 {
 	ROOT_PARAMETERS_DESCRIPTOR_TABLE,
 	ROOT_PARAMETERS_CONSTANT_PER_CALL,
+	ROOT_PARAMETERS_CONSTANT_DEBUG_CUBE_MATRICES,
 	ROOT_PARAMETERS_COUNT
 };
 
@@ -143,9 +144,9 @@ enum SceneBufferType {
 	SCENE_BUFFER_TYPE_COUNT
 };
 struct Scene {
-	// this slice owns its data
+	// the whole scene file
 	Slice<BYTE> data;
-	// CPU data
+	// wide pointers to the scene file (excluding headers) 
 	Triangles triangles;
 	// GPU heap
 	ComPtr<ID3D12Resource> resource;
@@ -231,7 +232,7 @@ struct Scene {
 				.Buffer = {
 					.FirstElement = bufferOffsets[i],
 					.NumElements = bufferLengths[i],
-					.StructureByteStride = sizeof(Vertex)
+					.StructureByteStride = sizeof(Vertex) // WARNING, this must be changed for other data types
 				}
 			};
 			device->CreateShaderResourceView(resource.Get(), &desc, descriptors[i].cpu);
@@ -246,6 +247,90 @@ struct Scene {
 	}
 };
 
+
+constexpr int MAX_DEBUG_CUBES = 1024;
+struct DebugCubes {
+	std::vector<XMMATRIX> transforms;
+	// GPU heap
+	ComPtr<ID3D12Resource> resource;
+	void *shared_ptr;
+	// GPU Descriptors
+	Descriptor descriptor;
+	
+	// vertices
+	Buffer<Vertex> vertexBuffer;
+	Descriptor vertexBufferDescriptor;
+
+	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator) {
+		{
+			Vertex cubeverts[6 * 2 * 3] = {
+				{ { -0.5f, -0.5f, -0.5 } },{ { -0.5f, -0.5f, 0.5 } },{ { -0.5f, 0.5f, 0.5 } },{ { -0.5f, -0.5f, -0.5 } },{ { -0.5f, 0.5f, 0.5 } },{ { -0.5f, 0.5f, -0.5 } },{ { -0.5f, 0.5f, -0.5 } },{ { -0.5f, 0.5f, 0.5 } },{ { 0.5f, 0.5f, 0.5 } },{ { -0.5f, 0.5f, -0.5 } },{ { 0.5f, 0.5f, 0.5 } },{ { 0.5f, 0.5f, -0.5 } },{ { 0.5f, 0.5f, -0.5 } },{ { 0.5f, 0.5f, 0.5 } },{ { 0.5f, -0.5f, 0.5 } },{ { 0.5f, 0.5f, -0.5 } },{ { 0.5f, -0.5f, 0.5 } },{ { 0.5f, -0.5f, -0.5 } },{ { 0.5f, -0.5f, -0.5 } },{ { 0.5f, -0.5f, 0.5 } },{ { -0.5f, -0.5f, 0.5 } },{ { 0.5f, -0.5f, -0.5 } },{ { -0.5f, -0.5f, 0.5 } },{ { -0.5f, -0.5f, -0.5 } },{ { -0.5f, 0.5f, -0.5 } },{ { 0.5f, 0.5f, -0.5 } },{ { 0.5f, -0.5f, -0.5 } },{ { -0.5f, 0.5f, -0.5 } },{ { 0.5f, -0.5f, -0.5 } },{ { -0.5f, -0.5f, -0.5 } },{ { 0.5f, 0.5f, 0.5 } },{ { -0.5f, 0.5f, 0.5 } },{ { -0.5f, -0.5f, 0.5 } },{ { 0.5f, 0.5f, 0.5 } },{ { -0.5f, -0.5f, 0.5 } },{ { 0.5f, -0.5f, 0.5 } }
+			};
+			const Slice<Vertex> cubeVertsSlice = {
+				.ptr = cubeverts,
+				.len = _countof(cubeverts),
+			};
+
+			vertexBuffer.Init(device, cubeVertsSlice, L"Debug Cube Vertex Buffer");
+
+			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+				.Format = DXGI_FORMAT_UNKNOWN,
+				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.Buffer = {
+					.FirstElement = 0,
+					.NumElements = cubeVertsSlice.len,
+					.StructureByteStride = sizeof(Vertex)
+				}
+			};
+
+			vertexBufferDescriptor = descriptorAllocator->Allocate();
+			device->CreateShaderResourceView(vertexBuffer.resource.Get(), &desc, vertexBufferDescriptor.cpu);
+		}
+		transforms.reserve(MAX_DEBUG_CUBES);
+
+		D3D12_HEAP_PROPERTIES heapProperties = { .Type = D3D12_HEAP_TYPE_UPLOAD };
+		CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(MAX_DEBUG_CUBES * sizeof(XMMATRIX));
+
+		// allocate GPU memory for the transformation matrices
+		UNWRAP(device->CreateCommittedResource(
+			&heapProperties,
+			D3D12_HEAP_FLAG_NONE,
+			&resourceDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&resource)
+		));
+		resource->SetName(L"Scene Debug Cubes");
+
+		D3D12_RANGE nullRange = {};
+		UNWRAP(
+			resource->Map(0, &nullRange, &shared_ptr)
+		);
+
+		descriptor = descriptorAllocator->Allocate();
+		D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+			.Format = DXGI_FORMAT_UNKNOWN,
+			.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+			.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+			.Buffer = {
+				.FirstElement = 0,
+				.NumElements = MAX_DEBUG_CUBES,
+				.StructureByteStride = sizeof(XMMATRIX)
+			}
+		};
+		device->CreateShaderResourceView(resource.Get(), &desc, descriptor.cpu);
+	}
+	void UpdateGPUSide() {
+		// copy scene to GPU
+		memcpy(shared_ptr, transforms.data(), transforms.size() * sizeof(XMMATRIX));
+	}
+	void Release() {
+		resource->Unmap(0, nullptr);
+		shared_ptr = nullptr;
+		descriptor = {};
+	}
+};
 
 class Renderer {
 public:
@@ -295,10 +380,9 @@ public:
 		}
 	};
 	CurrPlayerRenderState currPlayer = { 0 };
-	int dbg_NumTrisToDraw = 3;
-private:
-	std::vector<XMMATRIX> dbg_cubes;
 	void DBG_DrawCube(XMFLOAT3 min, XMFLOAT3 max);
+private:
+	DebugCubes debugCubes;
 
     D3D12_VIEWPORT m_viewport;
     D3D12_RECT m_scissorRect;

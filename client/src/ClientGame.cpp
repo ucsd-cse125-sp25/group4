@@ -244,6 +244,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 	break;
 	case WM_KEYDOWN:
 	{
+		/*
 		if (wParam == VK_DOWN) {
 			state->renderer.dbg_NumTrisToDraw -= 3;
 		}
@@ -251,6 +252,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wParam, LPARAM
 			state->renderer.dbg_NumTrisToDraw += 3;
 		}
 		break;
+		*/	
 	}
 	} 
 
