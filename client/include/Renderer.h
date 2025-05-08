@@ -20,16 +20,12 @@ struct LookDir {
 	// 0 means looking parallel to the ground
 	float pitch;  
 	// (-infinity, infinity) 
-	// increasing yaw means looking further
-	// - left if you're the player
-	// - counterclockwise if you're looking down from the +Z axis
-	// - in the rotation direction required to rotate (1, 0, 0) to (0, 1, 0) (the xy bivector) 
+	// increasing yaw means looking further:
+	// * left if you're the player
+	// * counterclockwise if you're looking down from the +Z axis
+	// * in the rotation direction of the shortest rotation from (1, 0, 0) to (0, 1, 0) (the xy bivector) 
 	// multiples of 2pi mean looking toward +y
 	float yaw; 
-};
-struct TEMPPlayerState {
-	XMVECTOR pos;
-	LookDir lookDir;
 };
 
 struct PlayerRenderState {
@@ -351,13 +347,6 @@ public:
 	// TODO: have a constant buffer for each frame
 	// SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
 
-	TEMPPlayerState playerState = {
-		.pos = {6, -6, 2.5, 1},
-		.lookDir = {
-			.pitch = XMConvertToRadians(-73),
-			.yaw = XMConvertToRadians(-45),
-		},
-	};
 	PlayerRenderState players[4] = {
 		{
 			.pos = {-4, -4, 0},
