@@ -223,8 +223,8 @@ void ClientGame::handleInput() {
 	int dy = p.y - centre.y;
 	if (dx != 0 || dy != 0) {
 		camUpdate = true;
-		yaw += dx * MOUSE_SENS;            // +yaw = clockwise right
-		pitch += -dy * MOUSE_SENS;      // mouse up = look down (DX style)
+		yaw += -dx * MOUSE_SENS;            
+		pitch += dy * MOUSE_SENS;      
 		pitch = std::clamp(pitch,
 						   XMConvertToRadians(-89.0f),
 			               XMConvertToRadians(+89.0f));

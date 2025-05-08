@@ -15,7 +15,16 @@ using Microsoft::WRL::ComPtr;
 #define UNWRAP(result) if(FAILED(result)) return false 
 
 struct LookDir {
-	float pitch; 
+	// (-pi/2, pi/2)
+	// increasing pitch means looking further up
+	// 0 means looking parallel to the ground
+	float pitch;  
+	// (-infinity, infinity) 
+	// increasing yaw means looking further
+	// - left if you're the player
+	// - counterclockwise if you're looking down from the +Z axis
+	// - in the rotation direction required to rotate (1, 0, 0) to (0, 1, 0) (the xy bivector) 
+	// multiples of 2pi mean looking toward +y
 	float yaw; 
 };
 struct TEMPPlayerState {

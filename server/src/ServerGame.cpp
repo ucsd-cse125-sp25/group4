@@ -118,7 +118,7 @@ void ServerGame::applyMovements() {
 		// convert intent + yaw into 2d vector
 		// CLOCKWISE positive
 		// foward x/y, actual delta x/y
-		float fx = sinf(mv.yaw), fy = cosf(mv.yaw), dx = 0, dy = 0;
+		float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), dx = 0, dy = 0;
 
 		switch (mv.direction)
 		{
