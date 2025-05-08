@@ -22,6 +22,7 @@ public:
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);
 	void sendMovePacket(char, float, float);
+	void sendCameraPacket(float, float);
 	void update();
 	void handleInput();
 
@@ -32,5 +33,10 @@ private:
 	unsigned int id;
 	ClientNetwork* network;
 	char network_data[MAX_PACKET_SIZE]; //todo this should change once we define the packet sizes
+
+	//camera constants
+	float yaw = 0.0;
+	float pitch = 0.0;
+	static constexpr float MOUSE_SENS = 0.002f;
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);

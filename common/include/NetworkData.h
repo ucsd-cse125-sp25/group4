@@ -10,6 +10,7 @@ enum class PacketType : uint32_t {
 	GAME_STATE = 2,
 	MOVE = 3,
 	IDENTIFICATION = 4,
+	CAMERA = 5,
 	// add more here
 };
 
@@ -67,6 +68,10 @@ typedef struct IDPayload {
 
 struct MovePayload {
 	char direction;
+	float yaw, pitch;
+};
+
+struct CameraPayload {
 	float yaw, pitch;
 };
 

@@ -42,6 +42,7 @@ void ServerGame::update() {
 
 	receiveFromClients();
 	applyMovements();
+	applyCamera();
 	sendUpdates();
 }
 
@@ -88,6 +89,13 @@ void ServerGame::receiveFromClients() {
 				latestMovement[id] = *mv;
 				break;
 			}
+			case PacketType::CAMERA:
+			{
+				CameraPayload* cam = (CameraPayload*)&(network_data[i+HDR_SIZE]);
+				printf("[CLIENT %d] CAMERA_PACKET: PITCH %f, YAW %f\n", id, cam->pitch, cam->yaw);
+				latestCamera[id] = *cam;
+				break;
+			}
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
 				break;
@@ -108,16 +116,16 @@ void ServerGame::applyMovements() {
 
 
 		// convert intent + yaw into 2d vector
-		float dx = 0, dy = 0;
-		const float cy = cosf(mv.yaw);
-		const float sy = sinf(mv.yaw);
+		// CLOCKWISE positive
+		// foward x/y, actual delta x/y
+		float fx = sinf(mv.yaw), fy = cosf(mv.yaw), dx = 0, dy = 0;
 
 		switch (mv.direction)
 		{
-		case 'W':  dx = cy; dy = sy; break;
-		case 'S':  dx = -cy; dy = -sy; break;
-		case 'A':  dx = -sy; dy = cy; break;
-		case 'D':  dx = sy; dy = -cy; break;
+		case 'W':  dx = fx; dy = fy; break;
+		case 'S':  dx = -fx; dy = -fy; break;
+		case 'A':  dx = -fy; dy = fx; break;
+		case 'D':  dx = fy; dy = -fx; break;
 		default: break;
 		}
 
@@ -128,6 +136,14 @@ void ServerGame::applyMovements() {
 	}
 
 	latestMovement.clear(); // consume the movement, don't keep for next tick
+}
+
+void ServerGame::applyCamera() {
+	for (auto& [id, cam] : latestCamera) {
+		state->players[id].yaw = cam.yaw;
+		state->players[id].pitch = cam.pitch;
+	}
+	latestCamera.clear();
 }
 
 void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy) {

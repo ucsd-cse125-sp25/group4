@@ -16,6 +16,7 @@ public:
 	void receiveFromClients();
 	void sendUpdates();
 	void applyMovements();
+	void applyCamera();
 	void updateClientPositionWithCollision(unsigned int, float, float);
 	void readBoundingBoxes();
 
@@ -38,4 +39,5 @@ private:
 	/* State */
 	GameState* state;
 	std::unordered_map<uint8_t, MovePayload> latestMovement;
+	std::unordered_map<uint8_t, CameraPayload> latestCamera;
 };

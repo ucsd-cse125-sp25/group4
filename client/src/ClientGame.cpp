@@ -1,4 +1,5 @@
 #include "ClientGame.h"
+#include <algorithm>
 
 const wchar_t CLASS_NAME[] = L"Window Class";
 const wchar_t GAME_NAME[] = L"$GAME_NAME";
@@ -58,7 +59,7 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow) {
 	}
 
 	ShowWindow(windowHandle, nCmdShow);
-
+	ShowCursor(FALSE);
 	hwnd = windowHandle;
 }
 
@@ -97,7 +98,19 @@ void ClientGame::sendMovePacket(char dir, float yaw, float pitch) {
 	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(MovePayload));
 }
 
+void ClientGame::sendCameraPacket(float yaw, float pitch) {
+	CameraPayload cam{};
+	cam.yaw = yaw;
+	cam.pitch = pitch;
+
+	char buf[HDR_SIZE + sizeof(cam)];
+	NetworkServices::buildPacket(PacketType::CAMERA, cam, buf);
+	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
+}
+
 void ClientGame::update() {
+
+	// check for server updates and process them accordingly
 	int len = network->receivePackets(network_data);
 	if (len > 0) {
 		// here, network_data should contain the game state packet
@@ -105,21 +118,20 @@ void ClientGame::update() {
 		switch (hdr->type) {
 		case PacketType::GAME_STATE: 
 		{
-			//GameStatePayload* game_state = (GameStatePayload*)(network_data + HDR_SIZE);
-			//printf("received update for tick %llu \n", game_state->tick);
-			//// add logic here
-			//if (game_state->tick % (uint64_t)64 == 0) {
-			//	sendDebugPacket(game_state->tick);
-			//}
+			// printf("received update for tick %llu \n", game_state->tick);
 			GameState* state = (GameState*)(network_data + HDR_SIZE);
 			char msgbuf[1000];
 			// printf(msgbuf, "Packet received y=%f \n", state->position[1]);
 
-			// renderer.m_constantBufferData.offset.y = state->position[1];
 			for (int i = 0; i < 4; i++) {
 				renderer.players[i].pos.x = state->players[i].x;
 				renderer.players[i].pos.y = state->players[i].y;
 				renderer.players[i].pos.z = state->players[i].z;
+
+				// update the rotation from other players only.
+				if (i == renderer.currPlayer.playerId) continue;
+				renderer.players[i].lookDir.pitch = state->players[i].pitch;
+				renderer.players[i].lookDir.yaw = state->players[i].yaw;
 			}
 
 			break;
@@ -133,6 +145,7 @@ void ClientGame::update() {
 			IDPayload* idPayload = (IDPayload*)(network_data + HDR_SIZE);
 
 			id = idPayload->id;
+			renderer.currPlayer.playerId = id;
 			char message[128];
 
 			strcpy_s(message, std::to_string(id).c_str());
@@ -149,18 +162,14 @@ void ClientGame::update() {
 
 	}
 
-
-	
 	// ---------------------------------------------------------------	
 	// Client Input Handling 
 
 	handleInput();
 
-
-	// TODO: check for server updates and process them accordingly
-
 	// ---------------------------------------------------------------	
 	// Update GPU data and render 
+	renderer.updateCamera(yaw, pitch);
 	// copy new data to the GPU
 	renderer.OnUpdate();
 	// render the frame
@@ -178,47 +187,60 @@ void ClientGame::handleInput() {
 	if (GetForegroundWindow() != hwnd) 
 		return;
 
-	bool isUpdate = false;
+	bool movUpdate = false;
 	char dir;
 
 	if (GetAsyncKeyState('W') & 0x8000) {
 		dir = 'W';
-		isUpdate = true;
+		movUpdate = true;
 	}
 	if (GetAsyncKeyState('S') & 0x8000) {
 		dir = 'S';
-		isUpdate = true;
+		movUpdate = true;
 	}
 	if (GetAsyncKeyState('A') & 0x8000) {
 		dir = 'A';
-		isUpdate = true;
+		movUpdate = true;
 	}
 	if (GetAsyncKeyState('D') & 0x8000) {
 		dir = 'D';
-		isUpdate = true;
+		movUpdate = true;
 	}
-	/*
-	if ((GetKeyState(VK_LEFT) & 0x8000) && id == 1) {
-		positionDelta[0] += 0.015f;
-		isUpdate = true;
-	}
-	if ((GetKeyState(VK_RIGHT) & 0x8000) && id == 1) {
-		positionDelta[0] -= 0.015f;
-		isUpdate = true;
-	}
-	if ((GetKeyState(VK_UP) & 0x8000) && id == 1) {
-		positionDelta[1] += 0.015f;
-		isUpdate = true;
-	}
-	if ((GetKeyState(VK_DOWN) & 0x8000) && id == 1) {
-		positionDelta[1] -= 0.015f;
-		isUpdate = true;
-	}
-	*/
 
-	// TODO: implement camera logic here...
-	if (isUpdate) {
-		sendMovePacket(dir, 0, 0);
+
+	// CAMERA LOGIC:
+	bool camUpdate = false;
+	// current cursor position
+	POINT p;
+	GetCursorPos(&p); 
+	// center of client
+	RECT rc;
+	GetClientRect(hwnd, &rc);
+	POINT centre{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
+	ClientToScreen(hwnd, &centre); // get client's center pos relative to screen
+
+	int dx = p.x - centre.x;
+	int dy = p.y - centre.y;
+	if (dx != 0 || dy != 0) {
+		camUpdate = true;
+		yaw += dx * MOUSE_SENS;            // +yaw = clockwise right
+		pitch += -dy * MOUSE_SENS;      // mouse up = look down (DX style)
+		pitch = std::clamp(pitch,
+						   XMConvertToRadians(-89.0f),
+			               XMConvertToRadians(+89.0f));
+		// recenter cursor
+		if(camUpdate) SetCursorPos(centre.x, centre.y);
+	}
+
+	if (camUpdate) {
+		sendCameraPacket(yaw, pitch);
+
+		// update own's camera
+		renderer.players[renderer.currPlayer.playerId].lookDir.pitch = pitch;
+		renderer.players[renderer.currPlayer.playerId].lookDir.yaw = yaw;
+	}
+	if (movUpdate) {
+		sendMovePacket(dir, yaw, pitch);
 	}
 }
 
