@@ -526,14 +526,13 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 		* XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100)
 	);
 	*/
-
 	XMVECTOR model_fwd = { 0, 1, 0, 0 };
 
 	// rotation matrix
 	XMVECTOR rotation =
 		XMVector3TransformNormal(
 			model_fwd,
-			XMMatrixRotationZ(cameraYaw) * XMMatrixRotationX(cameraPitch));
+			 XMMatrixRotationX(cameraPitch) * XMMatrixRotationZ(cameraYaw));
 
 	XMVECTOR camPos = pos - rotation * CAMERA_DIST + XMVECTORF32{ 0, 0, CAMERA_UP, 0 };
 
