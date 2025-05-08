@@ -14,6 +14,8 @@ using Microsoft::WRL::ComPtr;
 // return false from the function if there is a failure 
 #define UNWRAP(result) if(FAILED(result)) return false 
 
+constexpr uint32_t VERTS_PER_TRI = 3;
+
 struct LookDir {
 	// (-pi/2, pi/2)
 	// increasing pitch means looking further up
@@ -220,7 +222,7 @@ struct Scene {
 		
 		uint32_t bufferLengths[SCENE_BUFFER_TYPE_COUNT];
 		uint32_t bufferOffsets[SCENE_BUFFER_TYPE_COUNT];
-		bufferLengths[SCENE_BUFFER_TYPE_VERTEX_POSITION] = triangles.len;
+		bufferLengths[SCENE_BUFFER_TYPE_VERTEX_POSITION] = triangles.len * VERTS_PER_TRI;
 		bufferOffsets[SCENE_BUFFER_TYPE_VERTEX_POSITION] = 0;
 		bufferLengths[SCENE_BUFFER_TYPE_VERTEX_SHADING] = triangles.len;
 		bufferOffsets[SCENE_BUFFER_TYPE_VERTEX_SHADING] = 0; // CHANGE LATER
@@ -352,28 +354,28 @@ public:
 			.pos = {-4, -4, 0},
 			.lookDir = {
 				.pitch = XMConvertToRadians(0),
-				.yaw = XMConvertToRadians(-10),
+				.yaw = XMConvertToRadians(10),
 			},
 		},
 		{
 			.pos = {4, -4, 0},
 			.lookDir = {
 				.pitch = XMConvertToRadians(0),
-				.yaw = XMConvertToRadians(-20),
+				.yaw = XMConvertToRadians(20),
 			},
 		},
 		{
 			.pos = {-4, 4, 0},
 			.lookDir = {
 				.pitch = XMConvertToRadians(0),
-				.yaw = XMConvertToRadians(-30),
+				.yaw = XMConvertToRadians(30),
 			},
 		},
 		{
 			.pos = {4, 4, 0},
 			.lookDir = {
 				.pitch = XMConvertToRadians(0),
-				.yaw = XMConvertToRadians(-45),
+				.yaw = XMConvertToRadians(45),
 			},
 		}
 	};
