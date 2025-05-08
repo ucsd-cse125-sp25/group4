@@ -27,7 +27,7 @@ mesh.loop_triangles.foreach_get("normal", normals)
 with open('scene.jj', 'wb') as f:
     # write header 
     # version
-    f.write(pack("I", 1))
+    f.write(pack("I", 0))
     # number of triangles
     f.write(pack("I", len(mesh.loop_triangles) * 3))
     # index of first triangle
@@ -38,4 +38,4 @@ with open('scene.jj', 'wb') as f:
 
 print("File written successfully")
 # use this to write "scene.jj" into your working directory
-#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" H:\CSE125\suzanne.blend --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\ClientApp\exporter.py"
+#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" H:\CSE125\suzanne.blend --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"

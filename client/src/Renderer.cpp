@@ -506,6 +506,44 @@ bool Renderer::WaitForGpu() {
 	return true;
 }
 
+
+// transforms right handed world space global coordinates
+// to left handed view space coordinates
+inline XMMATRIX XM_CALLCONV XMMatrixLookToRHToLH
+(
+    FXMVECTOR EyePosition,
+    FXMVECTOR EyeDirection, 
+    FXMVECTOR UpDirection
+) noexcept
+{
+    assert(!XMVector3Equal(EyeDirection, XMVectorZero()));
+    assert(!XMVector3IsInfinite(EyeDirection));
+    assert(!XMVector3Equal(UpDirection, XMVectorZero()));
+    assert(!XMVector3IsInfinite(UpDirection));
+
+    XMVECTOR R2 = XMVector3Normalize(EyeDirection);
+
+    XMVECTOR R0 = XMVector3Cross(R2, UpDirection);
+    R0 = XMVector3Normalize(R0);
+
+    XMVECTOR R1 = XMVector3Cross(R0, R2);
+
+    XMVECTOR NegEyePosition = XMVectorNegate(EyePosition);
+
+    XMVECTOR D0 = XMVector3Dot(R0, NegEyePosition);
+    XMVECTOR D1 = XMVector3Dot(R1, NegEyePosition);
+    XMVECTOR D2 = XMVector3Dot(R2, NegEyePosition);
+
+    XMMATRIX M;
+    M.r[0] = XMVectorSelect(D0, R0, g_XMSelect1110.v);
+    M.r[1] = XMVectorSelect(D1, R1, g_XMSelect1110.v);
+    M.r[2] = XMVectorSelect(D2, R2, g_XMSelect1110.v);
+    M.r[3] = g_XMIdentityR3.v;
+
+    M = XMMatrixTranspose(M);
+
+    return M;
+}
 XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	using namespace DirectX;
 	/*
@@ -522,8 +560,7 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	
 	/*
 	return XMMatrixTranspose(
-		XMMatrixLookAtLH(XMVECTORF32{ 0, 0, 33, 1 }, XMVectorZero(), XMVECTORF32{ 0, 1, 0, 0 })
-		* XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100)
+		XMMatrixLookAtLH(XMVECTORF32{ 0, 0, 33, 1 }, XMVectorZero(), XMVECTORF32{ 0, 1, 0, 0 }) * XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100)
 	);
 	*/
 	XMVECTOR model_fwd = { 0, 1, 0, 0 };
@@ -532,20 +569,20 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	XMVECTOR rotation =
 		XMVector3TransformNormal(
 			model_fwd,
-			 XMMatrixRotationX(cameraPitch) * XMMatrixRotationZ(cameraYaw));
+			 XMMatrixRotationX(cameraPitch) * XMMatrixRotationZ(-cameraYaw));
 
 	XMVECTOR camPos = pos - rotation * CAMERA_DIST + XMVECTORF32{ 0, 0, CAMERA_UP, 0 };
 
 	XMVECTOR model_up = { 0, 0, 1, 0 }; 
-
-	XMMATRIX view = XMMatrixLookAtLH(camPos, pos, model_up);
+	
+	XMMATRIX view = XMMatrixLookToRHToLH(camPos, pos - camPos, model_up);
 	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100);
 
 	return XMMatrixTranspose(view * proj);
 }
 
 XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
-	XMMATRIX rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw);
+	XMMATRIX rotate = XMMatrixRotationZ(-playerRenderState.lookDir.yaw);
 	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z);
 	return XMMatrixTranspose(rotate * translate);
 }
