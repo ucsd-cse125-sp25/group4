@@ -3,6 +3,8 @@ import mathutils
 from struct import pack
 import numpy as np
 
+VERTS_PER_TRIANGLE = 3
+
 scene = bpy.data.scenes[0]
 
 obj = scene.objects.get("Suzanne")
@@ -18,10 +20,14 @@ verts = verts.reshape(-1, 3)
 verts = verts[indices]
 verts = verts.flatten()
 
+
+normals = np.zeros(3 * VERTS_PER_TRIANGLE * len(mesh.loop_triangles), dtype=np.float32)
+mesh.loop_triangles.foreach_get("normal", normals)
+
 with open('scene.jj', 'wb') as f:
     # write header 
     # version
-    f.write(pack("I", 0))
+    f.write(pack("I", 1))
     # number of triangles
     f.write(pack("I", len(mesh.loop_triangles) * 3))
     # index of first triangle
