@@ -42,6 +42,7 @@ void ServerGame::update() {
 
 	receiveFromClients();
 	applyMovements();
+	applyCamera();
 	sendUpdates();
 }
 
@@ -83,9 +84,16 @@ void ServerGame::receiveFromClients() {
 			case PacketType::MOVE:
 			{
 				MovePayload* mv = (MovePayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] MOVE_PACKET: DIR '%c', PITCH %f, YAW %f\n", id, mv->direction, mv->pitch, mv->yaw);
 				// register the latest movement, but do not update yet
 				latestMovement[id] = *mv;
-				//printf("[CLIENT %d] MOVE: %f, %f\n", id, newState->position[id][0], newState->position[id][1]);
+				break;
+			}
+			case PacketType::CAMERA:
+			{
+				CameraPayload* cam = (CameraPayload*)&(network_data[i+HDR_SIZE]);
+				printf("[CLIENT %d] CAMERA_PACKET: PITCH %f, YAW %f\n", id, cam->pitch, cam->yaw);
+				latestCamera[id] = *cam;
 				break;
 			}
 			default:
@@ -101,23 +109,23 @@ void ServerGame::receiveFromClients() {
 
 void ServerGame::applyMovements() {
 	for (auto& [id, mv] : latestMovement) {
-
+		//printf("[CLIENT %d] MOVE_INTENT: DIR '%c', PITCH %f, YAW %f\n", id, mv.direction, mv.pitch, mv.yaw);
 		// update direction regardless of collision
 		state->players[id].yaw = mv.yaw;
 		state->players[id].pitch = mv.pitch; 
 
 
 		// convert intent + yaw into 2d vector
-		float dx = 0, dy = 0;
-		const float cy = cosf(mv.yaw);
-		const float sy = sinf(mv.yaw);
+		// CLOCKWISE positive
+		// foward x/y, actual delta x/y
+		float fx = sinf(mv.yaw), fy = cosf(mv.yaw), dx = 0, dy = 0;
 
 		switch (mv.direction)
 		{
-		case 'W':  dx = cy; dy = sy; break;
-		case 'S':  dx = -cy; dy = -sy; break;
-		case 'A':  dx = -sy; dy = cy; break;
-		case 'D':  dx = sy; dy = -cy; break;
+		case 'W':  dx = fx; dy = fy; break;
+		case 'S':  dx = -fx; dy = -fy; break;
+		case 'A':  dx = -fy; dy = fx; break;
+		case 'D':  dx = fy; dy = -fx; break;
 		default: break;
 		}
 
@@ -128,6 +136,14 @@ void ServerGame::applyMovements() {
 	}
 
 	latestMovement.clear(); // consume the movement, don't keep for next tick
+}
+
+void ServerGame::applyCamera() {
+	for (auto& [id, cam] : latestCamera) {
+		state->players[id].yaw = cam.yaw;
+		state->players[id].pitch = cam.pitch;
+	}
+	latestCamera.clear();
 }
 
 void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy) {
@@ -175,6 +191,10 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 				//printf("no collision %d\n", i);
 			}
 		}
+
+		// check for bounding box collisions
+		// TODO: currently the setup prevents anything else other than
+		// cube 0 to move.
 		for (size_t b = 0; b < boxes2d.size(); ++b) {
 			// Bounding box for the current client
 			float temp = 1.0f;
@@ -204,10 +224,13 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 				break;
 			}
 		}
+		
 	}
 	state->players[clientId].x += delta[0];
 	state->players[clientId].y += delta[1];
 	state->players[clientId].z += delta[2];
+
+	printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
 }
 
 void ServerGame::sendUpdates() {

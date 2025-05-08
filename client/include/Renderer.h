@@ -381,6 +381,16 @@ public:
 	};
 	CurrPlayerRenderState currPlayer = { 0 };
 	void DBG_DrawCube(XMFLOAT3 min, XMFLOAT3 max);
+
+	// helper getters
+	UINT getWidth() { return m_width; };
+	UINT getHeight() { return m_height; };
+
+	//helper setters
+	void updateCamera(float yaw, float pitch) {
+		cameraYaw = yaw;
+		cameraPitch = pitch;
+	}
 private:
 	DebugCubes debugCubes;
 
@@ -439,6 +449,11 @@ private:
 	ComPtr<ID3D12Resource> m_depthStencilBuffer;
 	ComPtr<ID3D12DescriptorHeap> m_depthStencilDescriptorHeap;
 	
+	// CAMERA CONSTANTS
+	float cameraYaw   = 0.0f;
+	float cameraPitch = 0.0f;
+	static constexpr float CAMERA_DIST = 32.0f;
+	static constexpr float CAMERA_UP = 6.0f;
 };
 
 

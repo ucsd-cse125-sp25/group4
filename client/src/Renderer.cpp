@@ -507,6 +507,7 @@ bool Renderer::WaitForGpu() {
 }
 
 XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
+	using namespace DirectX;
 	/*
 	XMVECTOR lookVec = XMVECTORF32{0, 0, -1, 0}; // start by looking down
 	lookVec = XMVector3Transform(lookVec, XMMatrixRotationX(lookDir.pitch)); // look up/down
@@ -518,10 +519,30 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	XMMATRIX transposed = XMMatrixTranspose(projected);
 	return transposed;
 	*/
+	
+	/*
 	return XMMatrixTranspose(
 		XMMatrixLookAtLH(XMVECTORF32{ 0, 0, 33, 1 }, XMVectorZero(), XMVECTORF32{ 0, 1, 0, 0 })
 		* XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100)
 	);
+	*/
+
+	XMVECTOR model_fwd = { 0, 1, 0, 0 };
+
+	// rotation matrix
+	XMVECTOR rotation =
+		XMVector3TransformNormal(
+			model_fwd,
+			XMMatrixRotationZ(cameraYaw) * XMMatrixRotationX(cameraPitch));
+
+	XMVECTOR camPos = pos - rotation * CAMERA_DIST + XMVECTORF32{ 0, 0, CAMERA_UP, 0 };
+
+	XMVECTOR model_up = { 0, 0, 1, 0 }; 
+
+	XMMATRIX view = XMMatrixLookAtLH(camPos, pos, model_up);
+	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100);
+
+	return XMMatrixTranspose(view * proj);
 }
 
 XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
@@ -580,8 +601,10 @@ bool Renderer::Render() {
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 	
-	XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
-
+	// camera logic
+	XMVECTOR playerPos = XMLoadFloat3(&players[currPlayer.playerId].pos);
+	// XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
+	XMMATRIX viewProject = computeViewProject(playerPos, {}); // lookat is not used
 
 
 	// draw scene
