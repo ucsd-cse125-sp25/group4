@@ -62,42 +62,6 @@ struct Slice {
 	}
 };
 
-template<typename T>
-struct Buffer {
-	Slice<T>                   data;
-	ComPtr<ID3D12Resource>     resource;
-	void                      *shared_ptr; 
-	D3D12_GPU_VIRTUAL_ADDRESS  gpu_ptr;
-	// uint32_t offset;
-
-	bool Init(ID3D12Device* device, Slice<T> data, const wchar_t* debugName);
-	void Release();
-};
-
-struct Vertex {
-	XMFLOAT3 position;
-};
-
-// TODO: unify both vertex structs; this is just for development velocity
-
-struct SceneHeader {
-	int32_t version;
-	int32_t numTriangles;
-	int32_t firstTriangle;
-};
-
-struct VertexShadingData {
-	XMFLOAT3 normal;
-	XMFLOAT2 texcoord;
-};
-
-struct Triangles {
-	int                len;
-	XMFLOAT3          (*vertPositions)[3];
-	VertexShadingData (*shadingData)[3];
-	uint8_t           *materialId;
-};
-
 struct Descriptor {
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
 	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
@@ -142,6 +106,46 @@ struct DescriptorAllocator {
 		};
 	}
 };
+
+template<typename T>
+struct Buffer {
+	Slice<T>                   data;
+	ComPtr<ID3D12Resource>     resource;
+	void*                      shared_ptr; 
+	D3D12_GPU_VIRTUAL_ADDRESS  gpu_ptr;
+	Descriptor                 descriptor;
+	// uint32_t offset;
+
+	bool Init(Slice<T> data, ID3D12Device* device, DescriptorAllocator *descriptorAllocator,  const wchar_t* debugName);
+	void Release();
+};
+
+struct Vertex {
+	XMFLOAT3 position;
+};
+
+// TODO: unify both vertex structs; this is just for development velocity
+
+struct SceneHeader {
+	int32_t version;
+	int32_t numTriangles;
+	int32_t firstTriangle;
+};
+
+struct VertexShadingData {
+	XMFLOAT3 normal;
+	XMFLOAT2 texcoord;
+};
+
+struct Triangles {
+	int                len;
+	XMFLOAT3          (*vertPositions)[3];
+	VertexShadingData (*shadingData)[3];
+	uint8_t           *materialId;
+};
+
+
+
 
 
 constexpr uint32_t SCENE_VERSION = 000'000'000;
@@ -285,7 +289,6 @@ struct DebugCubes {
 	
 	// vertices
 	Buffer<Vertex> vertexBuffer;
-	Descriptor vertexBufferDescriptor;
 
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator) {
 		{
@@ -297,21 +300,7 @@ struct DebugCubes {
 				.len = _countof(cubeverts),
 			};
 
-			vertexBuffer.Init(device, cubeVertsSlice, L"Debug Cube Vertex Buffer");
-
-			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
-				.Format = DXGI_FORMAT_UNKNOWN,
-				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
-				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.Buffer = {
-					.FirstElement = 0,
-					.NumElements = cubeVertsSlice.len,
-					.StructureByteStride = sizeof(Vertex)
-				}
-			};
-
-			vertexBufferDescriptor = descriptorAllocator->Allocate();
-			device->CreateShaderResourceView(vertexBuffer.resource.Get(), &desc, vertexBufferDescriptor.cpu);
+			vertexBuffer.Init(cubeVertsSlice, device, descriptorAllocator, L"Debug Cube Vertex Buffer");
 		}
 		transforms.reserve(MAX_DEBUG_CUBES);
 
@@ -451,7 +440,6 @@ private:
 	// ComPtr<ID3D12Resource> m_vertexBuffer;
 	// D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
-	Descriptor m_vertexBufferDescriptor;
 	Buffer<Vertex> m_vertexBufferBindless;
 	Scene m_scene;
 	
@@ -479,24 +467,13 @@ private:
 
 
 template<typename T>
-inline bool Buffer<T>::Init(ID3D12Device* device, Slice<T> data, const wchar_t *debugName)
+inline bool Buffer<T>::Init(Slice<T> inData, ID3D12Device* device, DescriptorAllocator *descriptorAllocator, const wchar_t *debugName)
 {
-	this->data = {
-		data.ptr,
-		data.len
-	};
-	D3D12_HEAP_PROPERTIES heapProperties = {.Type = D3D12_HEAP_TYPE_UPLOAD};
-	D3D12_RESOURCE_DESC resourceDesc = {
-		.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
-		.Width            = data.numBytes(),
-		.Height           = 1,
-		.DepthOrArraySize = 1,
-		.MipLevels        = 1,
-		.Format           = DXGI_FORMAT_UNKNOWN,
-		.SampleDesc       = { .Count = 1, .Quality = 0 },
-		.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-	};
+	data = inData;
 
+	// create implicit heap and resource
+	D3D12_HEAP_PROPERTIES heapProperties = {.Type = D3D12_HEAP_TYPE_UPLOAD};
+	CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(data.numBytes());
 	UNWRAP(device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
@@ -506,11 +483,31 @@ inline bool Buffer<T>::Init(ID3D12Device* device, Slice<T> data, const wchar_t *
 		IID_PPV_ARGS(&resource)
 	));
 	resource->SetName(debugName);
+
 	
+	// allocate and create SRV
+	descriptor = descriptorAllocator->Allocate();
+	D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+		.Format                  = DXGI_FORMAT_UNKNOWN,
+		.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Buffer = {
+			.FirstElement        = 0,
+			.NumElements         = data.len,
+			.StructureByteStride = sizeof(T)
+		}
+	};
+	device->CreateShaderResourceView(resource.Get(), &desc, descriptor.cpu);
+
+
+	// map GPU memory
 	D3D12_RANGE nullRange = {};
 	UNWRAP(
 		resource->Map(0, &nullRange, &shared_ptr)
 	);
+
+
+	// copy data to GPU
 	memcpy(shared_ptr, data.ptr, data.numBytes());
 	return true;
 }
