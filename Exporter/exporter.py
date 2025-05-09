@@ -49,6 +49,9 @@ normal_uv_interleaved[..., :UV_FLOATS_PER_VERT] = uv
 print("interleaved shape:", normal_uv_interleaved.shape)
 
 
+def pack_bytes(layout : str, array : np.array):
+    return pack(layout * array.size, *array.flatten())
+
 with open('scene.jj', 'wb') as f:
     # write header 
     # version
@@ -59,7 +62,8 @@ with open('scene.jj', 'wb') as f:
     f.write(pack("I", 0))
 
     # write vertex positions
-    f.write(pack("f" * verts.size, *verts.flatten()))
+    # f.write(pack("f" * verts.size, *verts.flatten()))
+    f.write(pack_bytes("f", verts))
 
     # write interleaved normal and uv
     f.write(pack("f" * normal_uv_interleaved.size, *normal_uv_interleaved.flatten()))
