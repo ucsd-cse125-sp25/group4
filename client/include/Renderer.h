@@ -93,7 +93,7 @@ struct VertexShadingData {
 struct Triangles {
 	int                len;
 	XMFLOAT3          (*vertPositions)[3];
-	VertexShadingData *shadingData[3];
+	VertexShadingData (*shadingData)[3];
 	uint8_t           *materialId;
 };
 
@@ -191,11 +191,15 @@ struct Scene {
 			.ptr = data.ptr + sizeof(SceneHeader),
 			.len = data.len - sizeof(SceneHeader)
 		};
-
+		
+		int numTriangles = header->numTriangles;
+		// evil pointer casting >:)
+		auto vertPositions = reinterpret_cast<XMFLOAT3         (*)[3]> (&SceneBuffers.ptr);
+		auto shadingData   = reinterpret_cast<VertexShadingData(*)[3]> (&vertPositions[numTriangles]);
 		triangles = Triangles{
-			.len = header->numTriangles,
-			.vertPositions = reinterpret_cast<XMFLOAT3(*)[3]>(&SceneBuffers.ptr[header->firstTriangle]),
-			.shadingData = nullptr,
+			.len = numTriangles,
+			.vertPositions = vertPositions,
+			.shadingData = shadingData,
 			.materialId = nullptr,
 		};
 
@@ -219,29 +223,43 @@ struct Scene {
 		);
 		// copy scene to GPU
 		memcpy(shared_ptr, SceneBuffers.ptr, SceneBuffers.len);
-		
-		uint32_t bufferLengths[SCENE_BUFFER_TYPE_COUNT];
-		uint32_t bufferOffsets[SCENE_BUFFER_TYPE_COUNT];
-		bufferLengths[SCENE_BUFFER_TYPE_VERTEX_POSITION] = triangles.len * VERTS_PER_TRI;
-		bufferOffsets[SCENE_BUFFER_TYPE_VERTEX_POSITION] = 0;
-		bufferLengths[SCENE_BUFFER_TYPE_VERTEX_SHADING] = triangles.len;
-		bufferOffsets[SCENE_BUFFER_TYPE_VERTEX_SHADING] = 0; // CHANGE LATER
-		bufferLengths[SCENE_BUFFER_TYPE_MATERIAL_ID] = triangles.len;
-		bufferOffsets[SCENE_BUFFER_TYPE_MATERIAL_ID] = 0; // CHANGE LATER
 
+		struct BufferDesc {
+			uint32_t NumElements;
+			uint32_t ByteStride;
+		};
+
+		BufferDesc bufferDescs[SCENE_BUFFER_TYPE_COUNT];
+
+		bufferDescs[SCENE_BUFFER_TYPE_VERTEX_POSITION] = {
+			.NumElements = triangles.len * VERTS_PER_TRI,
+			.ByteStride  = sizeof(**triangles.vertPositions),
+		};
+		bufferDescs[SCENE_BUFFER_TYPE_VERTEX_SHADING] = {
+			.NumElements = (uint32_t)triangles.len * VERTS_PER_TRI,
+			.ByteStride  = sizeof(**triangles.shadingData),
+		};
+		bufferDescs[SCENE_BUFFER_TYPE_MATERIAL_ID] = {
+			.NumElements = (uint32_t)triangles.len,
+			.ByteStride  = sizeof(*triangles.materialId),
+		};
+		
+		uint64_t offset = 0;
 		for (unsigned int i = 0; i < SCENE_BUFFER_TYPE_COUNT; ++i) {
 			descriptors[i] = descriptorAllocator->Allocate();
 			
+			// TODO, allocate each buffer in its own comitted resource
 			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
-				.Format = DXGI_FORMAT_UNKNOWN,
-				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+				.Format                  = DXGI_FORMAT_UNKNOWN,
+				.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
 				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 				.Buffer = {
-					.FirstElement = bufferOffsets[i],
-					.NumElements = bufferLengths[i],
-					.StructureByteStride = sizeof(Vertex) // WARNING, this must be changed for other data types
-				}
+					.FirstElement        = 0,
+					.NumElements         = bufferDescs[i].NumElements,
+					.StructureByteStride = bufferDescs[i].ByteStride
+				},
 			};
+			offset += bufferDescs[i].NumElements * bufferDescs[i].ByteStride; // WARNING, may need to take into account alignment
 			device->CreateShaderResourceView(resource.Get(), &desc, descriptors[i].cpu);
 		}
 	}
