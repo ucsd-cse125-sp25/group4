@@ -23,7 +23,6 @@ verts = verts.reshape(-1, POS_FLOATS_PER_VERT) # (num_mesh_verts, 3)
 verts = verts[indices]
 # verts = verts.flatten()
 
-
 normals = np.zeros(NORMAL_FLOATS_PER_VERT * VERTS_PER_TRI * len(mesh.loop_triangles), dtype=np.float32)
 mesh.loop_triangles.foreach_get("normal", normals)
 normals = normals.reshape(len(mesh.loop_triangles),VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
@@ -59,7 +58,7 @@ with open('scene.jj', 'wb') as f:
     # number of triangles
     f.write(pack("I", len(mesh.loop_triangles)))
     # index of first triangle
-    f.write(pack("I", 0))
+    f.write(pack("I", 0)) # this is redundant
 
     # write vertex positions
     # f.write(pack("f" * verts.size, *verts.flatten()))

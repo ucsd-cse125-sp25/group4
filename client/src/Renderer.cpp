@@ -370,8 +370,6 @@ bool Renderer::Init(HWND window_handle) {
 	// ----------------------------------------------------------------------------------------------------------------
 	// create vertex buffer for player
 	{
-		// Define the geometry for a triangle.
-		
 		// 6 faces
 		// 2 triangles per face
 		// 3 vertices per triangle
@@ -379,28 +377,11 @@ bool Renderer::Init(HWND window_handle) {
 	    Vertex cubeverts[6 * 2 * 3] = {
 	    	{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } }
 	    };
-		{
 			const Slice<Vertex> cubeVertsSlice = {
 				.ptr = cubeverts,
 				.len = _countof(cubeverts),
 			};
-
-			m_vertexBufferBindless.Init(m_device.Get(), cubeVertsSlice, L"Bindless Vertex Buffer");
-
-			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
-				.Format = DXGI_FORMAT_UNKNOWN,
-				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
-				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.Buffer = {
-					.FirstElement = 0,
-					.NumElements = cubeVertsSlice.len,
-					.StructureByteStride = sizeof(Vertex)
-				}
-			};
-
-			m_vertexBufferDescriptor = m_resourceDescriptorAllocator.Allocate();
-			m_device->CreateShaderResourceView(m_vertexBufferBindless.resource.Get(), &desc, m_vertexBufferDescriptor.cpu);
-		}
+			m_vertexBufferBindless.Init(cubeVertsSlice, m_device.Get(), &m_resourceDescriptorAllocator, L"Player Vertex Buffer");
 	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// create vertex buffer for player
@@ -635,7 +616,7 @@ bool Renderer::Render() {
 		XMMATRIX modelMatrix = computeModelMatrix(players[i]);
 		XMMATRIX modelViewProjectMatrix = viewProject * modelMatrix;
 		m_commandList->SetGraphicsRoot32BitConstants(1, 16, &modelViewProjectMatrix, 0);
-		vertexPositionsIndex = m_vertexBufferDescriptor.index;
+		vertexPositionsIndex = m_vertexBufferBindless.descriptor.index;
 		m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
 		m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
 	}
@@ -643,11 +624,10 @@ bool Renderer::Render() {
 	// draw debug cubes
 	m_commandList->SetPipelineState(m_pipelineStateDebug.Get());
 	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
-	vertexPositionsIndex = debugCubes.vertexBufferDescriptor.index;
 	// index of vertex buffer
-	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &debugCubes.vertexBufferDescriptor.index, 16);
+	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &debugCubes.vertexBuffer.descriptor.index, 16);
 	// index of transforms 
-    m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
+  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
 	m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, debugCubes.transforms.size(), 0, 0);
 	// m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
 	
