@@ -66,6 +66,42 @@ struct Slice {
 	}
 };
 
+template<typename T>
+struct Buffer {
+	Slice<T>                   data;
+	ComPtr<ID3D12Resource>     resource;
+	void                      *shared_ptr; 
+	D3D12_GPU_VIRTUAL_ADDRESS  gpu_ptr;
+	// uint32_t offset;
+
+	bool Init(ID3D12Device* device, Slice<T> data, const wchar_t* debugName);
+	void Release();
+};
+
+struct Vertex {
+	XMFLOAT3 position;
+};
+
+// TODO: unify both vertex structs; this is just for development velocity
+
+struct SceneHeader {
+	int32_t version;
+	int32_t numTriangles;
+	int32_t firstTriangle;
+};
+
+struct VertexShadingData {
+	XMFLOAT3 normal;
+	XMFLOAT2 texcoord;
+};
+
+struct Triangles {
+	int                len;
+	XMFLOAT3          (*vertPositions)[3];
+	VertexShadingData (*shadingData)[3];
+	uint8_t           *materialId;
+};
+
 struct Descriptor {
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
 	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
@@ -202,6 +238,7 @@ struct Scene {
 			.len = data.len - sizeof(SceneHeader)
 		};
 		
+<<<<<<< HEAD
 		uint32_t numTriangles = header->numTriangles;
 		uint32_t numVerts     = numTriangles * VERTS_PER_TRI;
 
@@ -218,6 +255,17 @@ struct Scene {
 		Slice<uint8_t> materialIDSlice {
 			.ptr = reinterpret_cast<uint8_t*>(vertexShadingSlice.after()),
 			.len = numTriangles
+=======
+		int numTriangles = header->numTriangles;
+		// evil pointer casting >:)
+		auto vertPositions = reinterpret_cast<XMFLOAT3         (*)[3]> (&SceneBuffers.ptr);
+		auto shadingData   = reinterpret_cast<VertexShadingData(*)[3]> (&vertPositions[numTriangles]);
+		triangles = Triangles{
+			.len = numTriangles,
+			.vertPositions = vertPositions,
+			.shadingData = shadingData,
+			.materialId = nullptr,
+>>>>>>> eb12131 (failed heap suballocation refactor)
 		};
 
 		// create buffers from slices
@@ -225,7 +273,55 @@ struct Scene {
 		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
 		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
 
+<<<<<<< HEAD
 		return true;
+=======
+		D3D12_RANGE nullRange = {};
+		UNWRAP(
+			resource->Map(0, &nullRange, &shared_ptr)
+		);
+		// copy scene to GPU
+		memcpy(shared_ptr, SceneBuffers.ptr, SceneBuffers.len);
+
+		struct BufferDesc {
+			uint32_t NumElements;
+			uint32_t ByteStride;
+		};
+
+		BufferDesc bufferDescs[SCENE_BUFFER_TYPE_COUNT];
+
+		bufferDescs[SCENE_BUFFER_TYPE_VERTEX_POSITION] = {
+			.NumElements = triangles.len * VERTS_PER_TRI,
+			.ByteStride  = sizeof(**triangles.vertPositions),
+		};
+		bufferDescs[SCENE_BUFFER_TYPE_VERTEX_SHADING] = {
+			.NumElements = (uint32_t)triangles.len * VERTS_PER_TRI,
+			.ByteStride  = sizeof(**triangles.shadingData),
+		};
+		bufferDescs[SCENE_BUFFER_TYPE_MATERIAL_ID] = {
+			.NumElements = (uint32_t)triangles.len,
+			.ByteStride  = sizeof(*triangles.materialId),
+		};
+		
+		uint64_t offset = 0;
+		for (unsigned int i = 0; i < SCENE_BUFFER_TYPE_COUNT; ++i) {
+			descriptors[i] = descriptorAllocator->Allocate();
+			
+			// TODO, allocate each buffer in its own comitted resource
+			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+				.Format                  = DXGI_FORMAT_UNKNOWN,
+				.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.Buffer = {
+					.FirstElement        = 0,
+					.NumElements         = bufferDescs[i].NumElements,
+					.StructureByteStride = bufferDescs[i].ByteStride
+				},
+			};
+			offset += bufferDescs[i].NumElements * bufferDescs[i].ByteStride; // WARNING, may need to take into account alignment
+			device->CreateShaderResourceView(resource.Get(), &desc, descriptors[i].cpu);
+		}
+>>>>>>> eb12131 (failed heap suballocation refactor)
 	}
 	void Release() {
 		for (Buffer<BYTE> &buf : buffers) {
