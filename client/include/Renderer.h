@@ -163,7 +163,6 @@ enum SceneBufferType {
 struct Scene {
 	// the whole scene file
 	Slice<BYTE> data;
-	
 	// buffers reference the data slice
 	union {
 		struct {
@@ -233,6 +232,24 @@ struct Scene {
 	void Release() {
 		for (Buffer<BYTE> &buf : buffers) {
 			buf.Release();
+		int numTriangles = header->numTriangles;
+		int numVerts     = numTriangles * VERTS_PER_TRI;
+		// evil pointer casting >:)
+		auto vertexPositionStart = reinterpret_cast<XMFLOAT3*>          (SceneBuffers.ptr);
+		auto shadingDataStart    = reinterpret_cast<VertexShadingData*> (&vertexPositionStart[numVerts]);
+
+		Slice<XMFLOAT3> vertexPositionSlice = {.ptr = SceneBuffers.ptr, .len = numVerts};
+		Slice<VertexShadingData> vertexShadingSlice {
+			.ptr = reinterpret_cast<VertexShadingData*> (&vertexPositionStart[numVerts]),
+			.len = numVerts
+		};
+		
+		vertexPosition.Init(vertexPositionStart, numVerts, device, descriptorAllocator, L"Scene Vertex Position Buffer");
+		vertexShading .Init(shadingDataStart   , numVerts, device, descriptorAllocator, L"Scene Vertex Shading Buffer");
+	}
+	void Release() {
+		for (Buffer<BYTE> &buf : buffers) {
+			buf.release();
 		}
 		if (data.ptr != nullptr) free(data.ptr);
 		memset(this, 0, sizeof(this));
@@ -476,6 +493,9 @@ inline bool Buffer<T>::Init(Slice<T> inData, ID3D12Device* device, DescriptorAll
 }
 
 
+inline bool Buffer<T>::Init(T *ptr, uint32_t len, ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *debugName) {
+	this->Init(Slice<T>{ptr, len}, device, descriptorAllocator, debugName);
+}
 template<typename T>
 inline void Buffer<T>::Release()
 {
