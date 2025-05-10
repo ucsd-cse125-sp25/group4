@@ -115,7 +115,8 @@ struct Buffer {
 	Descriptor                 descriptor;
 	// uint32_t offset;
 
-	bool Init(Slice<T> data, ID3D12Device* device, DescriptorAllocator *descriptorAllocator,  const wchar_t* debugName);
+	bool Init(Slice<T> data       , ID3D12Device *device, DescriptorAllocator *descriptorAllocator,  const wchar_t *debugName);
+	bool Init(T *ptr, uint32_t len, ID3D12Device *device, DescriptorAllocator *descriptorAllocator,  const wchar_t *debugName);
 	void Release();
 };
 
@@ -157,13 +158,16 @@ enum SceneBufferType {
 struct Scene {
 	// the whole scene file
 	Slice<BYTE> data;
-	// wide pointers to the scene file (excluding headers) 
-	Triangles triangles;
-	// GPU heap
-	ComPtr<ID3D12Resource> resource;
-	void *shared_ptr;
-	// GPU Descriptors
-	Descriptor descriptors[SCENE_BUFFER_TYPE_COUNT];
+
+	// buffers reference the data slice
+	union {
+		struct {
+			Buffer<XMFLOAT3>          vertexPosition;
+			Buffer<VertexShadingData> vertexShading;
+			Buffer<uint8_t>           materialID;
+		};
+		Buffer<BYTE> buffers[SCENE_BUFFER_TYPE_COUNT];
+	};
 
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *filename) {
 		// ------------------------------------------------------------------------------------------------------------
@@ -197,81 +201,25 @@ struct Scene {
 		};
 		
 		int numTriangles = header->numTriangles;
+		int numVerts     = numTriangles * VERTS_PER_TRI;
 		// evil pointer casting >:)
-		auto vertPositions = reinterpret_cast<XMFLOAT3         (*)[3]> (&SceneBuffers.ptr);
-		auto shadingData   = reinterpret_cast<VertexShadingData(*)[3]> (&vertPositions[numTriangles]);
-		triangles = Triangles{
-			.len = numTriangles,
-			.vertPositions = vertPositions,
-			.shadingData = shadingData,
-			.materialId = nullptr,
-		};
+		auto vertexPositionStart = reinterpret_cast<XMFLOAT3*>          (SceneBuffers.ptr);
+		auto shadingDataStart    = reinterpret_cast<VertexShadingData*> (&vertexPositionStart[numVerts]);
 
-		D3D12_HEAP_PROPERTIES heapProperties = { .Type = D3D12_HEAP_TYPE_UPLOAD };
-		CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(SceneBuffers.len);
-		
-		// allocate GPU memory for the whole scene
-		UNWRAP(device->CreateCommittedResource(
-			&heapProperties,
-			D3D12_HEAP_FLAG_NONE,
-			&resourceDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(&resource)
-		));
-		resource->SetName(L"Scene Buffers");
-
-		D3D12_RANGE nullRange = {};
-		UNWRAP(
-			resource->Map(0, &nullRange, &shared_ptr)
-		);
-		// copy scene to GPU
-		memcpy(shared_ptr, SceneBuffers.ptr, SceneBuffers.len);
-
-		struct BufferDesc {
-			uint32_t NumElements;
-			uint32_t ByteStride;
-		};
-
-		BufferDesc bufferDescs[SCENE_BUFFER_TYPE_COUNT];
-
-		bufferDescs[SCENE_BUFFER_TYPE_VERTEX_POSITION] = {
-			.NumElements = triangles.len * VERTS_PER_TRI,
-			.ByteStride  = sizeof(**triangles.vertPositions),
-		};
-		bufferDescs[SCENE_BUFFER_TYPE_VERTEX_SHADING] = {
-			.NumElements = (uint32_t)triangles.len * VERTS_PER_TRI,
-			.ByteStride  = sizeof(**triangles.shadingData),
-		};
-		bufferDescs[SCENE_BUFFER_TYPE_MATERIAL_ID] = {
-			.NumElements = (uint32_t)triangles.len,
-			.ByteStride  = sizeof(*triangles.materialId),
+		Slice<XMFLOAT3> vertexPositionSlice = {.ptr = SceneBuffers.ptr, .len = numVerts};
+		Slice<VertexShadingData> vertexShadingSlice {
+			.ptr = reinterpret_cast<VertexShadingData*> (&vertexPositionStart[numVerts]),
+			.len = numVerts
 		};
 		
-		uint64_t offset = 0;
-		for (unsigned int i = 0; i < SCENE_BUFFER_TYPE_COUNT; ++i) {
-			descriptors[i] = descriptorAllocator->Allocate();
-			
-			// TODO, allocate each buffer in its own comitted resource
-			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
-				.Format                  = DXGI_FORMAT_UNKNOWN,
-				.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
-				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.Buffer = {
-					.FirstElement        = 0,
-					.NumElements         = bufferDescs[i].NumElements,
-					.StructureByteStride = bufferDescs[i].ByteStride
-				},
-			};
-			offset += bufferDescs[i].NumElements * bufferDescs[i].ByteStride; // WARNING, may need to take into account alignment
-			device->CreateShaderResourceView(resource.Get(), &desc, descriptors[i].cpu);
-		}
+		vertexPosition.Init(vertexPositionStart, numVerts, device, descriptorAllocator, L"Scene Vertex Position Buffer");
+		vertexShading .Init(shadingDataStart   , numVerts, device, descriptorAllocator, L"Scene Vertex Shading Buffer");
 	}
 	void Release() {
-		resource->Unmap(0, nullptr);
-		if (data.ptr != nullptr) {
-			free(data.ptr);
+		for (Buffer<BYTE> &buf : buffers) {
+			buf.release();
 		}
+		if (data.ptr != nullptr) free(data.ptr);
 		memset(this, 0, sizeof(this));
 	}
 };
@@ -507,6 +455,11 @@ inline bool Buffer<T>::Init(Slice<T> inData, ID3D12Device* device, DescriptorAll
 	// copy data to GPU
 	memcpy(shared_ptr, data.ptr, data.numBytes());
 	return true;
+}
+
+
+inline bool Buffer<T>::Init(T *ptr, uint32_t len, ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *debugName) {
+	this->Init(Slice<T>{ptr, len}, device, descriptorAllocator, debugName);
 }
 
 template<typename T>
