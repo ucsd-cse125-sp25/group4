@@ -93,6 +93,7 @@ struct DescriptorAllocator {
 		cpu_base = heap->GetCPUDescriptorHandleForHeapStart();
 		gpu_base = heap->GetGPUDescriptorHandleForHeapStart();
 		stride = device->GetDescriptorHandleIncrementSize(type);
+		return true;
 	}
 
 	Descriptor Allocate() {
@@ -169,7 +170,9 @@ struct Scene {
 		Buffer<BYTE> buffers[SCENE_BUFFER_TYPE_COUNT];
 	};
 
-	Scene() { return; };
+	Scene() {
+		memset(this, 0, sizeof(*this));
+	};
 	~Scene() { Release(); }
 
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *filename) {
@@ -220,6 +223,8 @@ struct Scene {
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
 		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
 		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
+
+		return true;
 	}
 	void Release() {
 		for (Buffer<BYTE> &buf : buffers) {
@@ -288,6 +293,7 @@ struct DebugCubes {
 			}
 		};
 		device->CreateShaderResourceView(resource.Get(), &desc, descriptor.cpu);
+		return true;
 	}
 	void UpdateGPUSide() {
 		// copy scene to GPU
