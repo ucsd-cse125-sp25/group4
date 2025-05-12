@@ -227,6 +227,8 @@ struct Scene {
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
 		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
 		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
+
+		return true;
 	}
 	void Release() {
 		for (Buffer<BYTE> &buf : buffers) {
