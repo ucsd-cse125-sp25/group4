@@ -173,7 +173,7 @@ struct Scene {
 		
 		SceneHeader* header = reinterpret_cast<SceneHeader*>(data.ptr);
 		if (header->version != SCENE_VERSION) {
-			printf("ERROR: version of scene file does not match parser\n");
+			printf("ERROR: version of scene file is %d while version of parser is %d \n", header->version, SCENE_VERSION);
 			return false;
 		}
 		if (header->numTriangles == 0) {

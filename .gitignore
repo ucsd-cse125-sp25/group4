@@ -4,6 +4,8 @@
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
 Assets/*
+uv.lock
+.python-version
 
 # User-specific files
 *.rsuser

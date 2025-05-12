@@ -1,0 +1,16 @@
+[[language]]
+name = "cpp"
+file-types = ["cpp", "h"]
+language-servers = [ "clangd" ]
+roots = [".git"]
+
+[language-server.clangd]
+command = "clangd"
+
+[[language]]
+name = "python"
+language-servers = [ "ruff" ]
+
+[language-server.ruff]
+command = "ruff"
+args = ["server"]
