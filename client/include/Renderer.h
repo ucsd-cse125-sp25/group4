@@ -186,6 +186,7 @@ struct Scene {
 		assert(data.ptr != nullptr);
 		
 		SceneHeader* header = reinterpret_cast<SceneHeader*>(data.ptr);
+		// sanity checks
 		if (header->version != SCENE_VERSION) {
 			printf("ERROR: version of scene file does not match parser\n");
 			return false;
