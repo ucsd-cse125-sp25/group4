@@ -62,6 +62,9 @@
       <DeploymentContent>true</DeploymentContent>
       <FileType>Document</FileType>
     </CopyFileToFolders>
+    <None Include="..\client\include\shaderShared.hlsli">
+      <FileType>Document</FileType>
+    </None>
     <None Include="exporter.py" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -157,6 +160,12 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <FxCompile>
+      <ShaderModel>6.6</ShaderModel>
+      <VariableName>
+      </VariableName>
+      <AdditionalIncludeDirectories>$(SolutionDir)client\include</AdditionalIncludeDirectories>
+    </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
