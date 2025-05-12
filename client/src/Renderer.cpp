@@ -542,7 +542,7 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	XMVECTOR model_up = { 0, 0, 1, 0 }; 
 	
 	XMMATRIX view = XMMatrixLookToRHToLH(camPos, pos - camPos, model_up);
-	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100);
+	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01f, 100.0f);
 
 	return XMMatrixTranspose(view * proj);
 }
@@ -632,7 +632,7 @@ bool Renderer::Render() {
 	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &debugCubes.vertexBuffer.descriptor.index, 16);
 	// index of transforms 
   m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
-	m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, debugCubes.transforms.size(), 0, 0);
+	m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, (UINT)debugCubes.transforms.size(), 0, 0);
 	// m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
 	
 	// barrier BEFORE presenting the back buffer 
