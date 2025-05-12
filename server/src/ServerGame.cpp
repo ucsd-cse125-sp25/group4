@@ -21,6 +21,11 @@ ServerGame::ServerGame(void) {
 		}
 	};
 
+	appState = new AppState{
+		.gameState = state,
+		.screenState = ScreenState::START_MENU
+	};
+
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
 	//// colors2d[i][0..3] = R, G, B, A (0–255)
@@ -41,9 +46,30 @@ void ServerGame::update() {
 	}
 
 	receiveFromClients();
-	applyMovements();
-	applyCamera();
-	sendUpdates();
+	switch (appState->screenState) {
+		case ScreenState::GAME_SCREEN:
+		{
+			applyMovements();
+			applyCamera();
+			sendGameStateUpdates();
+			break;
+		}
+		case ScreenState::START_MENU:
+		{
+			handleStartMenu();
+			break;
+		}
+		case ScreenState::SHOP_SCREEN:
+		{
+
+			break;
+		}
+		default:
+		{
+			break;
+		}
+	}
+	sendGameStateUpdates();
 }
 
 void ServerGame::receiveFromClients() {
@@ -95,6 +121,13 @@ void ServerGame::receiveFromClients() {
 				printf("[CLIENT %d] CAMERA_PACKET: PITCH %f, YAW %f\n", id, cam->pitch, cam->yaw);
 				latestCamera[id] = *cam;
 				break;
+			}
+			case PacketType::START_MENU_STATUS:
+			{
+				StartMenuStatusPayload* status = (StartMenuStatusPayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] SCREEN_STATE_PACKET: STATE %d\n", id, status->ready);
+				menuStatus[id] = *status;
+
 			}
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
@@ -153,7 +186,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 		bool isColliding = false;
 
 		// Check for collisions against other players
-		for (int c = 0; c < 4; c++) {
+		for (int c = 0; c < num_players; c++) {
 			if (c == (int)clientId) {
 				continue;
 			}
@@ -233,11 +266,24 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 	printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
 }
 
-void ServerGame::sendUpdates() {
+void ServerGame::sendGameStateUpdates() {
 
 	char packet_data[HDR_SIZE + sizeof(GameState)];
 
 	NetworkServices::buildPacket<GameState>(PacketType::GAME_STATE, *state, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+}
+
+void ServerGame::sendStartMenuStateUpdates() {
+
+	char packet_data[HDR_SIZE + sizeof(StartMenuStatusPayload)];
+
+	StartMenuStatusPayload* data = new StartMenuStatusPayload{
+		.ready = true
+	};
+
+	NetworkServices::buildPacket<StartMenuStatusPayload>(PacketType::START_MENU_STATUS, *data, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
 }
@@ -292,6 +338,19 @@ void ServerGame::readBoundingBoxes() {
 		colors2d.push_back(color2d);
 	}
 	json_value_free(rootVal);
+}
+
+void ServerGame::handleStartMenu() {
+	bool ready = true;
+	for (auto& [id, status] : menuStatus) {
+		if (!status.ready) {
+			ready = false;
+		}
+	}
+
+	if (ready) {
+		sendStartMenuStateUpdates();
+	}
 }
 
 ServerGame::~ServerGame() {

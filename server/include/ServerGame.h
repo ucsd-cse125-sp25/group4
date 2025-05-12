@@ -14,11 +14,14 @@ public:
 
 	void update();
 	void receiveFromClients();
-	void sendUpdates();
+	void sendGameStateUpdates();
+	void sendStartMenuStateUpdates();
+
 	void applyMovements();
 	void applyCamera();
 	void updateClientPositionWithCollision(unsigned int, float, float);
 	void readBoundingBoxes();
+	void handleStartMenu();
 
 
 private:
@@ -36,8 +39,12 @@ private:
 	// colors2d[i][0..3] = R, G, B, A (0–255)
 	vector<vector<int>> colors2d;
 
+	int num_players = 4;
+
 	/* State */
+	AppState* appState;
 	GameState* state;
 	std::unordered_map<uint8_t, MovePayload> latestMovement;
 	std::unordered_map<uint8_t, CameraPayload> latestCamera;
+	std::unordered_map<uint8_t, StartMenuStatusPayload> menuStatus;
 };

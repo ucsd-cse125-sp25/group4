@@ -23,6 +23,7 @@ public:
 	// void sendGameStatePacket(float[4]);
 	void sendMovePacket(char, float, float);
 	void sendCameraPacket(float, float);
+	void sendStartMenuStatusPacket();
 	void update();
 	void handleInput();
 

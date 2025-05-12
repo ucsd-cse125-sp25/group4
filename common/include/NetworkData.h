@@ -11,6 +11,7 @@ enum class PacketType : uint32_t {
 	MOVE = 3,
 	IDENTIFICATION = 4,
 	CAMERA = 5,
+	START_MENU_STATUS = 6,
 	// add more here
 };
 
@@ -29,6 +30,15 @@ struct InitPayload {};
 
 struct DebugPayload {
 	char message[128];
+};
+
+enum class ScreenState {
+	START_MENU,
+	GAME_SCREEN,
+	SHOP_SCREEN,
+
+
+	NUM_SCREENS,
 };
 
 struct PlayerState {
@@ -62,6 +72,11 @@ struct GameState {
 	PlayerState players[4];
 };
 
+struct AppState {
+	GameState* gameState;
+	ScreenState screenState;
+};
+
 typedef struct IDPayload {
 	unsigned int id;
 };
@@ -73,6 +88,10 @@ struct MovePayload {
 
 struct CameraPayload {
 	float yaw, pitch;
+};
+
+struct StartMenuStatusPayload {
+	bool ready;
 };
 
 

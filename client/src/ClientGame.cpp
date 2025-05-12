@@ -108,6 +108,15 @@ void ClientGame::sendCameraPacket(float yaw, float pitch) {
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
 
+void ClientGame::sendStartMenuStatusPacket() {
+	StartMenuStatusPayload status{};
+	status.ready = true;
+
+	char buf[HDR_SIZE + sizeof(status)];
+	NetworkServices::buildPacket(PacketType::START_MENU_STATUS, status, buf);
+	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
+}
+
 void ClientGame::update() {
 
 	// check for server updates and process them accordingly
@@ -155,6 +164,13 @@ void ClientGame::update() {
 
 			break;
 		}
+		case PacketType::START_MENU_STATUS:
+			StartMenuStatusPayload* statusPayload = (StartMenuStatusPayload*)(network_data + HDR_SIZE);
+			
+			//if (statusPayload->ready) {
+				//todo
+			//}
+			break;
 		default:
 			// printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
 			break;
@@ -189,6 +205,9 @@ void ClientGame::handleInput() {
 
 	bool movUpdate = false;
 	char dir;
+	bool ready = false;
+
+	//todo: different inputs for each screen, handle going between states
 
 	if (GetAsyncKeyState('W') & 0x8000) {
 		dir = 'W';
@@ -205,6 +224,12 @@ void ClientGame::handleInput() {
 	if (GetAsyncKeyState('D') & 0x8000) {
 		dir = 'D';
 		movUpdate = true;
+	}
+	/*if (GetAsyncKeyState('N') & 0x8000) {
+		screen = max(ScreenState::START_MENU, screen - 1);
+	}*/
+	if (GetAsyncKeyState('M') & 0x8000) {
+		ready = true;
 	}
 
 
@@ -241,6 +266,9 @@ void ClientGame::handleInput() {
 	}
 	if (movUpdate) {
 		sendMovePacket(dir, yaw, pitch);
+	}
+	if (ready) {
+		sendStartMenuStatusPacket();
 	}
 }
 
