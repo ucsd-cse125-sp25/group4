@@ -46,18 +46,19 @@ constexpr enum RootParameters : UINT8 {
 	ROOT_PARAMETERS_COUNT
 };
 
-// TODO: have 2 constant buffers
-// 1 is updated per-frame
-// 1 is updated per-tick
-// maybe a 3rd is updated sporadically
-
 template<typename T>
 struct Slice {
-	T* ptr;
-	UINT len;
+	T*       ptr; // pointer to first element
+	uint32_t len; // length in number of elements
+
 
 	inline UINT numBytes() {
 		return len * sizeof(T);
+	}
+	
+	// returns the pointer to the first byte beyond the end of the array
+	inline BYTE* after() {
+		return reinterpret_cast<BYTE*>(&(ptr[len]));
 	}
 };
 
@@ -108,12 +109,11 @@ struct DescriptorAllocator {
 
 template<typename T>
 struct Buffer {
-	Slice<T>                   data;
-	ComPtr<ID3D12Resource>     resource;
-	void*                      shared_ptr; 
-	D3D12_GPU_VIRTUAL_ADDRESS  gpu_ptr;
-	Descriptor                 descriptor;
-	// uint32_t offset;
+	Slice<T>                   data;       // non-owning view into CPU memory
+	ComPtr<ID3D12Resource>     resource;   // DX12 heap handle (each buffer has its own heap)
+	void*                      shared_ptr; // GPU heap memory mapped to CPU virtual memory
+	D3D12_GPU_VIRTUAL_ADDRESS  gpu_ptr;    // address of heap start
+	Descriptor                 descriptor; // SRV descriptor in the SRV heap
 
 	bool Init(Slice<T> data       , ID3D12Device *device, DescriptorAllocator *descriptorAllocator,  const wchar_t *debugName);
 	bool Init(T *ptr, uint32_t len, ID3D12Device *device, DescriptorAllocator *descriptorAllocator,  const wchar_t *debugName);
@@ -155,14 +155,10 @@ enum SceneBufferType {
 	SCENE_BUFFER_TYPE_MATERIAL_ID,
 	SCENE_BUFFER_TYPE_COUNT
 };
-constexpr uint32_t SceneBufferStride[SCENE_BUFFER_TYPE_COUNT];
-SceneBufferStride[SCENE_BUFFER_TYPE_VERTEX_POSITION] = sizeof(XMFLOAT3);
-SceneBufferStride[SCENE_BUFFER_TYPE_VERTEX_SHADING]  = sizeof(VertexShadingData);
-SceneBufferStride[SCENE_BUFFER_TYPE_MATERIAL_ID]     = sizeof(uint8_t);
 struct Scene {
 	// the whole scene file
 	Slice<BYTE> data;
-
+	
 	// buffers reference the data slice
 	union {
 		struct {
@@ -172,6 +168,9 @@ struct Scene {
 		};
 		Buffer<BYTE> buffers[SCENE_BUFFER_TYPE_COUNT];
 	};
+
+	Scene() { return; };
+	~Scene() { Release(); }
 
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *filename) {
 		// ------------------------------------------------------------------------------------------------------------
@@ -192,36 +191,39 @@ struct Scene {
 			printf("ERROR: scene has no triangles\n");
 			return false;
 		}
-		/*
-		if (header.firstTriangle + numTriangles >= data.len) {
-			printf("ERROR: described triangle buffer is out of bounds\n");
-			return false;
-		}*/
-
+		
 		// contains scene data but not the header	
 		Slice<BYTE> SceneBuffers = {
 			.ptr = data.ptr + sizeof(SceneHeader),
 			.len = data.len - sizeof(SceneHeader)
 		};
 		
-		int numTriangles = header->numTriangles;
-		int numVerts     = numTriangles * VERTS_PER_TRI;
-		// evil pointer casting >:)
-		auto vertexPositionStart = reinterpret_cast<XMFLOAT3*>          (SceneBuffers.ptr);
-		auto shadingDataStart    = reinterpret_cast<VertexShadingData*> (&vertexPositionStart[numVerts]);
+		uint32_t numTriangles = header->numTriangles;
+		uint32_t numVerts     = numTriangles * VERTS_PER_TRI;
 
-		Slice<XMFLOAT3> vertexPositionSlice = {.ptr = SceneBuffers.ptr, .len = numVerts};
-		Slice<VertexShadingData> vertexShadingSlice {
-			.ptr = reinterpret_cast<VertexShadingData*> (&vertexPositionStart[numVerts]),
+		// create slices to the file blob
+		// evil pointer casting >:)
+		Slice<XMFLOAT3> vertexPositionSlice = {
+			.ptr = reinterpret_cast<XMFLOAT3*>(SceneBuffers.ptr),
 			.len = numVerts
 		};
-		
-		vertexPosition.Init(vertexPositionStart, numVerts, device, descriptorAllocator, L"Scene Vertex Position Buffer");
-		vertexShading .Init(shadingDataStart   , numVerts, device, descriptorAllocator, L"Scene Vertex Shading Buffer");
+		Slice<VertexShadingData> vertexShadingSlice {
+			.ptr = reinterpret_cast<VertexShadingData*>(vertexPositionSlice.after()),
+			.len = numVerts
+		};
+		Slice<uint8_t> materialIDSlice {
+			.ptr = reinterpret_cast<uint8_t*>(vertexShadingSlice.after()),
+			.len = numTriangles
+		};
+
+		// create buffers from slices
+		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
+		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
+		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
 	}
 	void Release() {
 		for (Buffer<BYTE> &buf : buffers) {
-			buf.release();
+			buf.Release();
 		}
 		if (data.ptr != nullptr) free(data.ptr);
 		memset(this, 0, sizeof(this));
@@ -301,7 +303,7 @@ struct DebugCubes {
 class Renderer {
 public:
 	bool Init(HWND window_handle);
-
+	Renderer();
 	bool Render();
 	void OnUpdate();
 	~Renderer();
@@ -462,13 +464,10 @@ inline bool Buffer<T>::Init(Slice<T> inData, ID3D12Device* device, DescriptorAll
 }
 
 
-inline bool Buffer<T>::Init(T *ptr, uint32_t len, ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *debugName) {
-	this->Init(Slice<T>{ptr, len}, device, descriptorAllocator, debugName);
-}
-
 template<typename T>
 inline void Buffer<T>::Release()
 {
 	resource->Unmap(0, nullptr);
 	resource->Release();
+	memset(this, 0, sizeof(this));
 }
