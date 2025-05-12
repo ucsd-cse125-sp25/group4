@@ -649,7 +649,6 @@ bool Renderer::Render() {
 	}
 
 	// draw debug cubes
-<<<<<<< HEAD
 	{
 		PerDrawConstants drawConstants = {
 			.viewProject           = viewProject,
@@ -664,16 +663,6 @@ bool Renderer::Render() {
 	  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
 		m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, (UINT)debugCubes.transforms.size(), 0, 0);
 	}
-=======
-	m_commandList->SetPipelineState(m_pipelineStateDebug.Get());
-	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
-	// index of vertex buffer
-	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &debugCubes.vertexBuffer.descriptor.index, 16);
-	// index of transforms 
-  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
-	m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, debugCubes.transforms.size(), 0, 0);
-	// m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
->>>>>>> e020e95 (buffer refactor + python setup)
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {

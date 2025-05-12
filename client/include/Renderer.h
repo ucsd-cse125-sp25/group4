@@ -160,10 +160,6 @@ enum SceneBufferType {
 	SCENE_BUFFER_TYPE_MATERIAL_ID,
 	SCENE_BUFFER_TYPE_COUNT
 };
-constexpr uint32_t SceneBufferStride[SCENE_BUFFER_TYPE_COUNT];
-SceneBufferStride[SCENE_BUFFER_TYPE_VERTEX_POSITION] = sizeof(XMFLOAT3);
-SceneBufferStride[SCENE_BUFFER_TYPE_VERTEX_SHADING]  = sizeof(VertexShadingData);
-SceneBufferStride[SCENE_BUFFER_TYPE_MATERIAL_ID]     = sizeof(uint8_t);
 struct Scene {
 	// the whole scene file
 	Slice<BYTE> data;
@@ -231,29 +227,10 @@ struct Scene {
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
 		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
 		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
-		return true;
 	}
 	void Release() {
 		for (Buffer<BYTE> &buf : buffers) {
 			buf.Release();
-		int numTriangles = header->numTriangles;
-		int numVerts     = numTriangles * VERTS_PER_TRI;
-		// evil pointer casting >:)
-		auto vertexPositionStart = reinterpret_cast<XMFLOAT3*>          (SceneBuffers.ptr);
-		auto shadingDataStart    = reinterpret_cast<VertexShadingData*> (&vertexPositionStart[numVerts]);
-
-		Slice<XMFLOAT3> vertexPositionSlice = {.ptr = SceneBuffers.ptr, .len = numVerts};
-		Slice<VertexShadingData> vertexShadingSlice {
-			.ptr = reinterpret_cast<VertexShadingData*> (&vertexPositionStart[numVerts]),
-			.len = numVerts
-		};
-		
-		vertexPosition.Init(vertexPositionStart, numVerts, device, descriptorAllocator, L"Scene Vertex Position Buffer");
-		vertexShading .Init(shadingDataStart   , numVerts, device, descriptorAllocator, L"Scene Vertex Shading Buffer");
-	}
-	void Release() {
-		for (Buffer<BYTE> &buf : buffers) {
-			buf.release();
 		}
 		if (data.ptr != nullptr) free(data.ptr);
 		memset(this, 0, sizeof(this));
