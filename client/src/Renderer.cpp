@@ -473,6 +473,10 @@ bool Renderer::Init(HWND window_handle) {
 	return true;
 }
 
+Renderer::Renderer() {
+	return;
+}
+
 bool Renderer::WaitForGpu() {
 	// add signal to command queue
 	UNWRAP(m_commandQueue->Signal(m_fence.Get(), m_fenceValues[m_frameIndex]));
@@ -617,9 +621,9 @@ bool Renderer::Render() {
 
 	// draw scene
 	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
-	uint32_t vertexPositionsIndex = m_scene.descriptors[SCENE_BUFFER_TYPE_VERTEX_POSITION].index;
+	uint32_t vertexPositionsIndex = m_scene.vertexPosition.descriptor.index;
 	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
-	m_commandList->DrawInstanced(3 * m_scene.triangles.len, 1, 0, 0);
+	m_commandList->DrawInstanced(3 * m_scene.vertexPosition.data.len, 1, 0, 0);
 
 	// draw players
 	for (UINT8 i = 0; i < 4; ++i) {
