@@ -58,6 +58,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="exporter.py" />
+    <None Include="..\client\include\shaderShared.hlsli">
+      <Filter>Header Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="..\Assets\scene.jj">
