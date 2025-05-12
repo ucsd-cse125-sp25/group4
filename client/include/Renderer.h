@@ -156,6 +156,10 @@ enum SceneBufferType {
 	SCENE_BUFFER_TYPE_MATERIAL_ID,
 	SCENE_BUFFER_TYPE_COUNT
 };
+constexpr uint32_t SceneBufferStride[SCENE_BUFFER_TYPE_COUNT];
+SceneBufferStride[SCENE_BUFFER_TYPE_VERTEX_POSITION] = sizeof(XMFLOAT3);
+SceneBufferStride[SCENE_BUFFER_TYPE_VERTEX_SHADING]  = sizeof(VertexShadingData);
+SceneBufferStride[SCENE_BUFFER_TYPE_MATERIAL_ID]     = sizeof(uint8_t);
 struct Scene {
 	// the whole scene file
 	Slice<BYTE> data;
