@@ -7,6 +7,7 @@
 #include "d3dx12.h"
 #include "ReadData.h"
 #include "NetworkData.h"
+#include "shaderShared.hlsli"
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -16,6 +17,8 @@ using Microsoft::WRL::ComPtr;
 #define UNWRAP(result) if(FAILED(result)) return false 
 
 constexpr uint32_t VERTS_PER_TRI = 3;
+constexpr size_t BYTES_PER_DWORD = 4;
+constexpr size_t DRAW_CONSTANT_NUM_DWORDS = sizeof(PerDrawConstants)/BYTES_PER_DWORD;
 
 struct LookDir {
 	// (-pi/2, pi/2)
@@ -134,10 +137,6 @@ struct SceneHeader {
 	int32_t firstTriangle;
 };
 
-struct VertexShadingData {
-	XMFLOAT3 normal;
-	XMFLOAT2 texcoord;
-};
 
 struct Triangles {
 	int                len;

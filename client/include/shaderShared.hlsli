@@ -12,8 +12,15 @@ Contains shared data types between multiple shader file.
 #include <stdint.h>
 using namespace DirectX;
 
+using float2   = XMFLOAT2;
+using float3   = XMFLOAT3;
 using float4   = XMFLOAT4;
+
 using float4x4 = XMFLOAT4X4;
+
+using vector   = XMVECTOR;
+using matrix   = XMMATRIX;
+
 using uint     = uint32_t;
 
 #else
@@ -23,13 +30,19 @@ using uint     = uint32_t;
 struct PSInput
 {
     float4 position SEMANTIC(SV_POSITION);
+    float3 normal   SEMANTIC(NORMAL0);
 };
 struct PerDrawConstants 
 {
-    float4x4 modelViewProject;
-    uint vbuffer_idx;
+    matrix   modelViewProject;
+    uint     vpos_idx;
+    uint     vshade_idx;
 };
 struct VertexPosition
 {
 	float3 position;
+};
+struct VertexShadingData {
+	float3 normal;
+	float2 texcoord;
 };
