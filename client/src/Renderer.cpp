@@ -220,7 +220,7 @@ bool Renderer::Init(HWND window_handle) {
 			.Constants = {
 				.ShaderRegister = 1,
 				.RegisterSpace = 0,
-				.Num32BitValues = 17,
+				.Num32BitValues = DRAW_CONSTANT_NUM_DWORDS,
 			}
 		};
 		parameters[ROOT_PARAMETERS_CONSTANT_DEBUG_CUBE_MATRICES] = {
@@ -610,30 +610,43 @@ bool Renderer::Render() {
 
 
 	// draw scene
-	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
-	uint32_t vertexPositionsIndex = m_scene.vertexPosition.descriptor.index;
-	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
-	m_commandList->DrawInstanced(3 * m_scene.vertexPosition.data.len, 1, 0, 0);
+	{
+		PerDrawConstants drawConstants = {
+			.modelViewProject = viewProject,
+			.vpos_idx         = m_scene.vertexPosition.descriptor.index,
+			.vshade_idx       = m_scene.vertexShading.descriptor.index,
+		};
+	
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+		m_commandList->DrawInstanced(3 * m_scene.vertexPosition.data.len, 1, 0, 0);
+	}
 
 	// draw players
 	for (UINT8 i = 0; i < 4; ++i) {
 		XMMATRIX modelMatrix = computeModelMatrix(players[i]);
 		XMMATRIX modelViewProjectMatrix = viewProject * modelMatrix;
-		m_commandList->SetGraphicsRoot32BitConstants(1, 16, &modelViewProjectMatrix, 0);
-		vertexPositionsIndex = m_vertexBufferBindless.descriptor.index;
-		m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
+		PerDrawConstants drawConstants = {
+			.modelViewProject = modelViewProjectMatrix,
+			.vpos_idx = m_vertexBufferBindless.descriptor.index,
+			.vshade_idx = m_scene.vertexShading.descriptor.index // CHANGE LATER
+		};
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
 		m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
 	}
 
 	// draw debug cubes
-	m_commandList->SetPipelineState(m_pipelineStateDebug.Get());
-	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
-	// index of vertex buffer
-	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &debugCubes.vertexBuffer.descriptor.index, 16);
-	// index of transforms 
-  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
-	m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, (UINT)debugCubes.transforms.size(), 0, 0);
-	// m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
+	{
+		PerDrawConstants drawConstants = {
+			.modelViewProject = viewProject,
+			.vpos_idx         = debugCubes.vertexBuffer.descriptor.index,
+			.vshade_idx       = m_scene.vertexShading.descriptor.index, // CHANGE LATER
+		};
+		m_commandList->SetPipelineState(m_pipelineStateDebug.Get()); // bind the debug cube vertex and fragment shaders
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+		// index of transforms 
+	  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
+		m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, (UINT)debugCubes.transforms.size(), 0, 0);
+	}
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {
