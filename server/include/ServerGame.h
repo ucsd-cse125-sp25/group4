@@ -17,7 +17,7 @@ public:
 	void sendUpdates();
 	void applyMovements();
 	void applyCamera();
-	void updateClientPositionWithCollision(unsigned int, float, float);
+	void updateClientPositionWithCollision(unsigned int, float, float, float);
 	void readBoundingBoxes();
 
 

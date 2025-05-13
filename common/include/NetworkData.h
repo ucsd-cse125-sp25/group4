@@ -67,7 +67,7 @@ typedef struct IDPayload {
 };
 
 struct MovePayload {
-	char direction;
+	float direction[3];
 	float yaw, pitch;
 };
 

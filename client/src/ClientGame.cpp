@@ -25,7 +25,7 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow) {
     RegisterClassEx(&windowClass);
 	
 	// TODO: pass this into the renderer intialization
-    RECT windowRect = { 0, 0, 1920, 1080};
+    RECT windowRect = { 0, 0, 1920/2, 1080/2};
     AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
 
@@ -87,9 +87,10 @@ void ClientGame::sendGameStatePacket(float posDelta[4]) {
 }
 */
 
-void ClientGame::sendMovePacket(char dir, float yaw, float pitch) {
+void ClientGame::sendMovePacket(float direction[3], float yaw, float pitch) {
 	MovePayload mv{};
-	mv.direction = dir;
+	for (int i = 0; i < 3; i++)
+		mv.direction[i] = direction[i];
 	mv.yaw = yaw;
 	mv.pitch = pitch;
 
@@ -188,22 +189,22 @@ void ClientGame::handleInput() {
 		return;
 
 	bool movUpdate = false;
-	char dir;
+	float direction[3] = { 0, 0, 0 };
 
 	if (GetAsyncKeyState('W') & 0x8000) {
-		dir = 'W';
+		direction[0] += 1.0f;
 		movUpdate = true;
 	}
 	if (GetAsyncKeyState('S') & 0x8000) {
-		dir = 'S';
+		direction[0] -= 1.0f;
 		movUpdate = true;
 	}
 	if (GetAsyncKeyState('A') & 0x8000) {
-		dir = 'A';
+		direction[1] -= 1.0f;
 		movUpdate = true;
 	}
 	if (GetAsyncKeyState('D') & 0x8000) {
-		dir = 'D';
+		direction[1] += 1.0f;
 		movUpdate = true;
 	}
 
@@ -240,7 +241,7 @@ void ClientGame::handleInput() {
 		renderer.players[renderer.currPlayer.playerId].lookDir.yaw = yaw;
 	}
 	if (movUpdate) {
-		sendMovePacket(dir, yaw, pitch);
+		sendMovePacket(direction, yaw, pitch);
 	}
 }
 

@@ -14,10 +14,10 @@ ServerGame::ServerGame(void) {
 		.tick = 0,
 		//x, y, z, yaw, pitch, speed, coins, isHunter
 		.players = {
-			{ 4.0f,  4.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, false},
-			{-2.0f,  2.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, false},
-			{ 2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, false},
-			{-2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, true },
+			{ 4.0f,  4.0f, 8.0f, 0.0f, 0.0f, 0.15f, 0, false},
+			{-2.0f,  2.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false},
+			{ 2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false},
+			{-2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, true },
 		}
 	};
 
@@ -84,7 +84,7 @@ void ServerGame::receiveFromClients() {
 			case PacketType::MOVE:
 			{
 				MovePayload* mv = (MovePayload*)&(network_data[i + HDR_SIZE]);
-				printf("[CLIENT %d] MOVE_PACKET: DIR '%c', PITCH %f, YAW %f\n", id, mv->direction, mv->pitch, mv->yaw);
+				printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw);
 				// register the latest movement, but do not update yet
 				latestMovement[id] = *mv;
 				break;
@@ -114,25 +114,24 @@ void ServerGame::applyMovements() {
 		state->players[id].yaw = mv.yaw;
 		state->players[id].pitch = mv.pitch; 
 
+		// normalize the direction vector
+		float magnitude = sqrt(powf(mv.direction[0], 2) + powf(mv.direction[1], 2) + powf(mv.direction[2], 2));
+		if (magnitude == 0) continue;
+		for (int i = 0; i < 3; i++)
+			mv.direction[i] /= magnitude;
 
 		// convert intent + yaw into 2d vector
 		// CLOCKWISE positive
 		// foward x/y, actual delta x/y
-		float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), dx = 0, dy = 0;
+		float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), fz = 0, dx = 0, dy = 0, dz = 0;
+		
+		dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * state->players[id].speed;
 
-		switch (mv.direction)
-		{
-		case 'W':  dx = fx; dy = fy; break;
-		case 'S':  dx = -fx; dy = -fy; break;
-		case 'A':  dx = -fy; dy = fx; break;
-		case 'D':  dx = fy; dy = -fx; break;
-		default: break;
-		}
+		dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * state->players[id].speed;
 
-		dx *= state->players[id].speed;
-		dy *= state->players[id].speed;
+		dz = fz * mv.direction[2] * state->players[id].speed;
 
-		updateClientPositionWithCollision(id, dx, dy);
+		updateClientPositionWithCollision(id, dx, dy, dz);
 	}
 
 	latestMovement.clear(); // consume the movement, don't keep for next tick
@@ -146,9 +145,9 @@ void ServerGame::applyCamera() {
 	latestCamera.clear();
 }
 
-void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy) {
+void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy, float dz) {
 	// Update the position with collision detection
-	float delta[3] = { dx, dy, 0.0f };
+	float delta[3] = { dx, dy, dz };
 	for (int i = 0; i < 3; i++) {
 		bool isColliding = false;
 
@@ -159,28 +158,34 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 			}
 			// Bounding box for the current client
 			float temp = 1.0f; // radius of player
-			float minBoundCurrent[2] = {
+			float minBoundCurrent[3] = {
 				state->players[clientId].x + delta[0] - temp, // x - 0.5
-				state->players[clientId].y + delta[1] - temp  // y - 0.5
+				state->players[clientId].y + delta[1] - temp, // y - 0.5
+				state->players[clientId].z + delta[2] - temp  // z - 0.5
 			};
-			float maxBoundCurrent[2] = {
+			float maxBoundCurrent[3] = {
 				state->players[clientId].x + delta[0] + temp, // x + 0.5
-				state->players[clientId].y + delta[1] + temp  // y + 0.5
+				state->players[clientId].y + delta[1] + temp, // y + 0.5
+				state->players[clientId].z + delta[2] + temp  // z + 0.5
 			};
 
 			// Bounding box for the other client
-			float minBoundOther[2] = {
+			float minBoundOther[3] = {
 				state->players[c].x - temp, // x - 0.5
-				state->players[c].y - temp  // y - 0.5
+				state->players[c].y - temp, // y - 0.5
+				state->players[c].z - temp  // y - 0.5
 			};
-			float maxBoundOther[2] = {
+			float maxBoundOther[3] = {
 				state->players[c].x + temp, // x + 0.5
-				state->players[c].y + temp  // y + 0.5
+				state->players[c].y + temp, // y + 0.5
+				state->players[c].z + temp  // z + 0.5
 			};
 
 			// Check for overlap in both x and y directions
-			isColliding = isColliding || ((minBoundCurrent[0] <= maxBoundOther[0] && maxBoundCurrent[0] >= minBoundOther[0]) &&
-				(minBoundCurrent[1] <= maxBoundOther[1] && maxBoundCurrent[1] >= minBoundOther[1]));
+			isColliding = isColliding || 
+				((minBoundCurrent[0] <= maxBoundOther[0] && maxBoundCurrent[0] >= minBoundOther[0]) &&
+				 (minBoundCurrent[1] <= maxBoundOther[1] && maxBoundCurrent[1] >= minBoundOther[1]) &&
+				 (minBoundCurrent[2] <= maxBoundOther[2] && maxBoundCurrent[2] >= minBoundOther[2]));
 
 			if (isColliding) {
 				printf("Collision detected between client %d and client %d, %d\n", clientId, c, i);
@@ -198,29 +203,34 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 		for (size_t b = 0; b < boxes2d.size(); ++b) {
 			// Bounding box for the current client
 			float temp = 1.0f;
-			float minBoundCurrent[2] = {
+			float minBoundCurrent[3] = {
 				state->players[clientId].x + delta[0] - temp, // x - 0.5
-				state->players[clientId].y + delta[1] - temp  // y - 0.5
+				state->players[clientId].y + delta[1] - temp, // y - 0.5
+				state->players[clientId].z + delta[2] - temp  // z - 0.5
 			};
-			float maxBoundCurrent[2] = {
+			float maxBoundCurrent[3] = {
 				state->players[clientId].x + delta[0] + temp, // x + 0.5
-				state->players[clientId].y + delta[1] + temp  // y + 0.5
+				state->players[clientId].y + delta[1] + temp, // y + 0.5
+				state->players[clientId].z + delta[2] + temp  // z + 0.5
 			};
 
 			auto& box = boxes2d[b];
 			float staticMinX = box[0];
 			float staticMinY = box[1];
+			float staticMinZ = box[2];
 			float staticMaxX = box[3];
 			float staticMaxY = box[4];
+			float staticMaxZ = box[5];
 
 			// simple AABB overlap test in 2D (X vs X, Y vs Y)
 			if (minBoundCurrent[0] <= staticMaxX && maxBoundCurrent[0] >= staticMinX &&
-				minBoundCurrent[1] <= staticMaxY && maxBoundCurrent[1] >= staticMinY)
+				minBoundCurrent[1] <= staticMaxY && maxBoundCurrent[1] >= staticMinY &&
+				minBoundCurrent[2] <= staticMaxZ && maxBoundCurrent[2] >= staticMinZ)
 			{
 				// collision! cancel movement on this axis
-				isColliding = true;
+				//isColliding = true;
 				printf("Collision detected between client %d and collision box %d, %d\n", clientId, b, i);
-				delta[i] = 0;
+				//delta[i] = 0;
 				break;
 			}
 		}
