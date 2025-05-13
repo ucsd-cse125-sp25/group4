@@ -39,5 +39,6 @@ private:
 	float yaw = 0.0;
 	float pitch = 0.0;
 	static constexpr float MOUSE_SENS = 0.002f;
+	static constexpr float ATTACK_RANGE = 4.0f;
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);

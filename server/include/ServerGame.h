@@ -43,12 +43,11 @@ private:
 	std::unordered_map<uint8_t, MovePayload> latestMovement;
 	std::unordered_map<uint8_t, CameraPayload> latestCamera;
 
-	// inside class ServerGame
+	/* Attack */
 	std::unordered_map<unsigned, AttackPayload> latestAttacks;
-
+	static constexpr float attackAngleDeg = 45.0f;
 	static bool isHit(const AttackPayload& a,
-		const PlayerState& victim,
-		float angleDeg = 90.0f)
+		const PlayerState& victim)
 	{
 		// forward direction from yaw/pitch → unit vector
 		float fx = cosf(a.pitch) * -sinf(a.yaw);
@@ -66,7 +65,8 @@ private:
 		float len = sqrtf(dist2);
 		if (len < 1e-4f) return false;                        // same spot?
 		float dot = (vx * fx + vy * fy + vz * fz) / len;          // cosθ
-		float cosMax = cosf(DirectX::XMConvertToRadians(angleDeg));
+		float cosMax = cosf(DirectX::XMConvertToRadians(attackAngleDeg));
+        // Initialize the static member variable
 		return dot >= cosMax;                                 // within cone
 	}
 

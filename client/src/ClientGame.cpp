@@ -116,7 +116,7 @@ void ClientGame::sendAttackPacket(float origin[3], float yaw, float pitch) {
 	atk.originZ = origin[2];
 	atk.yaw = yaw;
 	atk.pitch = pitch;
-	atk.range = 3.0f;          // ← tweak reach as you like
+	atk.range = ATTACK_RANGE;
 
 	char packet_data[HDR_SIZE + sizeof(AttackPayload)];
 	NetworkServices::buildPacket(PacketType::ATTACK, atk, packet_data);
