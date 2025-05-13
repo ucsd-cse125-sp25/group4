@@ -155,6 +155,15 @@ void ClientGame::update() {
 
 			break;
 		}
+		case PacketType::ROUND_OVER:
+		{
+			RoundOverPayload* roundOverPayload = (RoundOverPayload*)(network_data + HDR_SIZE);
+			//printf("client %d: round %d is over\n", id, roundOverPayload->round_id);
+
+			char message[128];
+			sprintf_s(message, "client %d: round %d is over", id, roundOverPayload->round_id);
+			sendDebugPacket(message);
+		}
 		default:
 			// printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
 			break;

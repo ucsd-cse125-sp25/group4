@@ -3,12 +3,16 @@
 #include <random>
 #include <vector>
 #include <iostream>
+#include <functional>
+#include <thread>
 using namespace std;
 unsigned int ServerGame::client_id;
+int ServerGame::round_id = 0;
 
 ServerGame::ServerGame(void) {
 	client_id = 0;
 	network = new ServerNetwork();
+	round_id = 0;
 
 	state = new GameState{
 		.tick = 0,
@@ -38,6 +42,9 @@ void ServerGame::update() {
 	if (network->acceptNewClient(client_id)) {
 		printf("client %d has connected to the server (tick %llu)\n", client_id, state->tick);
 		client_id++;
+		if (client_id >= 4) {
+			startARound(5);
+		}
 	}
 
 	receiveFromClients();
@@ -146,6 +153,25 @@ void ServerGame::applyCamera() {
 	latestCamera.clear();
 }
 
+void ServerGame::startARound(int seconds) {
+	startTimer(seconds, [this]() {
+		// This code runs after the timer completes
+		sendRoundOver(); // or any other packet sending logic
+		});
+}
+void ServerGame::startTimer(int seconds, std::function<void()> onComplete) {
+	std::thread([seconds, onComplete]() {
+		printf("Starting timer for %d seconds\n", seconds);
+		auto start = std::chrono::steady_clock::now();
+		auto end = start + std::chrono::seconds(seconds);
+		while (std::chrono::steady_clock::now() < end) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+		printf("A timer of %d seconds has ended\n", seconds);
+		if (onComplete) onComplete();
+		}).detach();
+}
+
 void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy) {
 	// Update the position with collision detection
 	float delta[3] = { dx, dy, 0.0f };
@@ -231,6 +257,17 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 	state->players[clientId].z += delta[2];
 
 	printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
+}
+
+void ServerGame::sendRoundOver() {
+	char packet_data[HDR_SIZE + sizeof(RoundOverPayload)];
+
+	RoundOverPayload* data = new RoundOverPayload{
+		.round_id = round_id
+	};
+
+	NetworkServices::buildPacket<RoundOverPayload>(PacketType::ROUND_OVER, *data, packet_data);
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(RoundOverPayload));
 }
 
 void ServerGame::sendUpdates() {

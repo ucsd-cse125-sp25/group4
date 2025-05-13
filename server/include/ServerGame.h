@@ -6,6 +6,7 @@
 #include <cstdint>、
 #include <vector>
 #include <unordered_map>
+#include <functional>
 
 class ServerGame {
 public:
@@ -19,12 +20,16 @@ public:
 	void applyCamera();
 	void updateClientPositionWithCollision(unsigned int, float, float);
 	void readBoundingBoxes();
+	void sendRoundOver();
+	void startARound(int);
+	void startTimer(int, std::function<void()>);
 
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;
 	static constexpr std::chrono::milliseconds TICK_DURATION{ 1000 / TICKS_PER_SEC };
 	static unsigned int client_id;
+	static int round_id;
 
 	std::chrono::steady_clock::time_point next_tick = std::chrono::steady_clock::now();
 	ServerNetwork* network;
