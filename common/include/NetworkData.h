@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <cstring>
 
@@ -12,6 +12,8 @@ enum class PacketType : uint32_t {
 	IDENTIFICATION = 4,
 	CAMERA = 5,
 	// add more here
+	ATTACK = 6,
+	HIT = 7,
 };
 
 // The packet header preceeds every packet
@@ -37,7 +39,7 @@ struct PlayerState {
 	float speed;
 	uint8_t coins;
 	bool isHunter;
-//	bool dead;
+	bool isDead;
 };
 
 struct EntityState { // this is for traps or placed objects
@@ -75,6 +77,17 @@ struct CameraPayload {
 	float yaw, pitch;
 };
 
+struct AttackPayload {
+	float originX, originY, originZ;   // player position when swing happens
+	float yaw;                         // direction of the swing
+	float pitch;
+	float range;                       // reach in world units (eg. 3 m)
+};
+
+struct HitPayload {
+	uint8_t attackerId;
+	uint8_t victimId;
+};
 
 struct Packet {
 	unsigned int packet_type;

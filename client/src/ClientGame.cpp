@@ -1,4 +1,4 @@
-#include "ClientGame.h"
+﻿#include "ClientGame.h"
 #include <algorithm>
 
 const wchar_t CLASS_NAME[] = L"Window Class";
@@ -109,6 +109,24 @@ void ClientGame::sendCameraPacket(float yaw, float pitch) {
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
 
+// inside ClientGame ------------------------------------------------
+void ClientGame::sendAttackPacket(float origin[3], float yaw, float pitch) {
+	AttackPayload atk{};
+	atk.originX = origin[0];
+	atk.originY = origin[1];
+	atk.originZ = origin[2];
+	atk.yaw = yaw;
+	atk.pitch = pitch;
+	atk.range = ATTACK_RANGE;
+
+	char packet_data[HDR_SIZE + sizeof(AttackPayload)];
+	NetworkServices::buildPacket(PacketType::ATTACK, atk, packet_data);
+	NetworkServices::sendMessage(network->ConnectSocket,
+		packet_data,
+		sizeof packet_data);
+}
+
+
 void ClientGame::update() {
 
 	// check for server updates and process them accordingly
@@ -128,6 +146,8 @@ void ClientGame::update() {
 				renderer.players[i].pos.x = state->players[i].x;
 				renderer.players[i].pos.y = state->players[i].y;
 				renderer.players[i].pos.z = state->players[i].z;
+				//renderer.players[i].isDead = state->players[i].isDead;      // NEW
+				//renderer.players[i].isHunter = state->players[i].isHunter;  // NEW
 
 				// update the rotation from other players only.
 				if (i == renderer.currPlayer.playerId) continue;
@@ -135,6 +155,10 @@ void ClientGame::update() {
 				renderer.players[i].lookDir.yaw = state->players[i].yaw;
 			}
 
+			// cache own “dead” flag for input handling
+			localDead = state->players[renderer.currPlayer.playerId].isDead;
+
+			
 			break;
 		}
 		case PacketType::DEBUG: 
@@ -183,67 +207,166 @@ ClientGame::~ClientGame() {
 	delete network;
 }
 
-void ClientGame::handleInput() {
-	// if game window is not focused, don't register input
-	if (GetForegroundWindow() != hwnd) 
-		return;
+// ──────────────────────────────────────────────────────────────────
+// Refactor handleInput()
+inline bool ClientGame::isWindowFocused() const
+{
+	return GetForegroundWindow() == hwnd;
+}
 
-	bool movUpdate = false;
-	float direction[3] = { 0, 0, 0 };
-
-	if (GetAsyncKeyState('W') & 0x8000) {
-		direction[0] += 1.0f;
-		movUpdate = true;
-	}
-	if (GetAsyncKeyState('S') & 0x8000) {
-		direction[0] -= 1.0f;
-		movUpdate = true;
-	}
-	if (GetAsyncKeyState('A') & 0x8000) {
-		direction[1] -= 1.0f;
-		movUpdate = true;
-	}
-	if (GetAsyncKeyState('D') & 0x8000) {
-		direction[1] += 1.0f;
-		movUpdate = true;
-	}
-
-
-	// CAMERA LOGIC:
-	bool camUpdate = false;
-	// current cursor position
-	POINT p;
-	GetCursorPos(&p); 
-	// center of client
-	RECT rc;
-	GetClientRect(hwnd, &rc);
+bool ClientGame::processCameraInput()
+{
+	POINT  p;  GetCursorPos(&p);
+	RECT   rc; GetClientRect(hwnd, &rc);
 	POINT centre{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
-	ClientToScreen(hwnd, &centre); // get client's center pos relative to screen
+	ClientToScreen(hwnd, &centre);
 
 	int dx = p.x - centre.x;
 	int dy = p.y - centre.y;
-	if (dx != 0 || dy != 0) {
-		camUpdate = true;
-		yaw += -dx * MOUSE_SENS;            
-		pitch += dy * MOUSE_SENS;      
-		pitch = std::clamp(pitch,
-						   XMConvertToRadians(-89.0f),
-			               XMConvertToRadians(+89.0f));
-		// recenter cursor
-		if(camUpdate) SetCursorPos(centre.x, centre.y);
-	}
+	if (!dx && !dy) return false;
 
-	if (camUpdate) {
-		sendCameraPacket(yaw, pitch);
+	yaw += -dx * MOUSE_SENS;
+	pitch += dy * MOUSE_SENS;
+	pitch = std::clamp(pitch,
+		XMConvertToRadians(-89.0f),
+		XMConvertToRadians(+89.0f));
 
-		// update own's camera
-		renderer.players[renderer.currPlayer.playerId].lookDir.pitch = pitch;
-		renderer.players[renderer.currPlayer.playerId].lookDir.yaw = yaw;
-	}
-	if (movUpdate) {
-		sendMovePacket(direction, yaw, pitch);
-	}
+	SetCursorPos(centre.x, centre.y);
+	sendCameraPacket(yaw, pitch);
+
+	// update own camera locally for immediate feedback
+	auto& meLook = renderer.players[renderer.currPlayer.playerId].lookDir;
+	meLook.pitch = pitch;
+	meLook.yaw = yaw;
+	return true;
 }
+
+bool ClientGame::processMovementInput()
+{
+	float direction[3] = { 0, 0, 0 };
+	if (GetAsyncKeyState('W') & 0x8000) direction[0] += 1;
+	if (GetAsyncKeyState('S') & 0x8000) direction[0] -= 1;
+	if (GetAsyncKeyState('A') & 0x8000) direction[1] -= 1;
+	if (GetAsyncKeyState('D') & 0x8000) direction[1] += 1;
+
+	if (!direction[0] && !direction[1] && !direction[2]) return false;
+	sendMovePacket(direction, yaw, pitch);
+	return true;
+}
+
+// 5) Hunter’s left‑click attack, only for client‑0
+void ClientGame::processAttackInput()
+{
+	if (renderer.currPlayer.playerId != 0) return;   // only hunter
+	static bool wasDown = false;
+	bool  isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+
+	if (isDown && !wasDown)            // rising edge
+	{
+		float pos[3] = {
+			renderer.players[0].pos.x,
+			renderer.players[0].pos.y,
+			renderer.players[0].pos.z
+		};
+		sendAttackPacket(pos, yaw, pitch);
+	}
+	wasDown = isDown;
+}
+
+void ClientGame::handleInput()
+{
+	if (!isWindowFocused()) return;
+
+	// camera is always allowed (even dead players can spectate)
+	processCameraInput();
+
+	// if you’re dead, no movement or attack
+	if (localDead) return;
+
+	// movement & attack for the living
+	processMovementInput();
+	processAttackInput();
+}
+
+
+//void ClientGame::handleInput() {
+//	// if game window is not focused, don't register input
+//	if (GetForegroundWindow() != hwnd) 
+//		return;
+//
+//	bool movUpdate = false;
+//	char dir;
+//
+//	if (GetAsyncKeyState('W') & 0x8000) {
+//		dir = 'W';
+//		movUpdate = true;
+//	}
+//	if (GetAsyncKeyState('S') & 0x8000) {
+//		dir = 'S';
+//		movUpdate = true;
+//	}
+//	if (GetAsyncKeyState('A') & 0x8000) {
+//		dir = 'A';
+//		movUpdate = true;
+//	}
+//	if (GetAsyncKeyState('D') & 0x8000) {
+//		dir = 'D';
+//		movUpdate = true;
+//	}
+//
+//
+//	// CAMERA LOGIC:
+//	bool camUpdate = false;
+//	// current cursor position
+//	POINT p;
+//	GetCursorPos(&p); 
+//	// center of client
+//	RECT rc;
+//	GetClientRect(hwnd, &rc);
+//	POINT centre{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
+//	ClientToScreen(hwnd, &centre); // get client's center pos relative to screen
+//
+//	int dx = p.x - centre.x;
+//	int dy = p.y - centre.y;
+//	if (dx != 0 || dy != 0) {
+//		camUpdate = true;
+//		yaw += -dx * MOUSE_SENS;            
+//		pitch += dy * MOUSE_SENS;      
+//		pitch = std::clamp(pitch,
+//						   XMConvertToRadians(-89.0f),
+//			               XMConvertToRadians(+89.0f));
+//		// recenter cursor
+//		if(camUpdate) SetCursorPos(centre.x, centre.y);
+//	}
+//
+//	if (camUpdate) {
+//		sendCameraPacket(yaw, pitch);
+//
+//		// update own's camera
+//		renderer.players[renderer.currPlayer.playerId].lookDir.pitch = pitch;
+//		renderer.players[renderer.currPlayer.playerId].lookDir.yaw = yaw;
+//	}
+//	if (movUpdate) {
+//		sendMovePacket(dir, yaw, pitch);
+//	}
+//
+//	// Attack logic for hunter (client0) only
+//	if (renderer.currPlayer.playerId != 0) return; // only hunter can attack
+//
+//	static bool wasPressedLastFrame = false;
+//	bool isPressedNow = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+//
+//	if (isPressedNow && !wasPressedLastFrame) {          // rising edge only
+//		// player’s current world position
+//		float pos[3] = {
+//			renderer.players[renderer.currPlayer.playerId].pos.x,
+//			renderer.players[renderer.currPlayer.playerId].pos.y,
+//			renderer.players[renderer.currPlayer.playerId].pos.z
+//		};
+//		sendAttackPacket(pos, yaw, pitch);
+//	}
+//	wasPressedLastFrame = isPressedNow;
+//}
 
 inline ClientGame *GetState(HWND window_handle) {
 	LONG_PTR ptr = GetWindowLongPtr(window_handle, GWLP_USERDATA);
