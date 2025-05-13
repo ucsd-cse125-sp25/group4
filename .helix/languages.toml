@@ -14,3 +14,13 @@ language-servers = [ "ruff" ]
 [language-server.ruff]
 command = "ruff"
 args = ["server"]
+
+[[language]]
+name = "hlsl"
+language-servers = ["shader-language-server"]
+scope = "source.hlsl"
+file-types = ["hlsl", ".hlsli"]
+roots = [".git"]
+
+[language-server.shader-language-server]
+command = "shader-language-server"

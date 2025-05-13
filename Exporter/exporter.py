@@ -24,15 +24,19 @@ verts = verts[indices]
 # verts = verts.flatten()
 
 normals = np.zeros(NORMAL_FLOATS_PER_VERT * VERTS_PER_TRI * len(mesh.loop_triangles), dtype=np.float32)
-mesh.loop_triangles.foreach_get("normal", normals)
+mesh.loop_triangles.foreach_get("split_normals", normals)
 normals = normals.reshape(len(mesh.loop_triangles),VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
+for i in range(normals.shape[0]):
+    for j in range(normals.shape[1]):
+        if (normals[i, j] == np.zeros(3, dtype=np.float32)).all():
+            print(f"zero'd normal at {i}, {j}")
 
 loop_indices = np.zeros(VERTS_PER_TRI * len(mesh.loop_triangles), dtype = np.int32)
 mesh.loop_triangles.foreach_get("loops", loop_indices)
 
 uv_layer = mesh.uv_layers[0].uv
 loop_uvs = np.zeros(UV_FLOATS_PER_VERT * len(uv_layer), dtype = np.float32) # (num_mesh_loops * 2)
-uv_layer.foreach_get("vector", loop_uvs)
+# uv_layer.foreach_get("vector", loop_uvs)
 loop_uvs = loop_uvs.reshape(-1, UV_FLOATS_PER_VERT) # (num_mesh_loops, 2)
 
 uv = loop_uvs[loop_indices]
@@ -41,11 +45,14 @@ uv = uv.reshape(len(mesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT)
 print("normals shape:", normals.shape)
 print("uv shape:", uv.shape)
 
-normal_uv_interleaved = np.zeros((len(mesh.loop_triangles), VERTS_PER_TRI, (UV_FLOATS_PER_VERT + NORMAL_FLOATS_PER_VERT)), dtype=np.float32)
-normal_uv_interleaved[..., :NORMAL_FLOATS_PER_VERT] = normals
-normal_uv_interleaved[..., :UV_FLOATS_PER_VERT] = uv
+NORMAL_UV_STRIDE = UV_FLOATS_PER_VERT + NORMAL_FLOATS_PER_VERT
+# normal_uv_interleaved = np.zeros((len(mesh.loop_triangles), VERTS_PER_TRI, NORMAL_UV_STRIDE), dtype=np.float32)
+# normal_uv_interleaved[..., ::NORMAL_UV_STRIDE] = normals
+# normal_uv_interleaved[..., NORMAL_FLOATS_PER_VERT::NORMAL_UV_STRIDE] = uv
+normal_uv_interleaved = np.concatenate((normals, uv), axis=-1)
 
 print("interleaved shape:", normal_uv_interleaved.shape)
+print("interleaved:", normal_uv_interleaved)
 
 
 def pack_bytes(layout : str, array : np.array):
