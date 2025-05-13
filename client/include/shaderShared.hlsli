@@ -29,14 +29,20 @@ using uint     = uint32_t;
 
 struct PSInput
 {
-    float4 position SEMANTIC(SV_POSITION);
-    float3 normal   SEMANTIC(NORMAL0);
+	// divided by w in the by the rasterizer between the vertex and fragment shaders
+    float4 positionNDC    SEMANTIC(SV_POSITION);
+	
+	float4 positionGlobal SEMANTIC(POSITION);
+    float3 normal         SEMANTIC(NORMAL0);
 };
 struct PerDrawConstants 
 {
-    matrix   modelViewProject;
-    uint     vpos_idx;
-    uint     vshade_idx;
+    matrix   viewProject;           
+	matrix   modelMatrix;           // positions model to global
+	matrix   modelInverseTranspose; // normals model to global
+    uint     vpos_idx;              // vertex positions in model space
+    uint     vshade_idx;            // normals and texcoords
+	// 50 DWORDS
 };
 struct VertexPosition
 {

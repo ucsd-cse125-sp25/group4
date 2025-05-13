@@ -13,11 +13,12 @@ PSInput VSMain(uint vid : SV_VertexID)
     float4 position_homogeneous = float4(vbuffer[vid].position, 1);
     
     StructuredBuffer<VertexShadingData> shadebuffer = ResourceDescriptorHeap[drawConstants.vshade_idx];
-    float3 normal = shadebuffer[vid].normal;
+    float4 normal = float4(shadebuffer[vid].normal, 0);
     
     PSInput result;
-    result.position = mul(position_homogeneous, drawConstants.modelViewProject); // offset is visible outside of the struct
-    result.normal = normal;
+    result.positionGlobal = mul(position_homogeneous , drawConstants.modelMatrix);
+    result.normal         = mul(normal, drawConstants.modelInverseTranspose).xyz;
+    result.positionNDC    = mul(result.positionGlobal, drawConstants.viewProject);
 
     return result;
     

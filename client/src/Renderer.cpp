@@ -622,9 +622,11 @@ bool Renderer::Render() {
 	// draw scene
 	{
 		PerDrawConstants drawConstants = {
-			.modelViewProject = viewProject,
-			.vpos_idx         = m_scene.vertexPosition.descriptor.index,
-			.vshade_idx       = m_scene.vertexShading.descriptor.index,
+			.viewProject           = viewProject,
+			.modelMatrix           = XMMatrixIdentity(),
+			.modelInverseTranspose = XMMatrixIdentity(),
+			.vpos_idx              = m_scene.vertexPosition.descriptor.index,
+			.vshade_idx            = m_scene.vertexShading.descriptor.index,
 		};
 	
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
@@ -634,11 +636,13 @@ bool Renderer::Render() {
 	// draw players
 	for (UINT8 i = 0; i < 4; ++i) {
 		XMMATRIX modelMatrix = computeModelMatrix(players[i]);
-		XMMATRIX modelViewProjectMatrix = viewProject * modelMatrix;
+		XMMATRIX modelInverseTranspose = XMMatrixInverse(nullptr, XMMatrixTranspose(modelMatrix));
 		PerDrawConstants drawConstants = {
-			.modelViewProject = modelViewProjectMatrix,
-			.vpos_idx = m_vertexBufferBindless.descriptor.index,
-			.vshade_idx = m_scene.vertexShading.descriptor.index // CHANGE LATER
+			.viewProject           = viewProject,
+			.modelMatrix           = modelMatrix,
+			.modelInverseTranspose = modelInverseTranspose,
+			.vpos_idx              = m_vertexBufferBindless.descriptor.index,
+			.vshade_idx            = m_scene.vertexShading.descriptor.index // CHANGE LATER
 		};
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
 		m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
@@ -647,9 +651,11 @@ bool Renderer::Render() {
 	// draw debug cubes
 	{
 		PerDrawConstants drawConstants = {
-			.modelViewProject = viewProject,
-			.vpos_idx         = debugCubes.vertexBuffer.descriptor.index,
-			.vshade_idx       = m_scene.vertexShading.descriptor.index, // CHANGE LATER
+			.viewProject           = viewProject,
+			.modelMatrix           = XMMatrixIdentity(),
+			.modelInverseTranspose = XMMatrixIdentity(),
+			.vpos_idx              = debugCubes.vertexBuffer.descriptor.index,
+			.vshade_idx            = m_scene.vertexShading.descriptor.index, // CHANGE LATER
 		};
 		m_commandList->SetPipelineState(m_pipelineStateDebug.Get()); // bind the debug cube vertex and fragment shaders
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
