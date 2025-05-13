@@ -45,6 +45,7 @@ void ServerGame::update() {
 	applyCamera();
 	applyPhysics();
 	applyAttacks();
+	applyDodge();
 	sendUpdates();
 }
 
@@ -104,6 +105,31 @@ void ServerGame::receiveFromClients() {
 				latestAttacks[id] = *atk;      // overwrite if multiple swings this tick
 				printf("[CLIENT %d] ATTACK at %.1f, %.1f, %.1f  yaw=%.2f  pitch=%.2f\n",
 					id, atk->originX, atk->originY, atk->originZ, atk->yaw, atk->pitch);
+				break;
+			}
+			case PacketType::DODGE:
+			{
+				// hunters cannot dodge
+				if (state->players[id].isHunter || state->players[id].isDead) break;
+
+				bool offCooldown = (state->tick - lastDodgeTick[id]) >= DODGE_COOLDOWN_TICKS;
+				if (!offCooldown) break;                           // silently ignore spam
+
+				// grant!
+				lastDodgeTick[id] = state->tick;
+				invulTicks[id] = INVUL_TICKS;
+				dashTicks[id] = INVUL_TICKS;                   // dash lasts same 30 ticks
+
+				// speed boost
+				state->players[id].speed *= DASH_SPEED_MULTIPLIER;
+
+				// notify the client
+				DodgeOkPayload ok{ INVUL_TICKS };
+				char buf[HDR_SIZE + sizeof ok];
+				NetworkServices::buildPacket(PacketType::DODGE_OK, ok, buf);
+				network->sendToClient(id, buf, sizeof buf);
+
+				printf("[DODGE] survivor %u granted at tick %llu\n", id, state->tick);
 				break;
 			}
 
@@ -303,8 +329,9 @@ void ServerGame::applyAttacks()
 	{
 		for (unsigned victimId = 0; victimId < 4; ++victimId)
 		{
-			if (victimId == attackerId) continue;
-			if (state->players[victimId].isDead) continue;
+			if (victimId == attackerId) continue;	// skip self
+			if (state->players[victimId].isDead) continue;	// skip dead players
+			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
 
 			if (isHit(atk, state->players[victimId]))
 			{
@@ -329,6 +356,14 @@ void ServerGame::applyAttacks()
 	latestAttacks.clear();
 }
 
+void ServerGame::applyDodge()
+{
+	for (int i = 1; i < 4; i++) {
+		if (invulTicks[i] > 0) invulTicks[i]--;
+		if (dashTicks[i] > 0) dashTicks[i]--;
+		if (dashTicks[i] == 0) state->players[i].speed /= DASH_SPEED_MULTIPLIER;
+	}
+}
 
 void ServerGame::sendUpdates() {
 

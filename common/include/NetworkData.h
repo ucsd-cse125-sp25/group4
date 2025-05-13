@@ -13,7 +13,9 @@ enum class PacketType : uint32_t {
 	CAMERA = 5,
 	// add more here
 	ATTACK = 6,
-	HIT = 7
+	HIT = 7,
+	DODGE = 8,
+	DODGE_OK = 9
 };
 
 // The packet header preceeds every packet
@@ -97,6 +99,10 @@ struct HitPayload {
 	uint8_t attackerId;
 	uint8_t victimId;
 };
+
+struct DodgePayload { float yaw, pitch; };
+
+struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a placeholder for now
 
 struct Packet {
 	unsigned int packet_type;

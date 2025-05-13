@@ -110,7 +110,6 @@ void ClientGame::sendCameraPacket(float yaw, float pitch) {
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
 
-// inside ClientGame ------------------------------------------------
 void ClientGame::sendAttackPacket(float origin[3], float yaw, float pitch) {
 	AttackPayload atk{};
 	atk.originX = origin[0];
@@ -127,6 +126,13 @@ void ClientGame::sendAttackPacket(float origin[3], float yaw, float pitch) {
 		sizeof packet_data);
 }
 
+void ClientGame::sendDodgePacket()
+{
+	DodgePayload dp{ yaw, pitch };
+	char buf[HDR_SIZE + sizeof dp];
+	NetworkServices::buildPacket(PacketType::DODGE, dp, buf);
+	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
+}
 
 void ClientGame::update() {
 
@@ -181,6 +187,15 @@ void ClientGame::update() {
 
 			break;
 		}
+		case PacketType::DODGE_OK:
+		{
+			auto* ok = reinterpret_cast<DodgeOkPayload*>(network_data + HDR_SIZE);
+			//invulFrames_ = ok->invulTicks;        // usually 30
+			// Optional: kick off a local dash animation / speed buff here.
+			printf(">> DODGE granted!\n");
+			break;
+		}
+
 		default:
 			// printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
 			break;
@@ -276,6 +291,20 @@ void ClientGame::processAttackInput()
 	wasDown = isDown;
 }
 
+void ClientGame::processDodgeInput()
+{
+	if (renderer.currPlayer.playerId == 0) return;   // hunter cannot dash
+
+	static bool rWasDown = false;
+	bool rNowDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+
+	if (rNowDown && !rWasDown)      // rising edge
+		sendDodgePacket();
+
+	rWasDown = rNowDown;
+}
+
+
 void ClientGame::handleInput()
 {
 	if (!isWindowFocused()) return;
@@ -289,87 +318,9 @@ void ClientGame::handleInput()
 	// movement & attack for the living
 	processMovementInput();
 	processAttackInput();
+	processDodgeInput();
 }
 
-
-//void ClientGame::handleInput() {
-//	// if game window is not focused, don't register input
-//	if (GetForegroundWindow() != hwnd) 
-//		return;
-//
-//	bool movUpdate = false;
-//	char dir;
-//
-//	if (GetAsyncKeyState('W') & 0x8000) {
-//		dir = 'W';
-//		movUpdate = true;
-//	}
-//	if (GetAsyncKeyState('S') & 0x8000) {
-//		dir = 'S';
-//		movUpdate = true;
-//	}
-//	if (GetAsyncKeyState('A') & 0x8000) {
-//		dir = 'A';
-//		movUpdate = true;
-//	}
-//	if (GetAsyncKeyState('D') & 0x8000) {
-//		dir = 'D';
-//		movUpdate = true;
-//	}
-//
-//
-//	// CAMERA LOGIC:
-//	bool camUpdate = false;
-//	// current cursor position
-//	POINT p;
-//	GetCursorPos(&p); 
-//	// center of client
-//	RECT rc;
-//	GetClientRect(hwnd, &rc);
-//	POINT centre{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
-//	ClientToScreen(hwnd, &centre); // get client's center pos relative to screen
-//
-//	int dx = p.x - centre.x;
-//	int dy = p.y - centre.y;
-//	if (dx != 0 || dy != 0) {
-//		camUpdate = true;
-//		yaw += -dx * MOUSE_SENS;            
-//		pitch += dy * MOUSE_SENS;      
-//		pitch = std::clamp(pitch,
-//						   XMConvertToRadians(-89.0f),
-//			               XMConvertToRadians(+89.0f));
-//		// recenter cursor
-//		if(camUpdate) SetCursorPos(centre.x, centre.y);
-//	}
-//
-//	if (camUpdate) {
-//		sendCameraPacket(yaw, pitch);
-//
-//		// update own's camera
-//		renderer.players[renderer.currPlayer.playerId].lookDir.pitch = pitch;
-//		renderer.players[renderer.currPlayer.playerId].lookDir.yaw = yaw;
-//	}
-//	if (movUpdate) {
-//		sendMovePacket(dir, yaw, pitch);
-//	}
-//
-//	// Attack logic for hunter (client0) only
-//	if (renderer.currPlayer.playerId != 0) return; // only hunter can attack
-//
-//	static bool wasPressedLastFrame = false;
-//	bool isPressedNow = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-//
-//	if (isPressedNow && !wasPressedLastFrame) {          // rising edge only
-//		// player’s current world position
-//		float pos[3] = {
-//			renderer.players[renderer.currPlayer.playerId].pos.x,
-//			renderer.players[renderer.currPlayer.playerId].pos.y,
-//			renderer.players[renderer.currPlayer.playerId].pos.z
-//		};
-//		sendAttackPacket(pos, yaw, pitch);
-//	}
-//	wasPressedLastFrame = isPressedNow;
-//}
 
 inline ClientGame *GetState(HWND window_handle) {
 	LONG_PTR ptr = GetWindowLongPtr(window_handle, GWLP_USERDATA);
