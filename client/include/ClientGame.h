@@ -19,12 +19,18 @@ public:
 	ClientGame(HINSTANCE hInstance,  int nCmdShow);
 	~ClientGame(void);
 
+	bool isWindowFocused() const;
+	bool isLocalPlayerDead() const;
+	bool processCameraInput();
+	bool processMovementInput();
+
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);
 	void sendMovePacket(char, float, float);
 	void sendCameraPacket(float, float);
 	void sendAttackPacket(float origin[3], float yaw, float pitch);
 	void update();
+	void processAttackInput();
 	void handleInput();
 
 	GameState gameState;
@@ -40,5 +46,6 @@ private:
 	float pitch = 0.0;
 	static constexpr float MOUSE_SENS = 0.002f;
 	static constexpr float ATTACK_RANGE = 4.0f;
+	bool localDead = false;
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);

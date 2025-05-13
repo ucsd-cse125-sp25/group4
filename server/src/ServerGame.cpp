@@ -250,20 +250,25 @@ void ServerGame::applyAttacks()
 		for (unsigned victimId = 0; victimId < 4; ++victimId)
 		{
 			if (victimId == attackerId) continue;
+			if (state->players[victimId].isDead) continue;
+
 			if (isHit(atk, state->players[victimId]))
 			{
-				printf("[HIT] attacker %u → victim %u (tick %llu)\n",
+				printf("[HIT] attacker %u hits victim %u (tick %llu)\n",
 					attackerId, victimId, state->tick);
 
 				// simple reward: +1 coin
 				state->players[attackerId].coins++;
 
-				/* OPTIONAL: broadcast a one‑off HIT packet
-				   HitPayload hp{ attackerId, victimId };
-				   char buf[HDR_SIZE + sizeof hp];
-				   NetworkServices::buildPacket(PacketType::HIT, hp, buf);
-				   network->sendToAll(buf, sizeof buf);
-				*/
+				// mark victim as dead
+				state->players[victimId].isDead = true;
+				printf("[HIT] victim %u is dead\n", victimId);
+
+				HitPayload hp{ attackerId, victimId };
+				char buf[HDR_SIZE + sizeof hp];
+				NetworkServices::buildPacket(PacketType::HIT, hp, buf);
+				network->sendToClient(victimId, buf, sizeof buf);
+
 			}
 		}
 	}
