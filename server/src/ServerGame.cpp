@@ -43,6 +43,7 @@ void ServerGame::update() {
 	receiveFromClients();
 	applyMovements();
 	applyCamera();
+	applyAttacks();
 	sendUpdates();
 }
 
@@ -96,6 +97,15 @@ void ServerGame::receiveFromClients() {
 				latestCamera[id] = *cam;
 				break;
 			}
+			case PacketType::ATTACK:
+			{
+				AttackPayload* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
+				latestAttacks[id] = *atk;      // overwrite if multiple swings this tick
+				printf("[CLIENT %d] ATTACK at %.1f, %.1f, %.1f  yaw=%.2f  pitch=%.2f\n",
+					id, atk->originX, atk->originY, atk->originZ, atk->yaw, atk->pitch);
+				break;
+			}
+
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
 				break;
@@ -232,6 +242,34 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 
 	printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
 }
+
+void ServerGame::applyAttacks()
+{
+	for (auto& [attackerId, atk] : latestAttacks)
+	{
+		for (unsigned victimId = 0; victimId < 4; ++victimId)
+		{
+			if (victimId == attackerId) continue;
+			if (isHit(atk, state->players[victimId]))
+			{
+				printf("[HIT] attacker %u → victim %u (tick %llu)\n",
+					attackerId, victimId, state->tick);
+
+				// simple reward: +1 coin
+				state->players[attackerId].coins++;
+
+				/* OPTIONAL: broadcast a one‑off HIT packet
+				   HitPayload hp{ attackerId, victimId };
+				   char buf[HDR_SIZE + sizeof hp];
+				   NetworkServices::buildPacket(PacketType::HIT, hp, buf);
+				   network->sendToAll(buf, sizeof buf);
+				*/
+			}
+		}
+	}
+	latestAttacks.clear();
+}
+
 
 void ServerGame::sendUpdates() {
 

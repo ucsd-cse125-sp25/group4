@@ -6,6 +6,7 @@
 #include <cstdint>、
 #include <vector>
 #include <unordered_map>
+#include <DirectXMath.h>
 
 class ServerGame {
 public:
@@ -18,6 +19,7 @@ public:
 	void applyMovements();
 	void applyCamera();
 	void updateClientPositionWithCollision(unsigned int, float, float);
+	void applyAttacks();
 	void readBoundingBoxes();
 
 
@@ -40,4 +42,32 @@ private:
 	GameState* state;
 	std::unordered_map<uint8_t, MovePayload> latestMovement;
 	std::unordered_map<uint8_t, CameraPayload> latestCamera;
+
+	// inside class ServerGame
+	std::unordered_map<unsigned, AttackPayload> latestAttacks;
+
+	static bool isHit(const AttackPayload& a,
+		const PlayerState& victim,
+		float angleDeg = 90.0f)
+	{
+		// forward direction from yaw/pitch → unit vector
+		float fx = cosf(a.pitch) * -sinf(a.yaw);
+		float fy = cosf(a.pitch) * cosf(a.yaw);
+		float fz = sinf(a.pitch);
+
+		// vector attacker → victim
+		float vx = victim.x - a.originX;
+		float vy = victim.y - a.originY;
+		float vz = victim.z - a.originZ;
+
+		float dist2 = vx * vx + vy * vy + vz * vz;
+		if (dist2 > a.range * a.range) return false;          // out of reach
+
+		float len = sqrtf(dist2);
+		if (len < 1e-4f) return false;                        // same spot?
+		float dot = (vx * fx + vy * fy + vz * fz) / len;          // cosθ
+		float cosMax = cosf(DirectX::XMConvertToRadians(angleDeg));
+		return dot >= cosMax;                                 // within cone
+	}
+
 };

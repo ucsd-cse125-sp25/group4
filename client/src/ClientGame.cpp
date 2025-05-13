@@ -1,4 +1,4 @@
-#include "ClientGame.h"
+﻿#include "ClientGame.h"
 #include <algorithm>
 
 const wchar_t CLASS_NAME[] = L"Window Class";
@@ -107,6 +107,24 @@ void ClientGame::sendCameraPacket(float yaw, float pitch) {
 	NetworkServices::buildPacket(PacketType::CAMERA, cam, buf);
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
+
+// inside ClientGame ------------------------------------------------
+void ClientGame::sendAttackPacket(float origin[3], float yaw, float pitch) {
+	AttackPayload atk{};
+	atk.originX = origin[0];
+	atk.originY = origin[1];
+	atk.originZ = origin[2];
+	atk.yaw = yaw;
+	atk.pitch = pitch;
+	atk.range = 3.0f;          // ← tweak reach as you like
+
+	char packet_data[HDR_SIZE + sizeof(AttackPayload)];
+	NetworkServices::buildPacket(PacketType::ATTACK, atk, packet_data);
+	NetworkServices::sendMessage(network->ConnectSocket,
+		packet_data,
+		sizeof packet_data);
+}
+
 
 void ClientGame::update() {
 
@@ -242,6 +260,21 @@ void ClientGame::handleInput() {
 	if (movUpdate) {
 		sendMovePacket(dir, yaw, pitch);
 	}
+
+	// Attack logic
+	static bool wasPressedLastFrame = false;
+	bool isPressedNow = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+
+	if (isPressedNow && !wasPressedLastFrame) {          // rising edge only
+		// player’s current world position
+		float pos[3] = {
+			renderer.players[renderer.currPlayer.playerId].pos.x,
+			renderer.players[renderer.currPlayer.playerId].pos.y,
+			renderer.players[renderer.currPlayer.playerId].pos.z
+		};
+		sendAttackPacket(pos, yaw, pitch);
+	}
+	wasPressedLastFrame = isPressedNow;
 }
 
 inline ClientGame *GetState(HWND window_handle) {
