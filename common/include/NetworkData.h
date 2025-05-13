@@ -12,6 +12,7 @@ enum class PacketType : uint32_t {
 	IDENTIFICATION = 4,
 	CAMERA = 5,
 	START_MENU_STATUS = 6,
+	ROUND_OVER = 7,
 	// add more here
 };
 
@@ -88,6 +89,10 @@ struct MovePayload {
 
 struct CameraPayload {
 	float yaw, pitch;
+};
+
+struct RoundOverPayload {
+	int round_id;
 };
 
 struct StartMenuStatusPayload {
