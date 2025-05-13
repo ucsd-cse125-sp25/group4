@@ -13,7 +13,7 @@ enum class PacketType : uint32_t {
 	CAMERA = 5,
 	// add more here
 	ATTACK = 6,
-	HIT = 7,
+	HIT = 7
 };
 
 // The packet header preceeds every packet
@@ -36,10 +36,12 @@ struct DebugPayload {
 struct PlayerState {
 	float x, y, z;
 	float yaw, pitch;
+	float zVelocity;
 	float speed;
 	uint8_t coins;
 	bool isHunter;
 	bool isDead;
+	bool isGrounded; // is on the ground
 };
 
 struct EntityState { // this is for traps or placed objects
@@ -47,6 +49,12 @@ struct EntityState { // this is for traps or placed objects
 	bool placed;
 	bool consumed;
 };
+
+struct BoundingBox {
+	float minX, minY, minZ;
+	float maxX, maxY, maxZ;
+};
+
 struct GameStatePayload {
 	uint64_t tick;
 	/* commented out for demo
@@ -71,6 +79,7 @@ typedef struct IDPayload {
 struct MovePayload {
 	float direction[3];
 	float yaw, pitch;
+	bool jump;
 };
 
 struct CameraPayload {

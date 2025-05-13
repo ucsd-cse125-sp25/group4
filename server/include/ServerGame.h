@@ -8,6 +8,10 @@
 #include <unordered_map>
 #include <DirectXMath.h>
 
+#define GRAVITY 0.01f
+#define JUMP_VELOCITY 0.2f
+#define TERMINAL_VELOCITY -0.2f
+
 class ServerGame {
 public:
 	ServerGame(void);
@@ -18,6 +22,7 @@ public:
 	void sendUpdates();
 	void applyMovements();
 	void applyCamera();
+	void applyPhysics();
 	void updateClientPositionWithCollision(unsigned int, float, float, float);
 	void applyAttacks();
 	void readBoundingBoxes();
@@ -34,7 +39,7 @@ private:
 
 	/* Collision */
 	// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
-	vector<vector<float>> boxes2d;
+	vector<BoundingBox> boxes2d;
 	// colors2d[i][0..3] = R, G, B, A (0–255)
 	vector<vector<int>> colors2d;
 
@@ -71,3 +76,6 @@ private:
 	}
 
 };
+
+static bool checkCollision(BoundingBox, BoundingBox);
+static float findDistance(BoundingBox, BoundingBox, char);

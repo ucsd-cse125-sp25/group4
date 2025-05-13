@@ -87,12 +87,13 @@ void ClientGame::sendGameStatePacket(float posDelta[4]) {
 }
 */
 
-void ClientGame::sendMovePacket(float direction[3], float yaw, float pitch) {
+void ClientGame::sendMovePacket(float direction[3], float yaw, float pitch, bool jump) {
 	MovePayload mv{};
 	for (int i = 0; i < 3; i++)
 		mv.direction[i] = direction[i];
 	mv.yaw = yaw;
 	mv.pitch = pitch;
+	mv.jump = jump;
 
 	char packet_data [HDR_SIZE + sizeof(MovePayload)];
 	NetworkServices::buildPacket<MovePayload>(PacketType::MOVE, mv, packet_data);
@@ -139,7 +140,7 @@ void ClientGame::update() {
 		{
 			// printf("received update for tick %llu \n", game_state->tick);
 			GameState* state = (GameState*)(network_data + HDR_SIZE);
-			char msgbuf[1000];
+			//char msgbuf[1000];
 			// printf(msgbuf, "Packet received y=%f \n", state->position[1]);
 
 			for (int i = 0; i < 4; i++) {
@@ -244,13 +245,15 @@ bool ClientGame::processCameraInput()
 bool ClientGame::processMovementInput()
 {
 	float direction[3] = { 0, 0, 0 };
+	bool jump = false;
 	if (GetAsyncKeyState('W') & 0x8000) direction[0] += 1;
 	if (GetAsyncKeyState('S') & 0x8000) direction[0] -= 1;
 	if (GetAsyncKeyState('A') & 0x8000) direction[1] -= 1;
 	if (GetAsyncKeyState('D') & 0x8000) direction[1] += 1;
+	if (GetAsyncKeyState(' ') & 0x8000) jump = true;
 
-	if (!direction[0] && !direction[1] && !direction[2]) return false;
-	sendMovePacket(direction, yaw, pitch);
+	if (!direction[0] && !direction[1] && !direction[2] && !jump) return false;
+	sendMovePacket(direction, yaw, pitch, jump);
 	return true;
 }
 

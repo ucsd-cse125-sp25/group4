@@ -12,12 +12,12 @@ ServerGame::ServerGame(void) {
 
 	state = new GameState{
 		.tick = 0,
-		//x, y, z, yaw, pitch, speed, coins, isHunter
+		//x, y, z, yaw, pitch, speed, zVelocity, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f,  4.0f, 8.0f, 0.0f, 0.0f, 0.15f, 0, false},
-			{-2.0f,  2.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false},
-			{ 2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false},
-			{-2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, true },
+			{ 4.0f,  4.0f, 20.0f, 0.0f, 0.0f, 0.1f, 0.15f, 0, false, false, false },
+			{-2.0f,  2.0f, 20.0f, 0.0f, 0.0f, -0.1f, 0.15f, 0, false, false, false },
+			{ 2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
+			{-2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, true, false, false },
 		}
 	};
 
@@ -43,6 +43,7 @@ void ServerGame::update() {
 	receiveFromClients();
 	applyMovements();
 	applyCamera();
+	applyPhysics();
 	applyAttacks();
 	sendUpdates();
 }
@@ -85,7 +86,7 @@ void ServerGame::receiveFromClients() {
 			case PacketType::MOVE:
 			{
 				MovePayload* mv = (MovePayload*)&(network_data[i + HDR_SIZE]);
-				printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw);
+				printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f, JUMP %d\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw, mv->jump);
 				// register the latest movement, but do not update yet
 				latestMovement[id] = *mv;
 				break;
@@ -122,24 +123,27 @@ void ServerGame::applyMovements() {
 		//printf("[CLIENT %d] MOVE_INTENT: DIR '%c', PITCH %f, YAW %f\n", id, mv.direction, mv.pitch, mv.yaw);
 		// update direction regardless of collision
 		state->players[id].yaw = mv.yaw;
-		state->players[id].pitch = mv.pitch; 
+		state->players[id].pitch = mv.pitch;
+
+		if (mv.jump && state->players[id].isGrounded == true)
+			state->players[id].zVelocity = JUMP_VELOCITY;
 
 		// normalize the direction vector
 		float magnitude = sqrt(powf(mv.direction[0], 2) + powf(mv.direction[1], 2) + powf(mv.direction[2], 2));
-		if (magnitude == 0) continue;
-		for (int i = 0; i < 3; i++)
-			mv.direction[i] /= magnitude;
+		if (magnitude != 0)
+			for (int i = 0; i < 3; i++)
+				mv.direction[i] /= magnitude;
 
 		// convert intent + yaw into 2d vector
 		// CLOCKWISE positive
 		// foward x/y, actual delta x/y
-		float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), fz = 0, dx = 0, dy = 0, dz = 0;
+		float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), fz = 1, dx = 0, dy = 0, dz = 0;
 		
 		dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * state->players[id].speed;
 
 		dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * state->players[id].speed;
 
-		dz = fz * mv.direction[2] * state->players[id].speed;
+		dz = 0;
 
 		updateClientPositionWithCollision(id, dx, dy, dz);
 	}
@@ -155,55 +159,89 @@ void ServerGame::applyCamera() {
 	latestCamera.clear();
 }
 
+void ServerGame::applyPhysics() {
+	for (int c = 0; c < 4; c++) {
+		// By default, assumes the player is not on the ground
+		state->players[c].isGrounded = false;
+
+		// Processes z velocity (jumping & falling)
+		updateClientPositionWithCollision(c, 0, 0, state->players[c].zVelocity);
+
+		// Decreases player z velocity by gravity, up to terminal velocity
+		state->players[c].zVelocity -= GRAVITY;
+		if (state->players[c].zVelocity < TERMINAL_VELOCITY) state->players[c].zVelocity = TERMINAL_VELOCITY;
+	}
+}
+
 void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy, float dz) {
 	// Update the position with collision detection
 	float delta[3] = { dx, dy, dz };
+
+	// Bounding box for the current client
+	float temp = 1.0f;
+
+	// Bounding box before player moves
+	BoundingBox staticPlayerBox = {
+			state->players[clientId].x - temp,
+			state->players[clientId].y - temp,
+			state->players[clientId].z - temp,
+			state->players[clientId].x + temp,
+			state->players[clientId].y + temp,
+			state->players[clientId].z + temp
+	};
+
 	for (int i = 0; i < 3; i++) {
 		bool isColliding = false;
+		
+		BoundingBox playerBox = {
+			state->players[clientId].x - temp,
+			state->players[clientId].y - temp,
+			state->players[clientId].z - temp,
+			state->players[clientId].x + temp,
+			state->players[clientId].y + temp,
+			state->players[clientId].z + temp
+		};
+
+		if (i == 0) {
+			playerBox.minX += delta[0];
+			playerBox.maxX += delta[0];
+		}
+		else if (i == 1) {
+			playerBox.minY += delta[1];
+			playerBox.maxY += delta[1];
+		}
+		else if (i == 2) {
+			playerBox.minZ += delta[2];
+			playerBox.maxZ += delta[2];
+		}
 
 		// Check for collisions against other players
 		for (int c = 0; c < 4; c++) {
+			// Skip current client
 			if (c == (int)clientId) {
 				continue;
 			}
-			// Bounding box for the current client
-			float temp = 1.0f; // radius of player
-			float minBoundCurrent[3] = {
-				state->players[clientId].x + delta[0] - temp, // x - 0.5
-				state->players[clientId].y + delta[1] - temp, // y - 0.5
-				state->players[clientId].z + delta[2] - temp  // z - 0.5
-			};
-			float maxBoundCurrent[3] = {
-				state->players[clientId].x + delta[0] + temp, // x + 0.5
-				state->players[clientId].y + delta[1] + temp, // y + 0.5
-				state->players[clientId].z + delta[2] + temp  // z + 0.5
+
+			BoundingBox otherClientBox = {
+				state->players[c].x - temp,
+				state->players[c].y - temp,
+				state->players[c].z - temp,
+				state->players[c].x + temp,
+				state->players[c].y + temp,
+				state->players[c].z + temp,
 			};
 
-			// Bounding box for the other client
-			float minBoundOther[3] = {
-				state->players[c].x - temp, // x - 0.5
-				state->players[c].y - temp, // y - 0.5
-				state->players[c].z - temp  // y - 0.5
-			};
-			float maxBoundOther[3] = {
-				state->players[c].x + temp, // x + 0.5
-				state->players[c].y + temp, // y + 0.5
-				state->players[c].z + temp  // z + 0.5
-			};
-
-			// Check for overlap in both x and y directions
-			isColliding = isColliding || 
-				((minBoundCurrent[0] <= maxBoundOther[0] && maxBoundCurrent[0] >= minBoundOther[0]) &&
-				 (minBoundCurrent[1] <= maxBoundOther[1] && maxBoundCurrent[1] >= minBoundOther[1]) &&
-				 (minBoundCurrent[2] <= maxBoundOther[2] && maxBoundCurrent[2] >= minBoundOther[2]));
-
-			if (isColliding) {
+			if (checkCollision(playerBox, otherClientBox)) {
 				printf("Collision detected between client %d and client %d, %d\n", clientId, c, i);
-				delta[i] = 0; //reset position in this direction
-				break; // don't need to check other clients
-			}
-			else {
-				//printf("no collision %d\n", i);
+
+				float distance = findDistance(staticPlayerBox, otherClientBox, i) * (delta[i] > 0 ? 1 : -1);
+				if (abs(distance) < abs(delta[i])) delta[i] = distance;
+
+				// If the z is being changed, reset z velocity and "ground" player
+				if (i == 2) {
+					state->players[clientId].zVelocity = 0;
+					state->players[clientId].isGrounded = true;
+				}
 			}
 		}
 
@@ -211,37 +249,17 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 		// TODO: currently the setup prevents anything else other than
 		// cube 0 to move.
 		for (size_t b = 0; b < boxes2d.size(); ++b) {
-			// Bounding box for the current client
-			float temp = 1.0f;
-			float minBoundCurrent[3] = {
-				state->players[clientId].x + delta[0] - temp, // x - 0.5
-				state->players[clientId].y + delta[1] - temp, // y - 0.5
-				state->players[clientId].z + delta[2] - temp  // z - 0.5
-			};
-			float maxBoundCurrent[3] = {
-				state->players[clientId].x + delta[0] + temp, // x + 0.5
-				state->players[clientId].y + delta[1] + temp, // y + 0.5
-				state->players[clientId].z + delta[2] + temp  // z + 0.5
-			};
-
-			auto& box = boxes2d[b];
-			float staticMinX = box[0];
-			float staticMinY = box[1];
-			float staticMinZ = box[2];
-			float staticMaxX = box[3];
-			float staticMaxY = box[4];
-			float staticMaxZ = box[5];
-
 			// simple AABB overlap test in 2D (X vs X, Y vs Y)
-			if (minBoundCurrent[0] <= staticMaxX && maxBoundCurrent[0] >= staticMinX &&
-				minBoundCurrent[1] <= staticMaxY && maxBoundCurrent[1] >= staticMinY &&
-				minBoundCurrent[2] <= staticMaxZ && maxBoundCurrent[2] >= staticMinZ)
+			if (checkCollision(playerBox, boxes2d[b]))
 			{
-				// collision! cancel movement on this axis
-				//isColliding = true;
-				printf("Collision detected between client %d and collision box %d, %d\n", clientId, b, i);
-				//delta[i] = 0;
-				break;
+				float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
+				if (abs(distance) < abs(delta[i])) delta[i] = distance;
+
+				// If the z is being changed, reset z velocity and "ground" player
+				if (i == 2) {
+					state->players[clientId].zVelocity = 0;
+					state->players[clientId].isGrounded = true;
+				}
 			}
 		}
 		
@@ -250,7 +268,33 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 	state->players[clientId].y += delta[1];
 	state->players[clientId].z += delta[2];
 
-	printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
+	if (state->players[clientId].z < 0) {
+		state->players[clientId].z = 0;
+		state->players[clientId].zVelocity = 0;
+		state->players[clientId].isGrounded = true;
+	}
+
+	//printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
+}
+
+// Checks whether or not two bounding boxes are colliding
+static bool checkCollision(BoundingBox box1, BoundingBox box2) {
+	bool isColliding = (
+		(box1.minX < box2.maxX && box1.maxX > box2.minX) &&
+		(box1.minY < box2.maxY && box1.maxY > box2.minY) &&
+		(box1.minZ < box2.maxZ && box1.maxZ > box2.minZ)
+	);
+	return isColliding;
+}
+
+// Finds the distance between two bounding boxes on one axis
+static float findDistance(BoundingBox box1, BoundingBox box2, char direction) {
+	if (direction == 0) // X axis
+		return min(abs(box1.minX - box2.maxX), abs(box1.maxX - box2.minX));
+	if (direction == 1) // Y axis
+		return min(abs(box1.minY - box2.maxY), abs(box1.maxY - box2.minY));
+	if (direction == 2) // Z axis
+		return min(abs(box1.minZ - box2.maxZ), abs(box1.maxZ - box2.minZ));
 }
 
 void ServerGame::applyAttacks()
@@ -324,14 +368,7 @@ void ServerGame::readBoundingBoxes() {
 		float bz1 = (float)json_array_get_number(mx, 2);
 
 		// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
-		vector<float> box2d;
-		// convert to Raylib coords in boxes2d
-		box2d.push_back(bx0);  // min.x
-		box2d.push_back(by0);  // min.y  blender Z
-		box2d.push_back(bz0);  // min.z  -blender Y
-		box2d.push_back(bx1);   // max.x
-		box2d.push_back(by1);   // max.y
-		box2d.push_back(bz1);   // max.z
+		BoundingBox box2d = { bx0, by0, bz0, bx1, by1, bz1 };
 		boxes2d.push_back(box2d);
 		//cout << "box2d: " << box2d[0] << ", " << box2d[1] << ", " << box2d[2] << ", " << box2d[3] << ", " << box2d[4] << ", " << box2d[5] << endl;
 

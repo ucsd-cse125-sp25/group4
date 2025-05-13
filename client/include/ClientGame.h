@@ -26,7 +26,7 @@ public:
 
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);
-	void sendMovePacket(float[3], float, float);
+	void sendMovePacket(float[3], float, float, bool);
 	void sendCameraPacket(float, float);
 	void sendAttackPacket(float origin[3], float yaw, float pitch);
 	void update();
