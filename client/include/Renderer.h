@@ -137,10 +137,6 @@ struct SceneHeader {
 	int32_t firstTriangle;
 };
 
-struct VertexShadingData {
-	XMFLOAT3 normal;
-	XMFLOAT2 texcoord;
-};
 
 struct Triangles {
 	int                len;
