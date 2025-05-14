@@ -49,7 +49,8 @@ for obj in bpy.data.objects:
     bmesh = obj.data
     model_to_world_translation   = np.array(obj.matrix_world.to_translation(), dtype=np.float32)
     model_to_world_linear        = np.array(obj.matrix_world.to_3x3(), dtype=np.float32)
-    model_to_world_adj_transpose = np.array(obj.matrix_world.to_3x3().adjugated(), dtype=np.float32).T
+    model_to_world_adj_transpose = np.array(obj.matrix_world.to_3x3().adjugated().transposed(), dtype=np.float32)
+
 
     print("model_to_world_adj:", model_to_world_adj_transpose)
 
@@ -70,7 +71,15 @@ for obj in bpy.data.objects:
     normals = np.zeros(NORMAL_FLOATS_PER_VERT * VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.float32)
     bmesh.loop_triangles.foreach_get("split_normals", normals)
     normals = normals.reshape(-1, NORMAL_FLOATS_PER_VERT)
+    EPS = 10e-6
+    # assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
+    norm = np.linalg.norm(normals, axis=-1)
+    normals[abs(norm-1) > EPS, :] = np.array([0, 0, 1])
     normals = np.dot(normals, model_to_world_adj_transpose.T)
+    norm = np.linalg.norm(normals, axis=-1)[:, np.newaxis]
+    normals /= norm
+    assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
+
     normals = normals.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
 
     # texture coordinates
