@@ -305,7 +305,8 @@ bool Renderer::Init(HWND window_handle) {
 					.Count = 1,
 				},
 			};
-			psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
+			psoDesc.RasterizerState.FrontCounterClockwise = true;
+			// psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
 
 			// create the pipeline state object
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
