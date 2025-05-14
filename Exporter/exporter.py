@@ -47,9 +47,11 @@ for obj in bpy.data.objects:
     
     print(f"processing object {obj.name}")
     bmesh = obj.data
-    model_to_world_translation   = np.array(obj.matrix_world.to_translation())
-    model_to_world_linear        = np.array(obj.matrix_world.to_3x3())
-    model_to_world_adj_transpose = np.array(obj.matrix_world.to_3x3().adjugated()).T
+    model_to_world_translation   = np.array(obj.matrix_world.to_translation(), dtype=np.float32)
+    model_to_world_linear        = np.array(obj.matrix_world.to_3x3(), dtype=np.float32)
+    model_to_world_adj_transpose = np.array(obj.matrix_world.to_3x3().adjugated(), dtype=np.float32).T
+
+    print("model_to_world_adj:", model_to_world_adj_transpose)
 
     # vertex positions
     verts = np.zeros(POS_FLOATS_PER_VERT * len(bmesh.vertices), dtype=np.float32) # (num_bmesh_verts * 3)
@@ -60,7 +62,7 @@ for obj in bpy.data.objects:
 
     verts = verts.reshape(-1, POS_FLOATS_PER_VERT) # (num_bmesh_verts, 3)
     verts = verts[indices]
-    verts = verts @ model_to_world_linear.T
+    verts = np.dot(verts, model_to_world_linear.T)
     verts = verts + model_to_world_translation
     verts = verts.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, POS_FLOATS_PER_VERT)
 
@@ -68,7 +70,7 @@ for obj in bpy.data.objects:
     normals = np.zeros(NORMAL_FLOATS_PER_VERT * VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.float32)
     bmesh.loop_triangles.foreach_get("split_normals", normals)
     normals = normals.reshape(-1, NORMAL_FLOATS_PER_VERT)
-    normals = normals @ model_to_world_adj_transpose.T
+    normals = np.dot(normals, model_to_world_adj_transpose.T)
     normals = normals.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
 
     # texture coordinates
@@ -107,7 +109,8 @@ for obj in bpy.data.objects:
                        num_tris       = len(bmesh.loop_triangles),
                        vert_positions = verts,
                        vert_shade     = normal_uv_interleaved,
-                       material_ids   = material_ids)
+                       material_ids   = material_ids
+    )
     consolidated_mesh = new_mesh.merge(consolidated_mesh)
     assert(consolidated_mesh is not None)
 
