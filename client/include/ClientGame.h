@@ -28,6 +28,7 @@ public:
 	void handleInput();
 
 	GameState gameState;
+	AppState* appState;
 	Renderer renderer;
 private:
 	HWND hwnd;

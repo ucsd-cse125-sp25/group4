@@ -23,7 +23,7 @@ ServerGame::ServerGame(void) {
 
 	appState = new AppState{
 		.gameState = state,
-		.screenState = ScreenState::START_MENU
+		.gamePhase = GamePhase::START_MENU
 	};
 
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
@@ -46,20 +46,20 @@ void ServerGame::update() {
 	}
 
 	receiveFromClients();
-	switch (appState->screenState) {
-		case ScreenState::GAME_SCREEN:
+	switch (appState->gamePhase) {
+		case GamePhase::GAME_PHASE:
 		{
 			applyMovements();
 			applyCamera();
 			sendGameStateUpdates();
 			break;
 		}
-		case ScreenState::START_MENU:
+		case GamePhase::START_MENU:
 		{
 			handleStartMenu();
 			break;
 		}
-		case ScreenState::SHOP_SCREEN:
+		case GamePhase::SHOP_PHASE:
 		{
 
 			break;
@@ -99,6 +99,8 @@ void ServerGame::receiveFromClients() {
 				NetworkServices::buildPacket<IDPayload>(PacketType::IDENTIFICATION, { id }, packet_data);
 
 				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
+
+				menuStatus[id].ready = false;
 				break;
 			}
 			case PacketType::DEBUG:
@@ -125,7 +127,7 @@ void ServerGame::receiveFromClients() {
 			case PacketType::START_MENU_STATUS:
 			{
 				StartMenuStatusPayload* status = (StartMenuStatusPayload*)&(network_data[i + HDR_SIZE]);
-				printf("[CLIENT %d] SCREEN_STATE_PACKET: STATE %d\n", id, status->ready);
+				printf("[CLIENT %d] START_MENU_STATUS_PACKET: READY=%d\n", id, status->ready);
 				menuStatus[id] = *status;
 
 			}
@@ -348,7 +350,7 @@ void ServerGame::handleStartMenu() {
 		}
 	}
 
-	if (ready) {
+	if (ready && !menuStatus.empty()) {
 		sendStartMenuStateUpdates();
 	}
 }

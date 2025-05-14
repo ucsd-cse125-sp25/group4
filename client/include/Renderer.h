@@ -6,6 +6,7 @@
 #include <DirectXMath.h>
 #include "d3dx12.h"
 #include "ReadData.h"
+#include "NetworkData.h"
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -391,6 +392,8 @@ public:
 		cameraYaw = yaw;
 		cameraPitch = pitch;
 	}
+
+	GamePhase gamePhase;
 private:
 	DebugCubes debugCubes;
 

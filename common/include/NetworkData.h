@@ -32,10 +32,10 @@ struct DebugPayload {
 	char message[128];
 };
 
-enum class ScreenState {
+enum class GamePhase {
 	START_MENU,
-	GAME_SCREEN,
-	SHOP_SCREEN,
+	GAME_PHASE,
+	SHOP_PHASE,
 
 
 	NUM_SCREENS,
@@ -74,7 +74,7 @@ struct GameState {
 
 struct AppState {
 	GameState* gameState;
-	ScreenState screenState;
+	GamePhase gamePhase;
 };
 
 typedef struct IDPayload {

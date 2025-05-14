@@ -61,6 +61,9 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow) {
 	ShowWindow(windowHandle, nCmdShow);
 	ShowCursor(FALSE);
 	hwnd = windowHandle;
+
+	appState = new AppState();
+	appState->gamePhase = GamePhase::START_MENU;
 }
 
 void ClientGame::sendDebugPacket(const char* message) {
@@ -165,12 +168,15 @@ void ClientGame::update() {
 			break;
 		}
 		case PacketType::START_MENU_STATUS:
+		{
 			StartMenuStatusPayload* statusPayload = (StartMenuStatusPayload*)(network_data + HDR_SIZE);
-			
-			//if (statusPayload->ready) {
-				//todo
-			//}
+
+			if (statusPayload->ready) {
+				appState->gamePhase = GamePhase::GAME_PHASE;
+				renderer.gamePhase = GamePhase::GAME_PHASE;
+			}
 			break;
+		}
 		default:
 			// printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
 			break;
@@ -205,71 +211,86 @@ void ClientGame::handleInput() {
 
 	bool movUpdate = false;
 	char dir;
-	bool ready = false;
 
 	//todo: different inputs for each screen, handle going between states
+	switch (appState->gamePhase)
+	{
+	case GamePhase::START_MENU:
+	{
+		bool ready = false;
+		if (GetAsyncKeyState('M') & 0x8000) {
+			ready = true;
+		}
+		if (ready) {
+			sendStartMenuStatusPacket();
+		}
+		break;
+	}
+	case GamePhase::GAME_PHASE:
+	{
+		if (GetAsyncKeyState('W') & 0x8000) {
+			dir = 'W';
+			movUpdate = true;
+		}
+		if (GetAsyncKeyState('S') & 0x8000) {
+			dir = 'S';
+			movUpdate = true;
+		}
+		if (GetAsyncKeyState('A') & 0x8000) {
+			dir = 'A';
+			movUpdate = true;
+		}
+		if (GetAsyncKeyState('D') & 0x8000) {
+			dir = 'D';
+			movUpdate = true;
+		}
 
-	if (GetAsyncKeyState('W') & 0x8000) {
-		dir = 'W';
-		movUpdate = true;
-	}
-	if (GetAsyncKeyState('S') & 0x8000) {
-		dir = 'S';
-		movUpdate = true;
-	}
-	if (GetAsyncKeyState('A') & 0x8000) {
-		dir = 'A';
-		movUpdate = true;
-	}
-	if (GetAsyncKeyState('D') & 0x8000) {
-		dir = 'D';
-		movUpdate = true;
-	}
-	/*if (GetAsyncKeyState('N') & 0x8000) {
-		screen = max(ScreenState::START_MENU, screen - 1);
-	}*/
-	if (GetAsyncKeyState('M') & 0x8000) {
-		ready = true;
-	}
 
+		// CAMERA LOGIC:
+		bool camUpdate = false;
+		// current cursor position
+		POINT p;
+		GetCursorPos(&p);
+		// center of client
+		RECT rc;
+		GetClientRect(hwnd, &rc);
+		POINT centre{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
+		ClientToScreen(hwnd, &centre); // get client's center pos relative to screen
 
-	// CAMERA LOGIC:
-	bool camUpdate = false;
-	// current cursor position
-	POINT p;
-	GetCursorPos(&p); 
-	// center of client
-	RECT rc;
-	GetClientRect(hwnd, &rc);
-	POINT centre{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
-	ClientToScreen(hwnd, &centre); // get client's center pos relative to screen
+		int dx = p.x - centre.x;
+		int dy = p.y - centre.y;
+		if (dx != 0 || dy != 0) {
+			camUpdate = true;
+			yaw += -dx * MOUSE_SENS;
+			pitch += dy * MOUSE_SENS;
+			pitch = std::clamp(pitch,
+				XMConvertToRadians(-89.0f),
+				XMConvertToRadians(+89.0f));
+			// recenter cursor
+			if (camUpdate) SetCursorPos(centre.x, centre.y);
+		}
 
-	int dx = p.x - centre.x;
-	int dy = p.y - centre.y;
-	if (dx != 0 || dy != 0) {
-		camUpdate = true;
-		yaw += -dx * MOUSE_SENS;            
-		pitch += dy * MOUSE_SENS;      
-		pitch = std::clamp(pitch,
-						   XMConvertToRadians(-89.0f),
-			               XMConvertToRadians(+89.0f));
-		// recenter cursor
-		if(camUpdate) SetCursorPos(centre.x, centre.y);
-	}
+		if (camUpdate) {
+			sendCameraPacket(yaw, pitch);
 
-	if (camUpdate) {
-		sendCameraPacket(yaw, pitch);
-
-		// update own's camera
-		renderer.players[renderer.currPlayer.playerId].lookDir.pitch = pitch;
-		renderer.players[renderer.currPlayer.playerId].lookDir.yaw = yaw;
+			// update own's camera
+			renderer.players[renderer.currPlayer.playerId].lookDir.pitch = pitch;
+			renderer.players[renderer.currPlayer.playerId].lookDir.yaw = yaw;
+		}
+		if (movUpdate) {
+			sendMovePacket(dir, yaw, pitch);
+		}
+		break;
 	}
-	if (movUpdate) {
-		sendMovePacket(dir, yaw, pitch);
+	case GamePhase::SHOP_PHASE:
+	{
+		break;
 	}
-	if (ready) {
-		sendStartMenuStatusPacket();
+	default:
+		break;
 	}
+	
+	
 }
 
 inline ClientGame *GetState(HWND window_handle) {

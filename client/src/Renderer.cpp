@@ -609,7 +609,17 @@ bool Renderer::Render() {
 
 
 	// clear buffers
-	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+	float clearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
+	// temp game phase debugging
+	if (gamePhase == GamePhase::START_MENU) {
+		clearColor[0] = 0.4f;
+	}
+	else if (gamePhase == GamePhase::GAME_PHASE) {
+		clearColor[1] = 0.4f;
+	}
+	else {
+		clearColor[2] = 0.4f;
+	}
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	m_commandList->ClearDepthStencilView(m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
