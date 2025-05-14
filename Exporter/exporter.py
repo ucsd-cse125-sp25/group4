@@ -12,17 +12,17 @@ UV_FLOATS_PER_VERT = 2
 @dataclass
 class Mesh:
     num_tris       : int
-    vert_positions : np.array # (objs, tris, VERTS_PER_TRI, POS_FLOATS_PER_VERT)
-    vert_shade     : np.array # (objs, tris, VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
-    material_ids   : np.array # (objs, tris)
+    vert_positions : np.array # (tris, VERTS_PER_TRI, POS_FLOATS_PER_VERT)
+    vert_shade     : np.array # (tris, VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
+    material_ids   : np.array # (tris)
     
     def merge(self, other):
-        if other is None:
-            return
-        self.num_tris       = self.num_tris + other.num_tris
-        self.vert_positions = np.concat((self.vert_positions, other.vert_positions))
-        self.vert_shade     = np.concat((self.vert_shade    , other.vert_shade))
-        self.material_ids   = np.concat((self.material_ids  , other.material_ids))
+        if other is not None:
+            self.num_tris       = self.num_tris + other.num_tris
+            self.vert_positions = np.concatenate((self.vert_positions, other.vert_positions))
+            self.vert_shade     = np.concatenate((self.vert_shade    , other.vert_shade))
+            self.material_ids   = np.concatenate((self.material_ids  , other.material_ids))
+        return self
 
 @dataclass
 class Material:
@@ -32,7 +32,7 @@ class Material:
     normal     : int
 
 
-material_names_to_indices : dict[str, int] = {mat.name : i for i, mat in enumerate(bpy.data.materials)}
+material_names_to_indices : dict[str, int] = {"default_material" : 0} | {mat.name : i+1 for i, mat in enumerate(bpy.data.materials)}
 
 consolidated_mesh : Mesh = None
 
@@ -47,6 +47,9 @@ for obj in bpy.data.objects:
     
     print(f"processing object {obj.name}")
     bmesh = obj.data
+    model_to_world_translation   = np.array(obj.matrix_world.to_translation())
+    model_to_world_linear        = np.array(obj.matrix_world.to_3x3())
+    model_to_world_adj_transpose = np.array(obj.matrix_world.to_3x3().adjugated()).T
 
     # vertex positions
     verts = np.zeros(POS_FLOATS_PER_VERT * len(bmesh.vertices), dtype=np.float32) # (num_bmesh_verts * 3)
@@ -57,21 +60,24 @@ for obj in bpy.data.objects:
 
     verts = verts.reshape(-1, POS_FLOATS_PER_VERT) # (num_bmesh_verts, 3)
     verts = verts[indices]
+    verts = verts @ model_to_world_linear.T
+    verts = verts + model_to_world_translation
     verts = verts.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, POS_FLOATS_PER_VERT)
-    # TODO: transform verts into world space
 
     # normals
     normals = np.zeros(NORMAL_FLOATS_PER_VERT * VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.float32)
     bmesh.loop_triangles.foreach_get("split_normals", normals)
+    normals = normals.reshape(-1, NORMAL_FLOATS_PER_VERT)
+    normals = normals @ model_to_world_adj_transpose.T
     normals = normals.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
-    # TODO: transform normals by inverse transpose
 
     # texture coordinates
     loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype = np.int32)
     bmesh.loop_triangles.foreach_get("loops", loop_indices)
 
-    uv_layer = bmesh.uv_layers[0].uv
+    uv_layer = bmesh.uv_layers[0].uv # WARNING: this may not exist
     loop_uvs = np.zeros(UV_FLOATS_PER_VERT * len(uv_layer), dtype = np.float32) # (num_bmesh_loops * 2)
+    uv_layer.foreach_get("vector", loop_uvs)
     loop_uvs = loop_uvs.reshape(-1, UV_FLOATS_PER_VERT) # (num_bmesh_loops, 2)
 
     uv = loop_uvs[loop_indices]
@@ -86,19 +92,24 @@ for obj in bpy.data.objects:
     print("interleaved:", normal_uv_interleaved)
 
 
-    # material ids    
-    triangle_to_slot_index = np.zeros(len(bmesh.loop_triangles), dtype=np.int32)
-    bmesh.loop_triangles.foreach_get("material_index", triangle_to_slot_index)
-    slot_index_to_materialid = np.array([material_names_to_indices[slot.material.name] for slot in obj.material_slots])
-    material_ids = slot_index_to_materialid[triangle_to_slot_index]
+    # material ids
+    if len(obj.material_slots) == 0: # edge case: object has no materials
+        material_ids = np.zeros(len(bmesh.loop_triangles), dtype=np.int32)
+    else:
+        slot_index_to_materialid = np.array([material_names_to_indices[slot.material.name] for slot in obj.material_slots])
+        triangle_to_slot_index = np.zeros(len(bmesh.loop_triangles), dtype=np.int32)
+        bmesh.loop_triangles.foreach_get("material_index", triangle_to_slot_index)
+        material_ids = slot_index_to_materialid[triangle_to_slot_index]
+        
 
     # add batch dimension for easy concatenation with other meshes
     new_mesh = Mesh(
                        num_tris       = len(bmesh.loop_triangles),
-                       vert_positions = verts[np.newaxis, :],
-                       vert_shade     = normal_uv_interleaved[np.newaxis, :],
-                       material_ids   = material_ids[np.newaxis, :])
+                       vert_positions = verts,
+                       vert_shade     = normal_uv_interleaved,
+                       material_ids   = material_ids)
     consolidated_mesh = new_mesh.merge(consolidated_mesh)
+    assert(consolidated_mesh is not None)
 
 
     
@@ -112,7 +123,7 @@ with open('scene.jj', 'wb') as f:
     # version
     f.write(pack("I", 0))
     # number of triangles
-    f.write(pack("I", consilidated_mesh.num_tris))
+    f.write(pack("I", consolidated_mesh.num_tris))
     # index of first triangle
     f.write(pack("I", 0)) # this is redundant
 
