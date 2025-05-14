@@ -65,7 +65,6 @@
     <None Include="..\client\include\shaderShared.hlsli">
       <FileType>Document</FileType>
     </None>
-    <None Include="exporter.py" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

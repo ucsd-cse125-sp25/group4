@@ -222,7 +222,7 @@ struct Scene {
 		// create buffers from slices
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
 		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
-		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
+		// materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
 
 		return true;
 	}
@@ -473,7 +473,9 @@ inline bool Buffer<T>::Init(Slice<T> inData, ID3D12Device* device, DescriptorAll
 template<typename T>
 inline void Buffer<T>::Release()
 {
-	resource->Unmap(0, nullptr);
-	resource->Release();
+	if (resource) {
+		resource->Unmap(0, nullptr);
+		resource->Release();
+	}
 	memset(this, 0, sizeof(this));
 }
