@@ -7,7 +7,7 @@
 #include "NetworkData.h"
 
 #define DEFAULT_BUFLEN 512
-#define DEFAULT_PORT "6881"
+#define DEFAULT_PORT "2333"
 
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
