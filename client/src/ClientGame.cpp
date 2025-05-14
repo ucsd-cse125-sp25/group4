@@ -263,7 +263,7 @@ bool ClientGame::processCameraInput()
 	if (!dx && !dy) return false;
 
 	yaw += -dx * MOUSE_SENS;
-	pitch += dy * MOUSE_SENS;
+	pitch += -dy * MOUSE_SENS; // invert y makes more sense
 	pitch = std::clamp(pitch,
 		XMConvertToRadians(-89.0f),
 		XMConvertToRadians(+89.0f));

@@ -90,8 +90,8 @@ private:
 	}
 
 	// Dodge
-	static constexpr uint64_t DODGE_COOLDOWN_TICKS = 120;   // 2 s  (change to 60 if desired)
-	static constexpr uint8_t  INVUL_TICKS = 30;    // 0.5 s
+	static constexpr uint64_t DODGE_COOLDOWN_TICKS = TICKS_PER_SEC * 2;   // 2 s  (change to 60 if desired)
+	static constexpr uint8_t  INVUL_TICKS = TICKS_PER_SEC / 4;    // 0.25 s
 	static constexpr float    DASH_SPEED_MULTIPLIER = 2.5f; // run speed while dashing
 
 	std::array<uint64_t, 4> lastDodgeTick{ 0,0,0,0 };    // when each survivor last dodged
