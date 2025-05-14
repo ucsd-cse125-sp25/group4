@@ -74,25 +74,20 @@ for obj in bpy.data.objects:
     normals = normals.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
 
     # texture coordinates
-    loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype = np.int32)
-    bmesh.loop_triangles.foreach_get("loops", loop_indices)
-
-    uv_layer = bmesh.uv_layers[0].uv # WARNING: this may not exist
-    loop_uvs = np.zeros(UV_FLOATS_PER_VERT * len(uv_layer), dtype = np.float32) # (num_bmesh_loops * 2)
-    uv_layer.foreach_get("vector", loop_uvs)
-    loop_uvs = loop_uvs.reshape(-1, UV_FLOATS_PER_VERT) # (num_bmesh_loops, 2)
-
-    uv = loop_uvs[loop_indices]
-    uv = uv.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT)
-
-    print("normals shape:", normals.shape)
-    print("uv shape:", uv.shape)
-
+    if len(bmesh.uv_layers) == 0: # edge case: object has no UVs
+        uv = np.full((len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT), 0.5) # sample from the center of the texture
+    else:
+        uv_layer = bmesh.uv_layers[0].uv
+        loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype = np.int32)
+        bmesh.loop_triangles.foreach_get("loops", loop_indices)
+        loop_uvs = np.zeros(UV_FLOATS_PER_VERT * len(uv_layer), dtype = np.float32) # (num_bmesh_loops * 2)
+        uv_layer.foreach_get("vector", loop_uvs)
+        loop_uvs = loop_uvs.reshape(-1, UV_FLOATS_PER_VERT) # (num_bmesh_loops, 2)
+        uv = loop_uvs[loop_indices]
+        uv = uv.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT)
+    
+    # interleave normal and uv information
     normal_uv_interleaved = np.concatenate((normals, uv), axis=-1)
-
-    print("interleaved shape:", normal_uv_interleaved.shape)
-    print("interleaved:", normal_uv_interleaved)
-
 
     # material ids
     if len(obj.material_slots) == 0: # edge case: object has no materials
@@ -138,4 +133,4 @@ with open('scene.jj', 'wb') as f:
     f.write(pack_bytes("f", consolidated_mesh.vert_shade))
 print("File written successfully")
 # use this to write "scene.jj" into your working directory
-#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" H:\CSE125\suzanne.blend --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" H:\CSE125\bedroomv4.blend --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
