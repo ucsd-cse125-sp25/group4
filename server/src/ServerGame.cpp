@@ -68,7 +68,7 @@ void ServerGame::update() {
 		}
 		case GamePhase::SHOP_PHASE:
 		{
-
+			handleShopPhase();
 			break;
 		}
 		default:
@@ -76,7 +76,6 @@ void ServerGame::update() {
 			break;
 		}
 	}
-	sendGameStateUpdates();
 }
 
 void ServerGame::receiveFromClients() {
@@ -136,7 +135,7 @@ void ServerGame::receiveFromClients() {
 				PlayerReadyPayload* status = (PlayerReadyPayload*)&(network_data[i + HDR_SIZE]);
 				printf("[CLIENT %d] PLAYER_READY_PACKET: READY=%d\n", id, status->ready);
 				phaseStatus[id] = status->ready;
-
+				break;
 			}
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
@@ -314,6 +313,8 @@ void ServerGame::sendAppPhaseUpdates() {
 		.phase = appState->gamePhase
 	};
 
+	printf("GAME PHASE = %d\n", appState->gamePhase);
+
 	NetworkServices::buildPacket<AppPhasePayload>(PacketType::APP_PHASE, *data, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
@@ -380,8 +381,9 @@ void ServerGame::handleStartMenu() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
+		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(5);
+		startARound(25);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
@@ -398,8 +400,9 @@ void ServerGame::handleShopPhase() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
+		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(5);
+		startARound(25);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;

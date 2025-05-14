@@ -180,8 +180,8 @@ void ClientGame::update() {
 		{
 			AppPhasePayload* statusPayload = (AppPhasePayload*)(network_data + HDR_SIZE);
 
-			appState->gamePhase = GamePhase::GAME_PHASE;
-			renderer.gamePhase = GamePhase::GAME_PHASE;
+			appState->gamePhase = statusPayload->phase;
+			renderer.gamePhase = statusPayload->phase;
 			
 			break;
 		}
@@ -224,6 +224,7 @@ void ClientGame::handleInput() {
 	switch (appState->gamePhase)
 	{
 	case GamePhase::START_MENU:
+	case GamePhase::SHOP_PHASE:
 	{
 		bool ready = false;
 		if (GetAsyncKeyState('M') & 0x8000) {
@@ -231,6 +232,7 @@ void ClientGame::handleInput() {
 		}
 		if (ready) {
 			sendStartMenuStatusPacket();
+			Sleep(200);
 		}
 		break;
 	}
@@ -290,10 +292,10 @@ void ClientGame::handleInput() {
 		}
 		break;
 	}
-	case GamePhase::SHOP_PHASE:
+	/*case GamePhase::SHOP_PHASE:
 	{
 		break;
-	}
+	}*/
 	default:
 		break;
 	}
