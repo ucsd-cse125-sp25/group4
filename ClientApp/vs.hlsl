@@ -17,8 +17,8 @@ PSInput VSMain(uint vid : SV_VertexID)
     
     PSInput result;
     result.positionGlobal = mul(position_homogeneous , drawConstants.modelMatrix);
-    // result.normal         = mul(normal, drawConstants.modelInverseTranspose).xyz;
-    result.normal         = shadebuffer[vid].normal;
+    result.normal = normalize(mul(normal, drawConstants.modelInverseTranspose).xyz);
+    // result.normal         = shadebuffer[vid].normal;
     result.positionNDC    = mul(result.positionGlobal, drawConstants.viewProject);
 
     return result;

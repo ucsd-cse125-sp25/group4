@@ -3,10 +3,6 @@
 
 float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
 {
-    if (length(input.normal) < 0.5)
-    {
-        return float4(0, 1, 0, 1);
-    }
     const float3 lightpos = float3(-2, -2, 2);
     const float3 diffuseColor = float3(0.7, 0.1, 0.1);
     
