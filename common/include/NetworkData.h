@@ -11,8 +11,9 @@ enum class PacketType : uint32_t {
 	MOVE = 3,
 	IDENTIFICATION = 4,
 	CAMERA = 5,
-	START_MENU_STATUS = 6,
+	APP_PHASE = 6,
 	ROUND_OVER = 7,
+	PLAYER_READY = 8,
 	// add more here
 };
 
@@ -91,12 +92,12 @@ struct CameraPayload {
 	float yaw, pitch;
 };
 
-struct RoundOverPayload {
-	int round_id;
+struct PlayerReadyPayload {
+	bool ready;
 };
 
-struct StartMenuStatusPayload {
-	bool ready;
+struct AppPhasePayload {
+	GamePhase phase;
 };
 
 

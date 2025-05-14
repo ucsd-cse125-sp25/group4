@@ -112,11 +112,11 @@ void ClientGame::sendCameraPacket(float yaw, float pitch) {
 }
 
 void ClientGame::sendStartMenuStatusPacket() {
-	StartMenuStatusPayload status{};
+	PlayerReadyPayload status{};
 	status.ready = true;
 
 	char buf[HDR_SIZE + sizeof(status)];
-	NetworkServices::buildPacket(PacketType::START_MENU_STATUS, status, buf);
+	NetworkServices::buildPacket(PacketType::PLAYER_READY, status, buf);
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
 
@@ -167,23 +167,22 @@ void ClientGame::update() {
 
 			break;
 		}
-		case PacketType::ROUND_OVER:
-		{
-			RoundOverPayload* roundOverPayload = (RoundOverPayload*)(network_data + HDR_SIZE);
-			//printf("client %d: round %d is over\n", id, roundOverPayload->round_id);
+		//case PacketType::ROUND_OVER:
+		//{
+		//	RoundOverPayload* roundOverPayload = (RoundOverPayload*)(network_data + HDR_SIZE);
+		//	//printf("client %d: round %d is over\n", id, roundOverPayload->round_id);
 
-			char message[128];
-			sprintf_s(message, "client %d: round %d is over", id, roundOverPayload->round_id);
-			sendDebugPacket(message);
-		}
-		case PacketType::START_MENU_STATUS:
+		//	char message[128];
+		//	sprintf_s(message, "client %d: round %d is over", id, roundOverPayload->round_id);
+		//	sendDebugPacket(message);
+		//}
+		case PacketType::APP_PHASE:
 		{
-			StartMenuStatusPayload* statusPayload = (StartMenuStatusPayload*)(network_data + HDR_SIZE);
+			AppPhasePayload* statusPayload = (AppPhasePayload*)(network_data + HDR_SIZE);
 
-			if (statusPayload->ready) {
-				appState->gamePhase = GamePhase::GAME_PHASE;
-				renderer.gamePhase = GamePhase::GAME_PHASE;
-			}
+			appState->gamePhase = GamePhase::GAME_PHASE;
+			renderer.gamePhase = GamePhase::GAME_PHASE;
+			
 			break;
 		}
 		default:

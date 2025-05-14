@@ -107,7 +107,7 @@ void ServerGame::receiveFromClients() {
 
 				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
 
-				menuStatus[id].ready = false;
+				phaseStatus[id] = false;
 				break;
 			}
 			case PacketType::DEBUG:
@@ -131,11 +131,11 @@ void ServerGame::receiveFromClients() {
 				latestCamera[id] = *cam;
 				break;
 			}
-			case PacketType::START_MENU_STATUS:
+			case PacketType::PLAYER_READY:
 			{
-				StartMenuStatusPayload* status = (StartMenuStatusPayload*)&(network_data[i + HDR_SIZE]);
-				printf("[CLIENT %d] START_MENU_STATUS_PACKET: READY=%d\n", id, status->ready);
-				menuStatus[id] = *status;
+				PlayerReadyPayload* status = (PlayerReadyPayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] PLAYER_READY_PACKET: READY=%d\n", id, status->ready);
+				phaseStatus[id] = status->ready;
 
 			}
 			default:
@@ -188,10 +188,13 @@ void ServerGame::applyCamera() {
 	latestCamera.clear();
 }
 
+// Start a round
+// int seconds: length of round
 void ServerGame::startARound(int seconds) {
 	startTimer(seconds, [this]() {
 		// This code runs after the timer completes
-		sendRoundOver(); // or any other packet sending logic
+		appState->gamePhase = GamePhase::SHOP_PHASE;
+		sendAppPhaseUpdates(); // or any other packet sending logic
 		});
 }
 void ServerGame::startTimer(int seconds, std::function<void()> onComplete) {
@@ -294,17 +297,6 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 	printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
 }
 
-void ServerGame::sendRoundOver() {
-	char packet_data[HDR_SIZE + sizeof(RoundOverPayload)];
-
-	RoundOverPayload* data = new RoundOverPayload{
-		.round_id = round_id
-	};
-
-	NetworkServices::buildPacket<RoundOverPayload>(PacketType::ROUND_OVER, *data, packet_data);
-	network->sendToAll(packet_data, HDR_SIZE + sizeof(RoundOverPayload));
-}
-
 void ServerGame::sendGameStateUpdates() {
 
 	char packet_data[HDR_SIZE + sizeof(GameState)];
@@ -314,15 +306,15 @@ void ServerGame::sendGameStateUpdates() {
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
 }
 
-void ServerGame::sendStartMenuStateUpdates() {
+void ServerGame::sendAppPhaseUpdates() {
 
-	char packet_data[HDR_SIZE + sizeof(StartMenuStatusPayload)];
+	char packet_data[HDR_SIZE + sizeof(AppPhasePayload)];
 
-	StartMenuStatusPayload* data = new StartMenuStatusPayload{
-		.ready = true
+	AppPhasePayload* data = new AppPhasePayload{
+		.phase = appState->gamePhase
 	};
 
-	NetworkServices::buildPacket<StartMenuStatusPayload>(PacketType::START_MENU_STATUS, *data, packet_data);
+	NetworkServices::buildPacket<AppPhasePayload>(PacketType::APP_PHASE, *data, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
 }
@@ -381,14 +373,37 @@ void ServerGame::readBoundingBoxes() {
 
 void ServerGame::handleStartMenu() {
 	bool ready = true;
-	for (auto& [id, status] : menuStatus) {
-		if (!status.ready) {
+	for (auto& [id, status] : phaseStatus) {
+		if (!status) {
 			ready = false;
 		}
 	}
 
-	if (ready && !menuStatus.empty()) {
-		sendStartMenuStateUpdates();
+	if (ready && !phaseStatus.empty()) {
+		sendAppPhaseUpdates();
+		startARound(5);
+		// reset status
+		for (auto& [id, status] : phaseStatus) {
+			status = false;
+		}
+	}
+}
+
+void ServerGame::handleShopPhase() {
+	bool ready = true;
+	for (auto& [id, status] : phaseStatus) {
+		if (!status) {
+			ready = false;
+		}
+	}
+
+	if (ready && !phaseStatus.empty()) {
+		sendAppPhaseUpdates();
+		startARound(5);
+		// reset status
+		for (auto& [id, status] : phaseStatus) {
+			status = false;
+		}
 	}
 }
 

@@ -16,14 +16,14 @@ public:
 	void update();
 	void receiveFromClients();
 	void sendGameStateUpdates();
-	void sendStartMenuStateUpdates();
+	void sendAppPhaseUpdates();
 
 	void applyMovements();
 	void applyCamera();
 	void updateClientPositionWithCollision(unsigned int, float, float);
 	void readBoundingBoxes();
 	void handleStartMenu();
-	void sendRoundOver();
+	void handleShopPhase();
 	void startARound(int);
 	void startTimer(int, std::function<void()>);
 
@@ -51,5 +51,6 @@ private:
 	GameState* state;
 	std::unordered_map<uint8_t, MovePayload> latestMovement;
 	std::unordered_map<uint8_t, CameraPayload> latestCamera;
-	std::unordered_map<uint8_t, StartMenuStatusPayload> menuStatus;
+	// indicate whether each player is ready to move on to next phase
+	std::unordered_map<uint8_t, bool> phaseStatus;
 };
