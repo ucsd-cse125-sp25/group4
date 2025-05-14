@@ -133,4 +133,4 @@ with open('scene.jj', 'wb') as f:
     f.write(pack_bytes("f", consolidated_mesh.vert_shade))
 print("File written successfully")
 # use this to write "scene.jj" into your working directory
-#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" H:\CSE125\bedroomv4.blend --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv4.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
