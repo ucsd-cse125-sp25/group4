@@ -327,9 +327,10 @@ void ServerGame::applyAttacks()
 void ServerGame::applyDodge()
 {
 	for (int i = 1; i < 4; i++) {
+		int8_t prevDashTick = dashTicks[i];
 		if (invulTicks[i] > 0) invulTicks[i]--;
 		if (dashTicks[i] > 0) dashTicks[i]--;
-		if (dashTicks[i] == 0) state->players[i].speed /= DASH_SPEED_MULTIPLIER;
+		if (dashTicks[i] == 0 && prevDashTick > 0) state->players[i].speed /= DASH_SPEED_MULTIPLIER;
 	}
 }
 
