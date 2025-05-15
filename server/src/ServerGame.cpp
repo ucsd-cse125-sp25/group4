@@ -433,7 +433,8 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 				// If the z is being changed, reset z velocity and "ground" player
 				if (i == 2) {
 					state->players[clientId].zVelocity = 0;
-					state->players[clientId].isGrounded = true;
+					// The if statement here blocks climbing on the ceiling
+					if (delta[2] < 0) state->players[clientId].isGrounded = true;
 				}
 			}
 		}
@@ -451,7 +452,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 				// If the z is being changed, reset z velocity and "ground" player
 				if (i == 2) {
 					state->players[clientId].zVelocity = 0;
-					state->players[clientId].isGrounded = true;
+					if (delta[2] < 0) state->players[clientId].isGrounded = true;
 				}
 			}
 		}
@@ -464,7 +465,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 	if (state->players[clientId].z < 0) {
 		state->players[clientId].z = 0;
 		state->players[clientId].zVelocity = 0;
-		state->players[clientId].isGrounded = true;
+		if (delta[2] < 0) state->players[clientId].isGrounded = true;
 	}
 
 	//printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
