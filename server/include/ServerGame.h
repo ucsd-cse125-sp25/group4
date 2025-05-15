@@ -7,7 +7,6 @@
 #include <vector>
 #include <array>
 #include <unordered_map>
-#include <functional>
 #include <DirectXMath.h>
 
 #define GRAVITY 0.01f
@@ -37,14 +36,11 @@ public:
 	void handleStartMenu();
 	void handleShopPhase();
 	void startARound(int);
-	void startTimer(int, std::function<void()>);
-
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;
 	static constexpr std::chrono::milliseconds TICK_DURATION{ 1000 / TICKS_PER_SEC };
 	static unsigned int client_id;
-	static int round_id;
 
 	std::chrono::steady_clock::time_point next_tick = std::chrono::steady_clock::now();
 	ServerNetwork* network;
@@ -57,6 +53,7 @@ private:
 	vector<vector<int>> colors2d;
 
 	int num_players = 4;
+	int round_id;
 
 	/* State */
 	AppState* appState;

@@ -341,7 +341,7 @@ void ClientGame::handleInput()
 		}
 		if (ready) {
 			sendStartMenuStatusPacket();
-			Sleep(200);
+			Sleep(200); // temporary to prevent multiple inputs
 		}
 		break;
 	}

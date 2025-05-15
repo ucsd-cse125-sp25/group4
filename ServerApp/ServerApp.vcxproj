@@ -22,9 +22,11 @@
     <ClInclude Include="..\server\include\Parson.h" />
     <ClInclude Include="..\server\include\ServerGame.h" />
     <ClInclude Include="..\server\include\ServerNetwork.h" />
+    <ClInclude Include="..\server\include\Timer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\server\src\Parson.cpp" />
+    <ClCompile Include="..\server\src\Timer.cpp" />
     <ClCompile Include="..\server\src\ServerGame.cpp" />
     <ClCompile Include="..\server\src\ServerMain.cpp" />
     <ClCompile Include="..\server\src\ServerNetwork.cpp" />
