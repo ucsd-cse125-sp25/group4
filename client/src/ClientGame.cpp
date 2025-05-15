@@ -167,15 +167,6 @@ void ClientGame::update() {
 
 			break;
 		}
-		//case PacketType::ROUND_OVER:
-		//{
-		//	RoundOverPayload* roundOverPayload = (RoundOverPayload*)(network_data + HDR_SIZE);
-		//	//printf("client %d: round %d is over\n", id, roundOverPayload->round_id);
-
-		//	char message[128];
-		//	sprintf_s(message, "client %d: round %d is over", id, roundOverPayload->round_id);
-		//	sendDebugPacket(message);
-		//}
 		case PacketType::APP_PHASE:
 		{
 			AppPhasePayload* statusPayload = (AppPhasePayload*)(network_data + HDR_SIZE);
@@ -292,10 +283,6 @@ void ClientGame::handleInput() {
 		}
 		break;
 	}
-	/*case GamePhase::SHOP_PHASE:
-	{
-		break;
-	}*/
 	default:
 		break;
 	}

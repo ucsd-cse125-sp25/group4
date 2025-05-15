@@ -12,8 +12,7 @@ enum class PacketType : uint32_t {
 	IDENTIFICATION = 4,
 	CAMERA = 5,
 	APP_PHASE = 6,
-	ROUND_OVER = 7,
-	PLAYER_READY = 8,
+	PLAYER_READY = 7,
 	// add more here
 };
 
