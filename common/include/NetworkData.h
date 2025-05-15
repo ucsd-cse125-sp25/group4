@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <cstring>
 
@@ -14,6 +14,10 @@ enum class PacketType : uint32_t {
 	APP_PHASE = 6,
 	PLAYER_READY = 7,
 	// add more here
+	ATTACK = 8,
+	HIT = 9,
+	DODGE = 10,
+	DODGE_OK = 11
 };
 
 // The packet header preceeds every packet
@@ -45,10 +49,12 @@ enum class GamePhase {
 struct PlayerState {
 	float x, y, z;
 	float yaw, pitch;
+	float zVelocity;
 	float speed;
 	uint8_t coins;
 	bool isHunter;
-//	bool dead;
+	bool isDead;
+	bool isGrounded; // is on the ground
 };
 
 struct EntityState { // this is for traps or placed objects
@@ -56,6 +62,12 @@ struct EntityState { // this is for traps or placed objects
 	bool placed;
 	bool consumed;
 };
+
+struct BoundingBox {
+	float minX, minY, minZ;
+	float maxX, maxY, maxZ;
+};
+
 struct GameStatePayload {
 	uint64_t tick;
 	/* commented out for demo
@@ -78,17 +90,30 @@ struct AppState {
 	GamePhase gamePhase;
 };
 
-typedef struct IDPayload {
+struct IDPayload {
 	unsigned int id;
 };
 
 struct MovePayload {
-	char direction;
+	float direction[3];
 	float yaw, pitch;
+	bool jump;
 };
 
 struct CameraPayload {
 	float yaw, pitch;
+};
+
+struct AttackPayload {
+	float originX, originY, originZ;   // player position when swing happens
+	float yaw;                         // direction of the swing
+	float pitch;
+	float range;                       // reach in world units (eg. 3 m)
+};
+
+struct HitPayload {
+	uint8_t attackerId;
+	uint8_t victimId;
 };
 
 struct PlayerReadyPayload {
@@ -99,6 +124,9 @@ struct AppPhasePayload {
 	GamePhase phase;
 };
 
+struct DodgePayload { float yaw, pitch; };
+
+struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a placeholder for now
 
 struct Packet {
 	unsigned int packet_type;

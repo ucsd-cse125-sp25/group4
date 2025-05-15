@@ -16,12 +16,12 @@ ServerGame::ServerGame(void) {
 
 	state = new GameState{
 		.tick = 0,
-		//x, y, z, yaw, pitch, speed, coins, isHunter
+		//x, y, z, yaw, pitch, speed, zVelocity, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f,  4.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, false},
-			{-2.0f,  2.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, false},
-			{ 2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, false},
-			{-2.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.015f, 0, true },
+			{ 4.0f,  4.0f, 20.0f, 0.0f, 0.0f, 0.1f, 0.15f, 0, false, false, false },
+			{-2.0f,  2.0f, 20.0f, 0.0f, 0.0f, -0.1f, 0.15f, 0, false, false, false },
+			{ 2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
+			{-2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, true, false, false },
 		}
 	};
 
@@ -47,9 +47,6 @@ void ServerGame::update() {
 	if (network->acceptNewClient(client_id)) {
 		printf("client %d has connected to the server (tick %llu)\n", client_id, state->tick);
 		client_id++;
-		if (client_id >= 4) {
-			startARound(5);
-		}
 	}
 
 	receiveFromClients();
@@ -58,6 +55,9 @@ void ServerGame::update() {
 		{
 			applyMovements();
 			applyCamera();
+			applyPhysics();
+			applyAttacks();
+			applyDodge();
 			sendGameStateUpdates();
 			break;
 		}
@@ -118,7 +118,7 @@ void ServerGame::receiveFromClients() {
 			case PacketType::MOVE:
 			{
 				MovePayload* mv = (MovePayload*)&(network_data[i + HDR_SIZE]);
-				printf("[CLIENT %d] MOVE_PACKET: DIR '%c', PITCH %f, YAW %f\n", id, mv->direction, mv->pitch, mv->yaw);
+				printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f, JUMP %d\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw, mv->jump);
 				// register the latest movement, but do not update yet
 				latestMovement[id] = *mv;
 				break;
@@ -130,6 +130,40 @@ void ServerGame::receiveFromClients() {
 				latestCamera[id] = *cam;
 				break;
 			}
+			case PacketType::ATTACK:
+			{
+				AttackPayload* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
+				latestAttacks[id] = *atk;      // overwrite if multiple swings this tick
+				printf("[CLIENT %d] ATTACK at %.1f, %.1f, %.1f  yaw=%.2f  pitch=%.2f\n",
+					id, atk->originX, atk->originY, atk->originZ, atk->yaw, atk->pitch);
+				break;
+			}
+			case PacketType::DODGE:
+			{
+				// hunters cannot dodge
+				if (state->players[id].isHunter || state->players[id].isDead) break;
+
+				bool offCooldown = (state->tick - lastDodgeTick[id]) >= DODGE_COOLDOWN_TICKS;
+				if (!offCooldown) break;                           // silently ignore spam
+
+				// grant!
+				lastDodgeTick[id] = state->tick;
+				invulTicks[id] = INVUL_TICKS;
+				dashTicks[id] = INVUL_TICKS;                   // dash lasts same 30 ticks
+
+				// speed boost
+				state->players[id].speed *= DASH_SPEED_MULTIPLIER;
+
+				// notify the client
+				DodgeOkPayload ok{ INVUL_TICKS };
+				char buf[HDR_SIZE + sizeof ok];
+				NetworkServices::buildPacket(PacketType::DODGE_OK, ok, buf);
+				network->sendToClient(id, buf, sizeof buf);
+
+				printf("[DODGE] survivor %u granted at tick %llu\n", id, state->tick);
+				break;
+			}
+
 			case PacketType::PLAYER_READY:
 			{
 				PlayerReadyPayload* status = (PlayerReadyPayload*)&(network_data[i + HDR_SIZE]);
@@ -153,27 +187,29 @@ void ServerGame::applyMovements() {
 		//printf("[CLIENT %d] MOVE_INTENT: DIR '%c', PITCH %f, YAW %f\n", id, mv.direction, mv.pitch, mv.yaw);
 		// update direction regardless of collision
 		state->players[id].yaw = mv.yaw;
-		state->players[id].pitch = mv.pitch; 
+		state->players[id].pitch = mv.pitch;
 
+		if (mv.jump && state->players[id].isGrounded == true)
+			state->players[id].zVelocity = JUMP_VELOCITY;
+
+		// normalize the direction vector
+		float magnitude = sqrt(powf(mv.direction[0], 2) + powf(mv.direction[1], 2) + powf(mv.direction[2], 2));
+		if (magnitude != 0)
+			for (int i = 0; i < 3; i++)
+				mv.direction[i] /= magnitude;
 
 		// convert intent + yaw into 2d vector
 		// CLOCKWISE positive
 		// foward x/y, actual delta x/y
-		float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), dx = 0, dy = 0;
+		float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), fz = 1, dx = 0, dy = 0, dz = 0;
+		
+		dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * state->players[id].speed;
 
-		switch (mv.direction)
-		{
-		case 'W':  dx = fx; dy = fy; break;
-		case 'S':  dx = -fx; dy = -fy; break;
-		case 'A':  dx = -fy; dy = fx; break;
-		case 'D':  dx = fy; dy = -fx; break;
-		default: break;
-		}
+		dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * state->players[id].speed;
 
-		dx *= state->players[id].speed;
-		dy *= state->players[id].speed;
+		dz = 0;
 
-		updateClientPositionWithCollision(id, dx, dy);
+		updateClientPositionWithCollision(id, dx, dy, dz);
 	}
 
 	latestMovement.clear(); // consume the movement, don't keep for next tick
@@ -209,49 +245,89 @@ void ServerGame::startTimer(int seconds, std::function<void()> onComplete) {
 		}).detach();
 }
 
-void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy) {
+void ServerGame::applyPhysics() {
+	for (int c = 0; c < 4; c++) {
+		// By default, assumes the player is not on the ground
+		state->players[c].isGrounded = false;
+
+		// Processes z velocity (jumping & falling)
+		updateClientPositionWithCollision(c, 0, 0, state->players[c].zVelocity);
+
+		// Decreases player z velocity by gravity, up to terminal velocity
+		state->players[c].zVelocity -= GRAVITY;
+		if (state->players[c].zVelocity < TERMINAL_VELOCITY) state->players[c].zVelocity = TERMINAL_VELOCITY;
+	}
+}
+
+void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy, float dz) {
 	// Update the position with collision detection
-	float delta[3] = { dx, dy, 0.0f };
+	float delta[3] = { dx, dy, dz };
+
+	// Bounding box for the current client
+	float temp = 1.0f;
+
+	// Bounding box before player moves
+	BoundingBox staticPlayerBox = {
+			state->players[clientId].x - temp,
+			state->players[clientId].y - temp,
+			state->players[clientId].z - temp,
+			state->players[clientId].x + temp,
+			state->players[clientId].y + temp,
+			state->players[clientId].z + temp
+	};
+
 	for (int i = 0; i < 3; i++) {
 		bool isColliding = false;
+		
+		BoundingBox playerBox = {
+			state->players[clientId].x - temp,
+			state->players[clientId].y - temp,
+			state->players[clientId].z - temp,
+			state->players[clientId].x + temp,
+			state->players[clientId].y + temp,
+			state->players[clientId].z + temp
+		};
+
+		if (i == 0) {
+			playerBox.minX += delta[0];
+			playerBox.maxX += delta[0];
+		}
+		else if (i == 1) {
+			playerBox.minY += delta[1];
+			playerBox.maxY += delta[1];
+		}
+		else if (i == 2) {
+			playerBox.minZ += delta[2];
+			playerBox.maxZ += delta[2];
+		}
 
 		// Check for collisions against other players
 		for (int c = 0; c < num_players; c++) {
+			// skip current client
 			if (c == (int)clientId) {
 				continue;
 			}
-			// Bounding box for the current client
-			float temp = 1.0f; // radius of player
-			float minBoundCurrent[2] = {
-				state->players[clientId].x + delta[0] - temp, // x - 0.5
-				state->players[clientId].y + delta[1] - temp  // y - 0.5
-			};
-			float maxBoundCurrent[2] = {
-				state->players[clientId].x + delta[0] + temp, // x + 0.5
-				state->players[clientId].y + delta[1] + temp  // y + 0.5
+
+			BoundingBox otherClientBox = {
+				state->players[c].x - temp,
+				state->players[c].y - temp,
+				state->players[c].z - temp,
+				state->players[c].x + temp,
+				state->players[c].y + temp,
+				state->players[c].z + temp,
 			};
 
-			// Bounding box for the other client
-			float minBoundOther[2] = {
-				state->players[c].x - temp, // x - 0.5
-				state->players[c].y - temp  // y - 0.5
-			};
-			float maxBoundOther[2] = {
-				state->players[c].x + temp, // x + 0.5
-				state->players[c].y + temp  // y + 0.5
-			};
-
-			// Check for overlap in both x and y directions
-			isColliding = isColliding || ((minBoundCurrent[0] <= maxBoundOther[0] && maxBoundCurrent[0] >= minBoundOther[0]) &&
-				(minBoundCurrent[1] <= maxBoundOther[1] && maxBoundCurrent[1] >= minBoundOther[1]));
-
-			if (isColliding) {
+			if (checkCollision(playerBox, otherClientBox)) {
 				printf("Collision detected between client %d and client %d, %d\n", clientId, c, i);
-				delta[i] = 0; //reset position in this direction
-				break; // don't need to check other clients
-			}
-			else {
-				//printf("no collision %d\n", i);
+
+				float distance = findDistance(staticPlayerBox, otherClientBox, i) * (delta[i] > 0 ? 1 : -1);
+				if (abs(distance) < abs(delta[i])) delta[i] = distance;
+
+				// If the z is being changed, reset z velocity and "ground" player
+				if (i == 2) {
+					state->players[clientId].zVelocity = 0;
+					state->players[clientId].isGrounded = true;
+				}
 			}
 		}
 
@@ -259,32 +335,17 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 		// TODO: currently the setup prevents anything else other than
 		// cube 0 to move.
 		for (size_t b = 0; b < boxes2d.size(); ++b) {
-			// Bounding box for the current client
-			float temp = 1.0f;
-			float minBoundCurrent[2] = {
-				state->players[clientId].x + delta[0] - temp, // x - 0.5
-				state->players[clientId].y + delta[1] - temp  // y - 0.5
-			};
-			float maxBoundCurrent[2] = {
-				state->players[clientId].x + delta[0] + temp, // x + 0.5
-				state->players[clientId].y + delta[1] + temp  // y + 0.5
-			};
-
-			auto& box = boxes2d[b];
-			float staticMinX = box[0];
-			float staticMinY = box[1];
-			float staticMaxX = box[3];
-			float staticMaxY = box[4];
-
 			// simple AABB overlap test in 2D (X vs X, Y vs Y)
-			if (minBoundCurrent[0] <= staticMaxX && maxBoundCurrent[0] >= staticMinX &&
-				minBoundCurrent[1] <= staticMaxY && maxBoundCurrent[1] >= staticMinY)
+			if (checkCollision(playerBox, boxes2d[b]))
 			{
-				// collision! cancel movement on this axis
-				isColliding = true;
-				printf("Collision detected between client %d and collision box %d, %d\n", clientId, b, i);
-				delta[i] = 0;
-				break;
+				float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
+				if (abs(distance) < abs(delta[i])) delta[i] = distance;
+
+				// If the z is being changed, reset z velocity and "ground" player
+				if (i == 2) {
+					state->players[clientId].zVelocity = 0;
+					state->players[clientId].isGrounded = true;
+				}
 			}
 		}
 		
@@ -293,7 +354,75 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 	state->players[clientId].y += delta[1];
 	state->players[clientId].z += delta[2];
 
-	printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
+	if (state->players[clientId].z < 0) {
+		state->players[clientId].z = 0;
+		state->players[clientId].zVelocity = 0;
+		state->players[clientId].isGrounded = true;
+	}
+
+	//printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
+}
+
+// Checks whether or not two bounding boxes are colliding
+static bool checkCollision(BoundingBox box1, BoundingBox box2) {
+	bool isColliding = (
+		(box1.minX < box2.maxX && box1.maxX > box2.minX) &&
+		(box1.minY < box2.maxY && box1.maxY > box2.minY) &&
+		(box1.minZ < box2.maxZ && box1.maxZ > box2.minZ)
+	);
+	return isColliding;
+}
+
+// Finds the distance between two bounding boxes on one axis
+static float findDistance(BoundingBox box1, BoundingBox box2, char direction) {
+	if (direction == 0) // X axis
+		return min(abs(box1.minX - box2.maxX), abs(box1.maxX - box2.minX));
+	if (direction == 1) // Y axis
+		return min(abs(box1.minY - box2.maxY), abs(box1.maxY - box2.minY));
+	if (direction == 2) // Z axis
+		return min(abs(box1.minZ - box2.maxZ), abs(box1.maxZ - box2.minZ));
+}
+
+void ServerGame::applyAttacks()
+{
+	for (auto& [attackerId, atk] : latestAttacks)
+	{
+		for (unsigned victimId = 0; victimId < 4; ++victimId)
+		{
+			if (victimId == attackerId) continue;	// skip self
+			if (state->players[victimId].isDead) continue;	// skip dead players
+			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
+
+			if (isHit(atk, state->players[victimId]))
+			{
+				printf("[HIT] attacker %u hits victim %u (tick %llu)\n",
+					attackerId, victimId, state->tick);
+
+				// simple reward: +1 coin
+				state->players[attackerId].coins++;
+
+				// mark victim as dead
+				state->players[victimId].isDead = true;
+				printf("[HIT] victim %u is dead\n", victimId);
+
+				HitPayload hp{ attackerId, victimId };
+				char buf[HDR_SIZE + sizeof hp];
+				NetworkServices::buildPacket(PacketType::HIT, hp, buf);
+				network->sendToClient(victimId, buf, sizeof buf);
+
+			}
+		}
+	}
+	latestAttacks.clear();
+}
+
+void ServerGame::applyDodge()
+{
+	for (int i = 1; i < 4; i++) {
+		if (invulTicks[i] > 0) invulTicks[i]--;
+		if (dashTicks[i] > 0) dashTicks[i]--;
+		if (dashTicks[i] == 0) state->players[i].speed /= DASH_SPEED_MULTIPLIER;
+	}
 }
 
 void ServerGame::sendGameStateUpdates() {
@@ -349,14 +478,7 @@ void ServerGame::readBoundingBoxes() {
 		float bz1 = (float)json_array_get_number(mx, 2);
 
 		// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
-		vector<float> box2d;
-		// convert to Raylib coords in boxes2d
-		box2d.push_back(bx0);  // min.x
-		box2d.push_back(by0);  // min.y  blender Z
-		box2d.push_back(bz0);  // min.z  -blender Y
-		box2d.push_back(bx1);   // max.x
-		box2d.push_back(by1);   // max.y
-		box2d.push_back(bz1);   // max.z
+		BoundingBox box2d = { bx0, by0, bz0, bx1, by1, bz1 };
 		boxes2d.push_back(box2d);
 		//cout << "box2d: " << box2d[0] << ", " << box2d[1] << ", " << box2d[2] << ", " << box2d[3] << ", " << box2d[4] << ", " << box2d[5] << endl;
 
