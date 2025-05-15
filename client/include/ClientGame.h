@@ -29,11 +29,15 @@ public:
 	void sendMovePacket(float[3], float, float, bool);
 	void sendCameraPacket(float, float);
 	void sendAttackPacket(float origin[3], float yaw, float pitch);
+	void sendDodgePacket();
+	void sendStartMenuStatusPacket();
 	void update();
 	void processAttackInput();
+	void processDodgeInput();
 	void handleInput();
 
 	GameState gameState;
+	AppState* appState;
 	Renderer renderer;
 private:
 	HWND hwnd;

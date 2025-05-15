@@ -11,9 +11,13 @@ enum class PacketType : uint32_t {
 	MOVE = 3,
 	IDENTIFICATION = 4,
 	CAMERA = 5,
+	APP_PHASE = 6,
+	PLAYER_READY = 7,
 	// add more here
-	ATTACK = 6,
-	HIT = 7
+	ATTACK = 8,
+	HIT = 9,
+	DODGE = 10,
+	DODGE_OK = 11
 };
 
 // The packet header preceeds every packet
@@ -31,6 +35,15 @@ struct InitPayload {};
 
 struct DebugPayload {
 	char message[128];
+};
+
+enum class GamePhase {
+	START_MENU,
+	GAME_PHASE,
+	SHOP_PHASE,
+
+
+	NUM_SCREENS,
 };
 
 struct PlayerState {
@@ -72,7 +85,12 @@ struct GameState {
 	PlayerState players[4];
 };
 
-typedef struct IDPayload {
+struct AppState {
+	GameState* gameState;
+	GamePhase gamePhase;
+};
+
+struct IDPayload {
 	unsigned int id;
 };
 
@@ -97,6 +115,18 @@ struct HitPayload {
 	uint8_t attackerId;
 	uint8_t victimId;
 };
+
+struct PlayerReadyPayload {
+	bool ready;
+};
+
+struct AppPhasePayload {
+	GamePhase phase;
+};
+
+struct DodgePayload { float yaw, pitch; };
+
+struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a placeholder for now
 
 struct Packet {
 	unsigned int packet_type;

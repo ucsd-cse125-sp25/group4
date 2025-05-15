@@ -24,6 +24,9 @@
     <ClInclude Include="..\server\include\Parson.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\server\include\Timer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\server\src\ServerGame.cpp">
@@ -36,6 +39,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\server\src\Parson.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\server\src\Timer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

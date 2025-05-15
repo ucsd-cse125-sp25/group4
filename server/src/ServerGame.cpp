@@ -1,24 +1,33 @@
-﻿#include "ServerGame.h"
-#include "Parson.h"
-#include <random>
+﻿#include <random>
 #include <vector>
 #include <iostream>
+#include "ServerGame.h"
+#include "Parson.h"
+#include "Timer.h"
+
+
 using namespace std;
 unsigned int ServerGame::client_id;
 
 ServerGame::ServerGame(void) {
 	client_id = 0;
 	network = new ServerNetwork();
+	round_id = 0;
 
 	state = new GameState{
 		.tick = 0,
-		//x, y, z, yaw, pitch, speed, zVelocity, coins, isHunter, isDead, isGrounded
+		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
 			{ 4.0f,  4.0f, 20.0f, 0.0f, 0.0f, 0.1f, 0.15f, 0, false, false, false },
 			{-2.0f,  2.0f, 20.0f, 0.0f, 0.0f, -0.1f, 0.15f, 0, false, false, false },
 			{ 2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
 			{-2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, true, false, false },
 		}
+	};
+
+	appState = new AppState{
+		.gameState = state,
+		.gamePhase = GamePhase::START_MENU
 	};
 
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
@@ -41,11 +50,32 @@ void ServerGame::update() {
 	}
 
 	receiveFromClients();
-	applyMovements();
-	applyCamera();
-	applyPhysics();
-	applyAttacks();
-	sendUpdates();
+	switch (appState->gamePhase) {
+		case GamePhase::GAME_PHASE:
+		{
+			applyMovements();
+			applyCamera();
+			applyPhysics();
+			applyAttacks();
+			applyDodge();
+			sendGameStateUpdates();
+			break;
+		}
+		case GamePhase::START_MENU:
+		{
+			handleStartMenu();
+			break;
+		}
+		case GamePhase::SHOP_PHASE:
+		{
+			handleShopPhase();
+			break;
+		}
+		default:
+		{
+			break;
+		}
+	}
 }
 
 void ServerGame::receiveFromClients() {
@@ -75,6 +105,8 @@ void ServerGame::receiveFromClients() {
 				NetworkServices::buildPacket<IDPayload>(PacketType::IDENTIFICATION, { id }, packet_data);
 
 				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
+
+				phaseStatus[id] = false;
 				break;
 			}
 			case PacketType::DEBUG:
@@ -106,7 +138,39 @@ void ServerGame::receiveFromClients() {
 					id, atk->originX, atk->originY, atk->originZ, atk->yaw, atk->pitch);
 				break;
 			}
+			case PacketType::DODGE:
+			{
+				// hunters cannot dodge
+				if (state->players[id].isHunter || state->players[id].isDead) break;
 
+				bool offCooldown = (state->tick - lastDodgeTick[id]) >= DODGE_COOLDOWN_TICKS;
+				if (!offCooldown) break;                           // silently ignore spam
+
+				// grant!
+				lastDodgeTick[id] = state->tick;
+				invulTicks[id] = INVUL_TICKS;
+				dashTicks[id] = INVUL_TICKS;                   // dash lasts same 30 ticks
+
+				// speed boost
+				state->players[id].speed *= DASH_SPEED_MULTIPLIER;
+
+				// notify the client
+				DodgeOkPayload ok{ INVUL_TICKS };
+				char buf[HDR_SIZE + sizeof ok];
+				NetworkServices::buildPacket(PacketType::DODGE_OK, ok, buf);
+				network->sendToClient(id, buf, sizeof buf);
+
+				printf("[DODGE] survivor %u granted at tick %llu\n", id, state->tick);
+				break;
+			}
+
+			case PacketType::PLAYER_READY:
+			{
+				PlayerReadyPayload* status = (PlayerReadyPayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] PLAYER_READY_PACKET: READY=%d\n", id, status->ready);
+				phaseStatus[id] = status->ready;
+				break;
+			}
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
 				break;
@@ -117,6 +181,60 @@ void ServerGame::receiveFromClients() {
 	}
 
 }
+
+// Start a round
+// int seconds: length of round
+void ServerGame::startARound(int seconds) {
+	round_id++;
+	Timer* timer = new Timer();
+	timer->startTimer(seconds, [this]() {
+		// This code runs after the timer completes
+		appState->gamePhase = GamePhase::SHOP_PHASE;
+		sendAppPhaseUpdates(); // or any other packet sending logic
+		});
+}
+
+void ServerGame::handleStartMenu() {
+	bool ready = true;
+	for (auto& [id, status] : phaseStatus) {
+		if (!status) {
+			ready = false;
+		}
+	}
+
+	if (ready && !phaseStatus.empty()) {
+		appState->gamePhase = GamePhase::GAME_PHASE;
+		sendAppPhaseUpdates();
+		startARound(25);
+		// reset status
+		for (auto& [id, status] : phaseStatus) {
+			status = false;
+		}
+	}
+}
+
+void ServerGame::handleShopPhase() {
+	bool ready = true;
+	for (auto& [id, status] : phaseStatus) {
+		if (!status) {
+			ready = false;
+		}
+	}
+
+	if (ready && !phaseStatus.empty()) {
+		appState->gamePhase = GamePhase::GAME_PHASE;
+		sendAppPhaseUpdates();
+		startARound(25);
+		// reset status
+		for (auto& [id, status] : phaseStatus) {
+			status = false;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// GAME PHASE
+// -----------------------------------------------------------------------------
 
 void ServerGame::applyMovements() {
 	for (auto& [id, mv] : latestMovement) {
@@ -173,6 +291,81 @@ void ServerGame::applyPhysics() {
 	}
 }
 
+void ServerGame::applyAttacks()
+{
+	for (auto& [attackerId, atk] : latestAttacks)
+	{
+		for (unsigned victimId = 0; victimId < 4; ++victimId)
+		{
+			if (victimId == attackerId) continue;	// skip self
+			if (state->players[victimId].isDead) continue;	// skip dead players
+			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
+
+			if (isHit(atk, state->players[victimId]))
+			{
+				printf("[HIT] attacker %u hits victim %u (tick %llu)\n",
+					attackerId, victimId, state->tick);
+
+				// simple reward: +1 coin
+				state->players[attackerId].coins++;
+
+				// mark victim as dead
+				state->players[victimId].isDead = true;
+				printf("[HIT] victim %u is dead\n", victimId);
+
+				HitPayload hp{ attackerId, victimId };
+				char buf[HDR_SIZE + sizeof hp];
+				NetworkServices::buildPacket(PacketType::HIT, hp, buf);
+				network->sendToClient(victimId, buf, sizeof buf);
+
+			}
+		}
+	}
+	latestAttacks.clear();
+}
+
+void ServerGame::applyDodge()
+{
+	for (int i = 1; i < 4; i++) {
+		int8_t prevDashTick = dashTicks[i];
+		if (invulTicks[i] > 0) invulTicks[i]--;
+		if (dashTicks[i] > 0) dashTicks[i]--;
+		if (dashTicks[i] == 0 && prevDashTick > 0) state->players[i].speed /= DASH_SPEED_MULTIPLIER;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// NETWORK
+// -----------------------------------------------------------------------------
+
+void ServerGame::sendGameStateUpdates() {
+
+	char packet_data[HDR_SIZE + sizeof(GameState)];
+
+	NetworkServices::buildPacket<GameState>(PacketType::GAME_STATE, *state, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+}
+
+void ServerGame::sendAppPhaseUpdates() {
+
+	char packet_data[HDR_SIZE + sizeof(AppPhasePayload)];
+
+	AppPhasePayload* data = new AppPhasePayload{
+		.phase = appState->gamePhase
+	};
+
+	printf("GAME PHASE = %d\n", appState->gamePhase);
+
+	NetworkServices::buildPacket<AppPhasePayload>(PacketType::APP_PHASE, *data, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+}
+
+// -----------------------------------------------------------------------------
+// PHYSICS
+// -----------------------------------------------------------------------------
+
 void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float dx, float dy, float dz) {
 	// Update the position with collision detection
 	float delta[3] = { dx, dy, dz };
@@ -192,7 +385,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 
 	for (int i = 0; i < 3; i++) {
 		bool isColliding = false;
-		
+
 		BoundingBox playerBox = {
 			state->players[clientId].x - temp,
 			state->players[clientId].y - temp,
@@ -216,8 +409,8 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 		}
 
 		// Check for collisions against other players
-		for (int c = 0; c < 4; c++) {
-			// Skip current client
+		for (int c = 0; c < num_players; c++) {
+			// skip current client
 			if (c == (int)clientId) {
 				continue;
 			}
@@ -262,7 +455,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 				}
 			}
 		}
-		
+
 	}
 	state->players[clientId].x += delta[0];
 	state->players[clientId].y += delta[1];
@@ -283,9 +476,13 @@ static bool checkCollision(BoundingBox box1, BoundingBox box2) {
 		(box1.minX < box2.maxX && box1.maxX > box2.minX) &&
 		(box1.minY < box2.maxY && box1.maxY > box2.minY) &&
 		(box1.minZ < box2.maxZ && box1.maxZ > box2.minZ)
-	);
+		);
 	return isColliding;
 }
+
+// -----------------------------------------------------------------------------
+// BOUNDING BOXES
+// -----------------------------------------------------------------------------
 
 // Finds the distance between two bounding boxes on one axis
 static float findDistance(BoundingBox box1, BoundingBox box2, char direction) {
@@ -295,48 +492,6 @@ static float findDistance(BoundingBox box1, BoundingBox box2, char direction) {
 		return min(abs(box1.minY - box2.maxY), abs(box1.maxY - box2.minY));
 	if (direction == 2) // Z axis
 		return min(abs(box1.minZ - box2.maxZ), abs(box1.maxZ - box2.minZ));
-}
-
-void ServerGame::applyAttacks()
-{
-	for (auto& [attackerId, atk] : latestAttacks)
-	{
-		for (unsigned victimId = 0; victimId < 4; ++victimId)
-		{
-			if (victimId == attackerId) continue;
-			if (state->players[victimId].isDead) continue;
-
-			if (isHit(atk, state->players[victimId]))
-			{
-				printf("[HIT] attacker %u hits victim %u (tick %llu)\n",
-					attackerId, victimId, state->tick);
-
-				// simple reward: +1 coin
-				state->players[attackerId].coins++;
-
-				// mark victim as dead
-				state->players[victimId].isDead = true;
-				printf("[HIT] victim %u is dead\n", victimId);
-
-				HitPayload hp{ attackerId, victimId };
-				char buf[HDR_SIZE + sizeof hp];
-				NetworkServices::buildPacket(PacketType::HIT, hp, buf);
-				network->sendToClient(victimId, buf, sizeof buf);
-
-			}
-		}
-	}
-	latestAttacks.clear();
-}
-
-
-void ServerGame::sendUpdates() {
-
-	char packet_data[HDR_SIZE + sizeof(GameState)];
-
-	NetworkServices::buildPacket<GameState>(PacketType::GAME_STATE, *state, packet_data);
-
-	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
 }
 
 void ServerGame::readBoundingBoxes() {
