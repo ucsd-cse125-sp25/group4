@@ -40,6 +40,30 @@ consolidated_mesh : Mesh = None
 materials     : list[Material] = []
 texture_names : list[str] = []
 
+def get_node_input(input : bpy.types.Nodesocket):
+    if not input.is_linked:
+        return input.default_value
+
+    from_node = input.links[0].from_node
+    if from_node.bl_label == "ShaderNodeNormalMap":
+        return from_node.inputs["Color"].links[0].from_node.image
+    else:
+        return from_node.image
+
+for material in bpy.data.materials:
+    output = material.node_tree.get_output_node("ALL")
+    principled = output.inputs["Surface"].links[0].from_node
+
+    principled_inputs = {
+        "base_color" : get_node_input(principled.inputs["Base Color"]),
+        "metallic"   : get_node_input(principled.inputs["Metallic"]),
+        "roughness"  : get_node_input(principled.inputs["Roughness"]),
+        "normal"     : get_node_input(principled.inputs["Normal"]),
+    }
+    
+    for principled_input in principled_inputs.values():
+        if isinstance(principled_input, bpy.types.Image):
+            # save the image
 
 for obj in bpy.data.objects:
     if obj.type != "MESH" or obj.name[:3] == "bb#":
