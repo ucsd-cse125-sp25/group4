@@ -36,7 +36,7 @@ public:
 	void processDodgeInput();
 	void handleInput();
 
-	GameState gameState;
+	GameState* gameState;
 	AppState* appState;
 	Renderer renderer;
 private:
