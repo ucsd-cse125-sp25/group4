@@ -1,8 +1,11 @@
 ﻿#pragma once
 #include <cstdint>
 #include <cstring>
+#include <unordered_map>
 
 #define MAX_PACKET_SIZE 1000
+#define NUM_POWERUP_OPTIONS 3
+#define ROUND_DURATION 25
 
 enum class PacketType : uint32_t {
 	INIT_CONNECTION = 0,
@@ -17,7 +20,32 @@ enum class PacketType : uint32_t {
 	ATTACK = 8,
 	HIT = 9,
 	DODGE = 10,
-	DODGE_OK = 11
+	DODGE_OK = 11,
+	SHOP_INIT,			// server sends to each client the options
+	SHOP_UPDATE			// client sends what was purchased
+};
+
+enum class Powerup : unsigned int {
+	// HUNTER POWERUPS
+	HUNTER_POWERUPS = 0,
+	H_INCREASE_SPEED = 0,
+	H_INCREASE_JUMP,
+	H_INCREASE_VISION,
+	// ...
+
+	NUM_HUNTER_POWERUPS,
+	RUNNER_POWERUPS = 100,
+	R_INCREASE_SPEED = 100,
+	// ...
+
+	NUM_RUNNER_POWERUPS
+};
+
+std::unordered_map<Powerup, int> PowerupCosts{
+	{ Powerup::H_INCREASE_JUMP, 1 },
+	{ Powerup::H_INCREASE_SPEED, 2 },
+	{ Powerup::H_INCREASE_VISION, 3 },
+	{ Powerup::R_INCREASE_SPEED, 1 },
 };
 
 // The packet header preceeds every packet
@@ -127,6 +155,10 @@ struct AppPhasePayload {
 struct DodgePayload { float yaw, pitch; };
 
 struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a placeholder for now
+
+struct ShopOptionsPayload {
+	uint8_t options[NUM_POWERUP_OPTIONS];
+};
 
 struct Packet {
 	unsigned int packet_type;

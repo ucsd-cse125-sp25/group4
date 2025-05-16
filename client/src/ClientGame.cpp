@@ -64,6 +64,7 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow) {
 
 	appState = new AppState();
 	appState->gamePhase = GamePhase::START_MENU;
+	appState->gameState = gameState;
 }
 
 void ClientGame::sendDebugPacket(const char* message) {
@@ -157,25 +158,25 @@ void ClientGame::update() {
 		case PacketType::GAME_STATE: 
 		{
 			// printf("received update for tick %llu \n", game_state->tick);
-			GameState* state = (GameState*)(network_data + HDR_SIZE);
+			gameState = (GameState*)(network_data + HDR_SIZE);
 			//char msgbuf[1000];
 			// printf(msgbuf, "Packet received y=%f \n", state->position[1]);
 
 			for (int i = 0; i < 4; i++) {
-				renderer.players[i].pos.x = state->players[i].x;
-				renderer.players[i].pos.y = state->players[i].y;
-				renderer.players[i].pos.z = state->players[i].z;
+				renderer.players[i].pos.x = gameState->players[i].x;
+				renderer.players[i].pos.y = gameState->players[i].y;
+				renderer.players[i].pos.z = gameState->players[i].z;
 				//renderer.players[i].isDead = state->players[i].isDead;      // NEW
 				//renderer.players[i].isHunter = state->players[i].isHunter;  // NEW
 
 				// update the rotation from other players only.
 				if (i == renderer.currPlayer.playerId) continue;
-				renderer.players[i].lookDir.pitch = state->players[i].pitch;
-				renderer.players[i].lookDir.yaw = state->players[i].yaw;
+				renderer.players[i].lookDir.pitch = gameState->players[i].pitch;
+				renderer.players[i].lookDir.yaw = gameState->players[i].yaw;
 			}
 
 			// cache own “dead” flag for input handling
-			localDead = state->players[renderer.currPlayer.playerId].isDead;
+			localDead = gameState->players[renderer.currPlayer.playerId].isDead;
 
 			
 			break;
@@ -201,7 +202,7 @@ void ClientGame::update() {
 		}
 		case PacketType::DODGE_OK:
 		{
-			auto* ok = reinterpret_cast<DodgeOkPayload*>(network_data + HDR_SIZE);
+			DodgeOkPayload* ok = reinterpret_cast<DodgeOkPayload*>(network_data + HDR_SIZE);
 			//invulFrames_ = ok->invulTicks;        // usually 30
 			// Optional: kick off a local dash animation / speed buff here.
 			printf(">> DODGE granted!\n");

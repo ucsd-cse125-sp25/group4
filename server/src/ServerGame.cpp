@@ -205,13 +205,17 @@ void ServerGame::handleStartMenu() {
 	if (ready && !phaseStatus.empty()) {
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(25);
+		startARound(ROUND_DURATION);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
 		}
 	}
 }
+
+// -----------------------------------------------------------------------------
+// SHOP PHASE
+// -----------------------------------------------------------------------------
 
 void ServerGame::handleShopPhase() {
 	bool ready = true;
@@ -224,7 +228,7 @@ void ServerGame::handleShopPhase() {
 	if (ready && !phaseStatus.empty()) {
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(25);
+		startARound(ROUND_DURATION);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
