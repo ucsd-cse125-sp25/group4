@@ -8,6 +8,7 @@
 #include <array>
 #include <unordered_map>
 #include <DirectXMath.h>
+#include <random>
 
 #define GRAVITY 0.01f
 #define JUMP_VELOCITY 0.2f
@@ -25,6 +26,7 @@ public:
 	void receiveFromClients();
 	void sendGameStateUpdates();
 	void sendAppPhaseUpdates();
+	void sendShopOptions(ShopOptionsPayload *data, int dest);
 
 	void applyMovements();
 	void applyCamera();
@@ -34,8 +36,10 @@ public:
 	void applyDodge();
 	void readBoundingBoxes();
 	void handleStartMenu();
-	void handleShopPhase();
 	void startARound(int);
+
+	void handleShopPhase();
+	void startShopPhase();
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;
@@ -54,6 +58,17 @@ private:
 
 	int num_players = 4;
 	int round_id;
+
+	std::random_device dev;
+	std::mt19937 rng;
+	std::uniform_int_distribution<std::mt19937::result_type> randomHunterPowerupGen;
+	std::uniform_int_distribution<std::mt19937::result_type> randomRunnerPowerupGen;
+
+
+
+
+
+
 
 	/* State */
 	AppState* appState;

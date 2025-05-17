@@ -215,6 +215,8 @@ void ClientGame::update() {
 
 			appState->gamePhase = statusPayload->phase;
 			renderer.gamePhase = statusPayload->phase;
+
+			ready = false;
 			
 			break;
 		}
@@ -326,6 +328,56 @@ void ClientGame::processDodgeInput()
 	rWasDown = rNowDown;
 }
 
+void ClientGame::processShopInputs() {
+	// if ready, player is locked in and cannot change
+	if (ready)
+		return;
+
+	// only allow one selection per tick
+	if (GetAsyncKeyState('M') & 0x8000) {
+		ready = true;
+		gameState->players[id].coins = tempCoins;
+		// TODO: save selected powerups
+		// things to consider:
+		// powerups can be passive (trap, buff) or active (item, temporary)
+		// can't have multiple of the same powerup
+		// how should it be displayed/ordered?
+		sendStartMenuStatusPacket();
+	}
+	else if (GetAsyncKeyState('1') & 0x8000) {
+		handleShopItemSelection(0);
+	}
+	else if (GetAsyncKeyState('2') & 0x8000) {
+		handleShopItemSelection(1);
+	}
+	else if (GetAsyncKeyState('3') & 0x8000) {
+		handleShopItemSelection(2);
+	}
+}
+
+void ClientGame::handleShopItemSelection(int choice) {
+	ShopItem item = shopOptions[choice];
+	int cost = PowerupCosts[item.item];
+	if (item.isSelected) 
+	{
+		item.isSelected = false;
+		tempCoins += cost;
+	}
+	else
+	{
+		// Only select the item if client has enough coins
+		if (item.isBuyable)
+		{
+			item.isSelected = true;
+			tempCoins -= cost;
+		}
+	}
+
+	// Update if each item is buyable
+	for (auto& item : shopOptions) {
+		item.isBuyable = (PowerupCosts[item.item] <= tempCoins);
+	}
+}
 
 void ClientGame::handleInput()
 {
@@ -334,16 +386,21 @@ void ClientGame::handleInput()
 	switch (appState->gamePhase)
 	{
 	case GamePhase::START_MENU:
-	case GamePhase::SHOP_PHASE:
 	{
-		bool ready = false;
+		// Avoid sending multiple ready packets
+		if (ready)
+			break;
+
 		if (GetAsyncKeyState('M') & 0x8000) {
 			ready = true;
-		}
-		if (ready) {
 			sendStartMenuStatusPacket();
-			Sleep(200); // temporary to prevent multiple inputs
 		}
+
+		break;
+	}
+	case GamePhase::SHOP_PHASE:
+	{
+		processShopInputs();
 		break;
 	}
 	case GamePhase::GAME_PHASE:

@@ -18,10 +18,10 @@ ServerGame::ServerGame(void) {
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f,  4.0f, 20.0f, 0.0f, 0.0f, 0.1f, 0.15f, 0, false, false, false },
+			{ 4.0f,  4.0f, 20.0f, 0.0f, 0.0f, 0.1f, 0.15f, 0, true, false, false },
 			{-2.0f,  2.0f, 20.0f, 0.0f, 0.0f, -0.1f, 0.15f, 0, false, false, false },
 			{ 2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
-			{-2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, true, false, false },
+			{-2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
 		}
 	};
 
@@ -34,6 +34,16 @@ ServerGame::ServerGame(void) {
 	//vector<vector<float>> boxes2d;
 	//// colors2d[i][0..3] = R, G, B, A (0–255)
 	//vector<vector<int>> colors2d;
+
+	std::mt19937 rng(dev());
+	std::uniform_int_distribution<std::mt19937::result_type> randomHunterPowerupGen((int)Powerup::HUNTER_POWERUPS, (int)Powerup::NUM_HUNTER_POWERUPS - 1);
+	std::uniform_int_distribution<std::mt19937::result_type> randomRunnerPowerupGen((int)Powerup::RUNNER_POWERUPS, (int)Powerup::NUM_RUNNER_POWERUPS - 1);
+
+	// TODO: test RNG on the atkinson hall computers
+	//cout << "Entropy: " << dev.entropy() << endl;
+	//for (int i = 0; i < 100; i++) {
+	//	cout << randomHunterPowerupGen(rng) << endl;
+	//}
 }
 
 void ServerGame::update() {
@@ -78,9 +88,8 @@ void ServerGame::update() {
 	}
 }
 
-void ServerGame::receiveFromClients() {
-	Packet packet;
-
+void ServerGame::receiveFromClients() 
+{
 	std::map<unsigned int, SOCKET>::iterator iter;
 
 	for (auto& [id, sock] : network->sessions) {
@@ -92,7 +101,7 @@ void ServerGame::receiveFromClients() {
 			continue;
 		}
 
-		int i = 0;
+		unsigned int i = 0;
 		while (i < (unsigned int)data_length) {
 			PacketHeader* hdr = (PacketHeader*) &(network_data[i]);
 
@@ -225,6 +234,8 @@ void ServerGame::handleShopPhase() {
 		}
 	}
 
+	//todo: we probably want a timer OR all ready to start the next round
+
 	if (ready && !phaseStatus.empty()) {
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
@@ -234,6 +245,21 @@ void ServerGame::handleShopPhase() {
 			status = false;
 		}
 	}
+}
+
+void ServerGame::startShopPhase() {
+	// send each client their powerups -- TODO: MOVE to client side
+	for (int id = 0; id < num_players; id++) {
+		ShopOptionsPayload* options = new ShopOptionsPayload();
+		// if hunter
+		for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
+			options->options[p] = randomHunterPowerupGen(rng);
+		}
+		// else runner
+
+		sendShopOptions(options, id);
+	}
+	// todo start timer
 }
 
 // -----------------------------------------------------------------------------
@@ -364,6 +390,14 @@ void ServerGame::sendAppPhaseUpdates() {
 	NetworkServices::buildPacket<AppPhasePayload>(PacketType::APP_PHASE, *data, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+}
+
+void ServerGame::sendShopOptions(ShopOptionsPayload* data, int dest) {
+	char packet_data[HDR_SIZE + sizeof(ShopOptionsPayload)];
+
+	NetworkServices::buildPacket<ShopOptionsPayload>(PacketType::SHOP_INIT, *data, packet_data);
+
+	network->sendToClient(dest, packet_data, HDR_SIZE + sizeof(ShopOptionsPayload));
 }
 
 // -----------------------------------------------------------------------------

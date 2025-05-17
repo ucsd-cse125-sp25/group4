@@ -21,8 +21,17 @@ public:
 
 	bool isWindowFocused() const;
 	bool isLocalPlayerDead() const;
+
+
+	void handleInput();
+	void processAttackInput();
+	void processDodgeInput();
 	bool processCameraInput();
 	bool processMovementInput();
+	void processShopInputs();
+
+	void handleShopItemSelection(int choice);
+	void updateBuyable();
 
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);
@@ -32,13 +41,20 @@ public:
 	void sendDodgePacket();
 	void sendStartMenuStatusPacket();
 	void update();
-	void processAttackInput();
-	void processDodgeInput();
-	void handleInput();
 
-	GameState gameState;
+	GameState* gameState;
 	AppState* appState;
 	Renderer renderer;
+
+	struct ShopItem {
+		Powerup item;
+		bool isSelected;
+		bool isBuyable;
+	};
+
+	ShopItem shopOptions[NUM_POWERUP_OPTIONS];
+
+
 private:
 	HWND hwnd;
 	unsigned int id;
@@ -51,5 +67,9 @@ private:
 	static constexpr float MOUSE_SENS = 0.002f;
 	static constexpr float ATTACK_RANGE = 4.0f;
 	bool localDead = false;
+
+	bool ready = false;
+	int tempCoins = 0;
+	std::vector<Powerup> powerups;
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);

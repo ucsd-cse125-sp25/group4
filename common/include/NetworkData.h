@@ -36,12 +36,13 @@ enum class Powerup : unsigned int {
 	NUM_HUNTER_POWERUPS,
 	RUNNER_POWERUPS = 100,
 	R_INCREASE_SPEED = 100,
+	R_INCREASE_JUMP,
 	// ...
 
 	NUM_RUNNER_POWERUPS
 };
 
-std::unordered_map<Powerup, int> PowerupCosts{
+static std::unordered_map<Powerup, int> PowerupCosts{
 	{ Powerup::H_INCREASE_JUMP, 1 },
 	{ Powerup::H_INCREASE_SPEED, 2 },
 	{ Powerup::H_INCREASE_VISION, 3 },
