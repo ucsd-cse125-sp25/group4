@@ -11,6 +11,8 @@ Timer::~Timer()
 }
 
 void Timer::startTimer(int seconds, std::function<void()> onComplete) {
+	// spawns a new thread to keep track of time
+	// needs synch protection
 	std::thread([seconds, onComplete]() {
 		printf("Starting timer for %d seconds\n", seconds);
 		auto start = std::chrono::steady_clock::now();

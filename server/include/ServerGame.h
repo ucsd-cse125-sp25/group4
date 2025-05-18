@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <DirectXMath.h>
 #include <random>
+#include <mutex>
 
 #define GRAVITY 0.01f
 #define JUMP_VELOCITY 0.2f
@@ -35,9 +36,9 @@ public:
 	void applyAttacks();
 	void applyDodge();
 	void readBoundingBoxes();
+	void handleGamePhase();
 	void handleStartMenu();
 	void startARound(int);
-
 	void handleShopPhase();
 	void startShopPhase();
 
@@ -73,10 +74,14 @@ private:
 	/* State */
 	AppState* appState;
 	GameState* state;
+	// synchornize access to states
+	mutex state_mu;
 	std::unordered_map<uint8_t, MovePayload> latestMovement;
 	std::unordered_map<uint8_t, CameraPayload> latestCamera;
 	// indicate whether each player is ready to move on to next phase
 	std::unordered_map<uint8_t, bool> phaseStatus;
+	// One timer object
+	Timer* timer;
 
 	/* Attack */
 	std::unordered_map<unsigned, AttackPayload> latestAttacks;

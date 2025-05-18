@@ -30,6 +30,8 @@ ServerGame::ServerGame(void) {
 		.gamePhase = GamePhase::START_MENU
 	};
 
+	timer = new Timer();
+
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
 	//// colors2d[i][0..3] = R, G, B, A (0–255)
@@ -60,6 +62,8 @@ void ServerGame::update() {
 	}
 
 	receiveFromClients();
+
+	state_mu.lock();
 	switch (appState->gamePhase) {
 		case GamePhase::GAME_PHASE:
 		{
@@ -69,6 +73,7 @@ void ServerGame::update() {
 			applyAttacks();
 			applyDodge();
 			sendGameStateUpdates();
+			handleGamePhase();
 			break;
 		}
 		case GamePhase::START_MENU:
@@ -86,6 +91,7 @@ void ServerGame::update() {
 			break;
 		}
 	}
+	state_mu.unlock();
 }
 
 void ServerGame::receiveFromClients() 
@@ -115,7 +121,9 @@ void ServerGame::receiveFromClients()
 
 				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
 
+				state_mu.lock();
 				phaseStatus[id] = false;
+				state_mu.unlock();
 				break;
 			}
 			case PacketType::DEBUG:
@@ -177,7 +185,9 @@ void ServerGame::receiveFromClients()
 			{
 				PlayerReadyPayload* status = (PlayerReadyPayload*)&(network_data[i + HDR_SIZE]);
 				printf("[CLIENT %d] PLAYER_READY_PACKET: READY=%d\n", id, status->ready);
+				state_mu.lock();
 				phaseStatus[id] = status->ready;
+				state_mu.unlock();
 				break;
 			}
 			default:
@@ -195,11 +205,17 @@ void ServerGame::receiveFromClients()
 // int seconds: length of round
 void ServerGame::startARound(int seconds) {
 	round_id++;
-	Timer* timer = new Timer();
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
-		appState->gamePhase = GamePhase::SHOP_PHASE;
-		sendAppPhaseUpdates(); // or any other packet sending logic
+		state_mu.lock();
+		// set all status to true here, handle in the main game loop
+		for (auto& [id, status] : phaseStatus) {
+			status = true;
+		}
+		// Don't send packets in timer!
+		// Socket wrapper isn't thread safe...
+		// sendAppPhaseUpdates();
+		state_mu.unlock();
 		});
 }
 
@@ -216,6 +232,27 @@ void ServerGame::handleStartMenu() {
 		sendAppPhaseUpdates();
 		startARound(ROUND_DURATION);
 		// reset status
+		for (auto& [id, status] : phaseStatus) {
+			status = false;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// GAME PHASE PHASE LOGIC
+// -----------------------------------------------------------------------------
+
+void ServerGame::handleGamePhase() {
+	bool ready = true;
+	for (auto& [id, status] : phaseStatus) {
+		if (!status) {
+			ready = false;
+		}
+	}
+
+	if (ready && !phaseStatus.empty()) {
+		appState->gamePhase = GamePhase::SHOP_PHASE;
+		sendAppPhaseUpdates();
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
 		}
