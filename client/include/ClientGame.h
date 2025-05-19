@@ -39,7 +39,7 @@ public:
 	void sendCameraPacket(float, float);
 	void sendAttackPacket(float origin[3], float yaw, float pitch);
 	void sendDodgePacket();
-	void sendStartMenuStatusPacket();
+	void sendReadyStatusPacket(uint8_t selection);
 	void update();
 
 	GameState* gameState;

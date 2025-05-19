@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "ServerNetwork.h"
 #include "NetworkData.h"
+#include "Timer.h"
 #include <chrono>
 #include <thread>
 #include <cstdint>
@@ -66,11 +67,6 @@ private:
 	std::uniform_int_distribution<std::mt19937::result_type> randomRunnerPowerupGen;
 
 
-
-
-
-
-
 	/* State */
 	AppState* appState;
 	GameState* state;
@@ -118,6 +114,9 @@ private:
 	std::array<int8_t, 4> invulTicks{ 0,0,0,0 };    // frames of invulnerability left
 	std::array<int8_t, 4> dashTicks{ 0,0,0,0 };    // frames of dash‑speed left
 
+
+	// Shop
+	std::unordered_map<uint8_t, vector<uint8_t>> playerPowerups;
 
 };
 

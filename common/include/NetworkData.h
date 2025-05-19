@@ -4,7 +4,7 @@
 #include <unordered_map>
 
 #define MAX_PACKET_SIZE 1000
-#define NUM_POWERUP_OPTIONS 3
+#define NUM_POWERUP_OPTIONS 3 // Number of options that display in the shop each round
 #define ROUND_DURATION 25
 
 enum class PacketType : uint32_t {
@@ -25,10 +25,11 @@ enum class PacketType : uint32_t {
 	SHOP_UPDATE			// client sends what was purchased
 };
 
-enum class Powerup : unsigned int {
+enum class Powerup : uint8_t {
+	DEFAULT = 0,
 	// HUNTER POWERUPS
-	HUNTER_POWERUPS = 0,
-	H_INCREASE_SPEED = 0,
+	HUNTER_POWERUPS = 1,
+	H_INCREASE_SPEED = 1,
 	H_INCREASE_JUMP,
 	H_INCREASE_VISION,
 	// ...
@@ -147,6 +148,7 @@ struct HitPayload {
 
 struct PlayerReadyPayload {
 	bool ready;
+	uint8_t selection; // powerup selection for shop phase, ignore/0 otherwise
 };
 
 struct AppPhasePayload {

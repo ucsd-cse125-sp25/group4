@@ -3,7 +3,6 @@
 #include <iostream>
 #include "ServerGame.h"
 #include "Parson.h"
-#include "Timer.h"
 
 
 using namespace std;
@@ -188,6 +187,13 @@ void ServerGame::receiveFromClients()
 				state_mu.lock();
 				phaseStatus[id] = status->ready;
 				state_mu.unlock();
+
+				// Save powerup selections
+				if (appState->gamePhase == GamePhase::SHOP_PHASE)
+				{
+					playerPowerups[id].push_back(status->selection);
+				}
+
 				break;
 			}
 			default:
@@ -271,8 +277,6 @@ void ServerGame::handleShopPhase() {
 		}
 	}
 
-	//todo: we probably want a timer OR all ready to start the next round
-
 	if (ready && !phaseStatus.empty()) {
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
@@ -285,15 +289,21 @@ void ServerGame::handleShopPhase() {
 }
 
 void ServerGame::startShopPhase() {
-	// send each client their powerups -- TODO: MOVE to client side
+	// send each client their powerups
 	for (int id = 0; id < num_players; id++) {
 		ShopOptionsPayload* options = new ShopOptionsPayload();
-		// if hunter
-		for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-			options->options[p] = randomHunterPowerupGen(rng);
+		if (state->players[id].isHunter)
+		{
+			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
+				options->options[p] = randomHunterPowerupGen(rng);
+			}
 		}
-		// else runner
-
+		else
+		{
+			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
+				options->options[p] = randomRunnerPowerupGen(rng);
+			}
+		}
 		sendShopOptions(options, id);
 	}
 	// todo start timer
