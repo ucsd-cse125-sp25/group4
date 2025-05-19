@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "ServerNetwork.h"
 #include "NetworkData.h"
+#include "Timer.h"
 #include <chrono>
 #include <thread>
 #include <cstdint>

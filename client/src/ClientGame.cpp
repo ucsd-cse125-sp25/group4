@@ -1,11 +1,12 @@
 ﻿#include "ClientGame.h"
 #include <algorithm>
-
+#include <string>
+using namespace std;
 const wchar_t CLASS_NAME[] = L"Window Class";
 const wchar_t GAME_NAME[] = L"$GAME_NAME";
 
-ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow) {
-	network = new ClientNetwork();
+ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
+	network = new ClientNetwork(IPAddress);
 
 	InitPayload init{};  // empty payload for now
 	char packet_data[HDR_SIZE + sizeof(InitPayload)];

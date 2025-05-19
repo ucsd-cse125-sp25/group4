@@ -5,6 +5,8 @@
 #include "ClientNetwork.h"
 #include "NetworkData.h"
 #include "Renderer.h"
+#include <string>
+using namespace std;
 
 
 // this links to the directx12 dynamic library
@@ -16,7 +18,7 @@
 
 class ClientGame {
 public:
-	ClientGame(HINSTANCE hInstance,  int nCmdShow);
+	ClientGame(HINSTANCE hInstance,  int nCmdShow, string IPAddress);
 	~ClientGame(void);
 
 	bool isWindowFocused() const;
