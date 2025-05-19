@@ -115,9 +115,13 @@ void ClientGame::sendCameraPacket(float yaw, float pitch) {
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
 
-void ClientGame::sendStartMenuStatusPacket() {
+void ClientGame::sendReadyStatusPacket(uint8_t selection = 0) {
 	PlayerReadyPayload status{};
 	status.ready = true;
+	if (appState->gamePhase == GamePhase::SHOP_PHASE)
+	{
+		status.selection = selection;
+	}
 
 	char buf[HDR_SIZE + sizeof(status)];
 	NetworkServices::buildPacket(PacketType::PLAYER_READY, status, buf);
@@ -219,6 +223,20 @@ void ClientGame::update() {
 
 			ready = false;
 			
+			break;
+		}
+		case PacketType::SHOP_INIT:
+		{
+			ShopOptionsPayload* optionsPayload = (ShopOptionsPayload*)(network_data + HDR_SIZE);
+
+			for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
+			{
+				Powerup powerup = (Powerup)optionsPayload->options[i];
+				shopOptions[i].item = powerup;
+				shopOptions[i].isSelected = false;
+				shopOptions[i].isBuyable = (PowerupCosts[powerup] <= gameState->players[id].coins);
+			}
+
 			break;
 		}
 		default:
@@ -338,12 +356,21 @@ void ClientGame::processShopInputs() {
 	if (GetAsyncKeyState('M') & 0x8000) {
 		ready = true;
 		gameState->players[id].coins = tempCoins;
-		// TODO: save selected powerups
+		uint8_t selection = 0;
+
+		// only one powerup can be selected
+		for (auto& item : shopOptions) {
+			if (item.isSelected) {
+				selection = (uint8_t)item.item;
+			}
+		}
+		// TODO: display powerup in GUI?
 		// things to consider:
 		// powerups can be passive (trap, buff) or active (item, temporary)
 		// can't have multiple of the same powerup
+		// 1 purchase per shop
 		// how should it be displayed/ordered?
-		sendStartMenuStatusPacket();
+		sendReadyStatusPacket(selection);
 	}
 	else if (GetAsyncKeyState('1') & 0x8000) {
 		handleShopItemSelection(0);
@@ -369,14 +396,12 @@ void ClientGame::handleShopItemSelection(int choice) {
 		// Only select the item if client has enough coins
 		if (item.isBuyable)
 		{
-			item.isSelected = true;
+			for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
+			{
+				shopOptions[i].isSelected = (i == choice);
+			}
 			tempCoins -= cost;
 		}
-	}
-
-	// Update if each item is buyable
-	for (auto& item : shopOptions) {
-		item.isBuyable = (PowerupCosts[item.item] <= tempCoins);
 	}
 }
 
@@ -394,7 +419,7 @@ void ClientGame::handleInput()
 
 		if (GetAsyncKeyState('M') & 0x8000) {
 			ready = true;
-			sendStartMenuStatusPacket();
+			sendReadyStatusPacket();
 		}
 
 		break;
