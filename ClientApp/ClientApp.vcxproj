@@ -22,6 +22,7 @@
     <ClInclude Include="..\client\include\ClientGame.h" />
     <ClInclude Include="..\client\include\ClientNetwork.h" />
     <ClInclude Include="..\client\include\d3dx12.h" />
+    <ClInclude Include="..\client\include\ddspp.h" />
     <ClInclude Include="..\client\include\Renderer.h" />
   </ItemGroup>
   <ItemGroup>
