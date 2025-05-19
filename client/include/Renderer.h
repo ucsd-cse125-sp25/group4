@@ -7,6 +7,7 @@
 #include "d3dx12.h"
 #include "ReadData.h"
 #include "shaderShared.hlsli"
+#include "ddspp.h"
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -145,7 +146,48 @@ struct Triangles {
 };
 
 
+struct Texture {
+	Slice<unsigned char> data; // owning slice of raw DDS File data
+	ComPtr<ID3D12Resource> resource;
+	Descriptor descriptor;
+	
+	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *filename) {
+		data.len = DX::ReadDataToPtr(filename, &data.ptr);
+		if (data.len <= 0) {
+			printf("ERROR: failed to read scene file\n");
+			return false;
+		}
 
+		ddspp::Descriptor desc;
+		ddspp::Result decodeResult = ddspp::decode_header(data.ptr, desc);
+		UNWRAP(decodeResult == ddspp::Success);
+
+		BYTE* initialData = data.ptr + desc.headerSize;
+
+		UNWRAP(desc.type == ddspp::Texture2D); // we only support 2D textures
+		D3D12_RESOURCE_DESC textureDesc = {
+			.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+			.Alignment        = 0,
+			.Width            = desc.width,
+			.Height           = desc.height,
+			.DepthOrArraySize = desc.arraySize,
+			.MipLevels        = desc.numMips,
+			.Format           = (DXGI_FORMAT)desc.format,
+			.SampleDesc       = {.Count = 1, .Quality = 0},
+			.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+			.Flags            = D3D12_RESOURCE_FLAG_NONE,
+		};
+			
+		D3D12_HEAP_PROPERTIES defaultHeapProperties = { .Type = D3D12_HEAP_TYPE_DEFAULT };
+		device->CreateCommittedResource(&defaultHeapProperties,
+										D3D12_HEAP_FLAG_NONE,
+										&textureDesc,
+										D3D12_RESOURCE_STATE_COPY_DEST,
+										nullptr,
+										IID_PPV_ARGS(&resource));
+
+	}
+};
 
 
 constexpr uint32_t SCENE_VERSION = 000'000'000;
@@ -187,7 +229,7 @@ struct Scene {
 		SceneHeader* header = reinterpret_cast<SceneHeader*>(data.ptr);
 		// sanity checks
 		if (header->version != SCENE_VERSION) {
-			printf("ERROR: version of scene file is %d while version of parser is %d \n", header->version, SCENE_VERSION);
+			printf("eRROR: version of scene file is %d while version of parser is %d \n", header->version, SCENE_VERSION);
 			return false;
 		}
 		if (header->numTriangles == 0) {
