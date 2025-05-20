@@ -3,6 +3,7 @@ import mathutils
 from struct import pack
 import numpy as np
 from dataclasses import dataclass
+import os
 
 VERTS_PER_TRI = 3
 NORMAL_FLOATS_PER_VERT = 3
@@ -28,16 +29,31 @@ class Mesh:
 class Material:
     # float3 is compacted to 1 bit tag and then R10G11B10 (stored in int type)
     # floats are negated before compacting so there is a 1-bit tag
+    
     base_color : int
     metallic   : int | float
     roughness  : int | float
     normal     : int
 
-    def __init__():
-        base_color = 1 << 31 | round(0.8*2**10) << 21 | round(0.8*2 ** 11) << 10 | round(0.8 * 2**10)
-        metallic = -0.0
-        roughness = -0.5
-        normal = 1 << 31
+    # default material; same as default for Blender Principled
+    def default():
+        return Material(
+        # 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00
+        # TT RR RR RR RR RR RR RR RR RR RR GG GG GG GG GG GG GG GG GG GG GG BB BB BB BB BB BB BB BB BB BB
+        base_color = 1 << 31 | round(0.8*(2**10)) << 21 | round(0.8*(2**11)) << 10 | round(0.8 * (2**10)),
+        metallic   = -0.0,
+        roughness  = -0.5,
+        normal     = 1 << 31)
+
+    def serialize(self) -> bytes:
+        print(type(self.base_color), self.base_color)
+        print(type(self.metallic), self.metallic)
+        print(type(self.roughness), self.roughness)
+        print(type(self.normal), self.normal)
+        metallic_format = "I" if isinstance(self.metallic, int) else "f"
+        roughness_format = "I" if isinstance(self.roughness, int) else "f"
+
+        return pack(f"I{metallic_format}{roughness_format}I", self.base_color, self.metallic, self.roughness, self.normal)
 
 @dataclass
 class MaterialData:
@@ -51,7 +67,7 @@ num_textures = 0
 
 consolidated_mesh : Mesh = None
 
-materials     : list[Material] = [Material()]
+materials     : list[Material] = [Material.default()]
 texture_paths : list[str] = []
 
 def clamp(x : float, a : float, b : float) -> float:
@@ -68,7 +84,8 @@ def get_node_input(input : bpy.types.NodeSocket)-> int | float | bpy.types.bpy_p
         return from_node.image
     else:
         return input.default_value
-
+    
+# process materials
 for material in bpy.data.materials:
     no_users       : bool = material.users == 0
     only_fake_user : bool = material.users == 1 and material.use_fake_user
@@ -88,16 +105,18 @@ for material in bpy.data.materials:
     }
 
     output = {
-        "base_color" :  0,
-        "metallic"   :  0,
-        "roughness"  :  0,
-        "normal"     :  0,
-        
+        "base_color" :  None,
+        "metallic"   :  None,
+        "roughness"  :  None,
+        "normal"     :  None,
     }
+    
     for input_type, input in d.items():
+        # save images
         if isinstance(input, bpy.types.Image):
-            filepath = f"./textures/{material_name_file}_{input_type}.png"        
-            input.save(filepath=filepath, quality=100, save_copy=True)
+            filepath = f"./textures/{material_name_file}_{input_type}.png"
+            if not os.path.exists(filepath):
+                input.save(filepath=filepath, quality=100, save_copy=True)
             
             texture_paths.append(filepath)
             output[input_type] = num_textures
@@ -106,7 +125,8 @@ for material in bpy.data.materials:
             output[input_type] = -input
         else:
             assert(isinstance(input, bpy.types.bpy_prop_array))
-            if input_type == normal:
+            # simply use a tag to indicate default normal
+            if input_type == "normal":
                 output[input_type] = 1 << 31
                 continue
             
@@ -115,12 +135,13 @@ for material in bpy.data.materials:
             b = clamp(input[2], 0, 1)
 
             # pack into R10G11B10
-            tag_packed = 1 << 31
-            r_packed = round(r * 2**10) << (11 + 10)
-            g_packed = round(g * 2**11) << 10
-            b_packed = round(b * 2**10)
-            packed   = tag_packed | r_packed | g_packed | b_packed
+            tag_packed         = 1 << 31
+            r_packed           = round(r * 2**10) << (11 + 10)
+            g_packed           = round(g * 2**11) << 10
+            b_packed           = round(b * 2**10)
+            packed             = tag_packed | r_packed | g_packed | b_packed
             output[input_type] = packed
+            
     materials.append(Material(**output))
             
 
@@ -205,24 +226,41 @@ for obj in bpy.data.objects:
     
 
 def pack_bytes(layout : str, array : np.array) -> bytes:
-    return pack(layout * array.size, *array.flatten())
+    return pack(f"{array.size}{layout}", *array.flatten())
 
 
 with open('scene.jj', 'wb') as f:
     # write header 
     # version
-    f.write(pack("I", 0))
+    f.write(pack("I", 1))
     # number of triangles
     f.write(pack("I", consolidated_mesh.num_tris))
-    # index of first triangle
-    f.write(pack("I", 0)) # this is redundant
+    # number of materials
+    f.write(pack("I", len(materials)))
+    # number of textures
+    f.write(pack("I", len(texture_paths)))
 
     # write vertex positions
-    # f.write(pack("f" * verts.size, *verts.flatten()))
     f.write(pack_bytes("f", consolidated_mesh.vert_positions))
 
     # write shading data
     f.write(pack_bytes("f", consolidated_mesh.vert_shade))
+
+    # write material ids
+    f.write(pack_bytes("B", consolidated_mesh.material_ids))
+
+    # write materials
+    for material in materials:
+        f.write(material.serialize())
+    # write texture names
+    for path in texture_paths:
+        # windows uses the wchar_t type which is utf_16_le
+        path_bytes = path.encode("utf_16_le")
+        # we use 256 byte strings and need room for 1 null-terminator
+        assert(len(path_bytes) < 256)
+        # missing bytes are padded with null terminators
+        f.write(pack("256s", path_bytes))
+        
 print("File written successfully")
 # use this to write "scene.jj" into your working directory
 #  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv4.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"

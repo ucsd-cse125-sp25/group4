@@ -80,12 +80,12 @@ struct Descriptor {
 // based off of https://github.com/TheSandvichMaker/HelloBindlessD3D12/blob/main/hello_bindless.cpp#L389
 struct DescriptorAllocator {
 	ComPtr<ID3D12DescriptorHeap> heap;
-	D3D12_DESCRIPTOR_HEAP_TYPE type;
-	D3D12_CPU_DESCRIPTOR_HANDLE cpu_base;
-	D3D12_GPU_DESCRIPTOR_HANDLE gpu_base;
-	uint32_t stride;
-	uint32_t at;
-	uint32_t capacity;
+	D3D12_DESCRIPTOR_HEAP_TYPE   type;
+	D3D12_CPU_DESCRIPTOR_HANDLE  cpu_base;
+	D3D12_GPU_DESCRIPTOR_HANDLE  gpu_base;
+	uint32_t                     stride;
+	uint32_t                     at;
+	uint32_t                     capacity;
 
 	bool Init(ID3D12Device *device, D3D12_DESCRIPTOR_HEAP_TYPE inputType, uint32_t inputCapacity, const wchar_t *name) {
 		at = 0;
@@ -139,7 +139,8 @@ struct Vertex {
 struct SceneHeader {
 	int32_t version;
 	int32_t numTriangles;
-	int32_t firstTriangle;
+	int32_t numMaterials;
+	int32_t numTextures;
 };
 
 
@@ -225,10 +226,10 @@ struct Texture {
 
 			const UINT subResourceHeight = numRows[mipIndex]; 
 			
-			BYTE* destinationSubResourceMemory = (BYTE*)mapped + subResourceLayout.Offset;                                       // in CPU-GPU mapped memory
-			const UINT subResourceRowPitch = alignU32(subResourceLayout.Footprint.RowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT); // row pitch in the GPU resource
+			BYTE* destinationSubResourceMemory = (BYTE*)mapped + subResourceLayout.Offset;                                           // in CPU-GPU mapped memory
+			const UINT subResourceRowPitch     = alignU32(subResourceLayout.Footprint.RowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT); // row pitch in the GPU resource
 
-			const UINT cpuDataRowPitch = ddspp::get_row_pitch(desc, mipIndex); // row pitch in the CPU buffer
+			const UINT cpuDataRowPitch    = ddspp::get_row_pitch(desc, mipIndex);              // row pitch in the CPU buffer
 			BYTE* sourceSubResourceMemory = initialData[ddspp::get_offset(desc, mipIndex, 0)]; // in CPU-only memory
 			
 			// copy rows individually as there may be end-of-row padding in the GPU buffer
@@ -249,17 +250,17 @@ struct Texture {
 										nullptr,
 										IID_PPV_ARGS(&resource));
 		
-		// copy from upload heap to 
+		// copy from upload heap to default heap
 		for (UINT subResourceIndex = 0; subResourceIndex < desc.numMips; subResourceIndex++) {
 			D3D12_TEXTURE_COPY_LOCATION destination = {
-				.pResource = resource.Get(),
-				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+				.pResource       = resource.Get(),
+				.Type            = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
 				.PlacedFootprint = layouts[subResourceIndex],
 			};
 
 			D3D12_TEXTURE_COPY_LOCATION source = {
-				.pResource = uploadHeap.Get(),
-				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+				.pResource       = uploadHeap.Get(),
+				.Type            = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
 				.PlacedFootprint = layouts[subResourceIndex]
 			};
 			commandList->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
@@ -268,7 +269,7 @@ struct Texture {
 };
 
 
-constexpr uint32_t SCENE_VERSION = 000'000'000;
+constexpr uint32_t SCENE_VERSION = 000'000'001;
 enum SceneBufferType {
 	SCENE_BUFFER_TYPE_VERTEX_POSITION,
 	SCENE_BUFFER_TYPE_VERTEX_SHADING,
@@ -342,7 +343,7 @@ struct Scene {
 		// create buffers from slices
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
 		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
-		// materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
+		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
 
 		return true;
 	}
