@@ -21,6 +21,8 @@ constexpr uint32_t VERTS_PER_TRI = 3;
 constexpr size_t BYTES_PER_DWORD = 4;
 constexpr size_t DRAW_CONSTANT_NUM_DWORDS = sizeof(PerDrawConstants)/BYTES_PER_DWORD;
 
+typedef char(*)[256] TexturePath_t;
+
 inline uint32_t alignU32(uint32_t num, uint32_t alignment) {
 	return ((num + alignment - 1) / alignment) * alignment;
 }
@@ -339,6 +341,14 @@ struct Scene {
 			.ptr = reinterpret_cast<uint8_t*>(vertexShadingSlice.after()),
 			.len = numTriangles
 		};
+		Slice<Material> materialSlice {
+			.ptr = reinterpret_cast<Material*>(materialIDSlice.after()),
+			.len = header.numMaterials,
+		};
+		Slice<TexturePath_t> texturePathSlice {
+			.ptr = reinterpret_cast<TexturePath_t*>(materialSlice.after()),
+			.len = header.numTextures,
+		}
 
 		// create buffers from slices
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
