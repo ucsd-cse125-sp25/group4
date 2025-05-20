@@ -26,44 +26,103 @@ class Mesh:
 
 @dataclass
 class Material:
+    # float3 is compacted to 1 bit tag and then R10G11B10 (stored in int type)
+    # floats are negated before compacting so there is a 1-bit tag
     base_color : int
-    metallic   : int
-    roughness  : int
+    metallic   : int | float
+    roughness  : int | float
     normal     : int
 
+    def __init__():
+        base_color = 1 << 31 | round(0.8*2**10) << 21 | round(0.8*2 ** 11) << 10 | round(0.8 * 2**10)
+        metallic = -0.0
+        roughness = -0.5
+        normal = 1 << 31
+
+@dataclass
+class MaterialData:
+    base_color : bpy.types.Image | bpy.types.bpy_prop_array
+    metallic   : bpy.types.Image | float
+    roughness  : bpy.types.Image | float
+    normal     : bpy.types.Image | bpy.types.bpy_prop_array
 
 material_names_to_indices : dict[str, int] = {"default_material" : 0} | {mat.name : i+1 for i, mat in enumerate(bpy.data.materials)}
+num_textures = 0
 
 consolidated_mesh : Mesh = None
 
-# meshes        : list[Mesh] = []
-materials     : list[Material] = []
-texture_names : list[str] = []
+materials     : list[Material] = [Material()]
+texture_paths : list[str] = []
 
-def get_node_input(input : bpy.types.Nodesocket):
+def clamp(x : float, a : float, b : float) -> float:
+    return max(a, min(x, b))
+
+def get_node_input(input : bpy.types.NodeSocket)-> int | float | bpy.types.bpy_prop_array:
     if not input.is_linked:
         return input.default_value
 
     from_node = input.links[0].from_node
-    if from_node.bl_label == "ShaderNodeNormalMap":
+    if from_node.bl_idname == "ShaderNodeNormalMap":
         return from_node.inputs["Color"].links[0].from_node.image
-    else:
+    elif from_node.bl_idname == "ShaderNodeTexImage":
         return from_node.image
+    else:
+        return input.default_value
 
 for material in bpy.data.materials:
+    no_users       : bool = material.users == 0
+    only_fake_user : bool = material.users == 1 and material.use_fake_user
+    if no_users or only_fake_user:
+        continue
+    
     output = material.node_tree.get_output_node("ALL")
     principled = output.inputs["Surface"].links[0].from_node
 
-    principled_inputs = {
-        "base_color" : get_node_input(principled.inputs["Base Color"]),
-        "metallic"   : get_node_input(principled.inputs["Metallic"]),
-        "roughness"  : get_node_input(principled.inputs["Roughness"]),
-        "normal"     : get_node_input(principled.inputs["Normal"]),
+    material_name_file = material.name.replace(".", "_")
+
+    d = {
+        "base_color" :  get_node_input(principled.inputs["Base Color"]),
+        "metallic"   :  get_node_input(principled.inputs["Metallic"]),
+        "roughness"  :  get_node_input(principled.inputs["Roughness"]),
+        "normal"     :  get_node_input(principled.inputs["Normal"]),
     }
-    
-    for principled_input in principled_inputs.values():
-        if isinstance(principled_input, bpy.types.Image):
-            # save the image
+
+    output = {
+        "base_color" :  0,
+        "metallic"   :  0,
+        "roughness"  :  0,
+        "normal"     :  0,
+        
+    }
+    for input_type, input in d.items():
+        if isinstance(input, bpy.types.Image):
+            filepath = f"./textures/{material_name_file}_{input_type}.png"        
+            input.save(filepath=filepath, quality=100, save_copy=True)
+            
+            texture_paths.append(filepath)
+            output[input_type] = num_textures
+            num_textures += 1
+        elif isinstance(input, float):
+            output[input_type] = -input
+        else:
+            assert(isinstance(input, bpy.types.bpy_prop_array))
+            if input_type == normal:
+                output[input_type] = 1 << 31
+                continue
+            
+            r = clamp(input[0], 0, 1)
+            g = clamp(input[1], 0, 1)
+            b = clamp(input[2], 0, 1)
+
+            # pack into R10G11B10
+            tag_packed = 1 << 31
+            r_packed = round(r * 2**10) << (11 + 10)
+            g_packed = round(g * 2**11) << 10
+            b_packed = round(b * 2**10)
+            packed   = tag_packed | r_packed | g_packed | b_packed
+            output[input_type] = packed
+    materials.append(Material(**output))
+            
 
 for obj in bpy.data.objects:
     if obj.type != "MESH" or obj.name[:3] == "bb#":
