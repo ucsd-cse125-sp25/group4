@@ -234,6 +234,7 @@ void ServerGame::handleStartMenu() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
+		num_players = phaseStatus.size();
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
 		startARound(ROUND_DURATION);
@@ -259,6 +260,7 @@ void ServerGame::handleGamePhase() {
 	if (ready && !phaseStatus.empty()) {
 		appState->gamePhase = GamePhase::SHOP_PHASE;
 		sendAppPhaseUpdates();
+		startShopPhase();
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
 		}
@@ -306,7 +308,6 @@ void ServerGame::startShopPhase() {
 		}
 		sendShopOptions(options, id);
 	}
-	// todo start timer
 }
 
 // -----------------------------------------------------------------------------
