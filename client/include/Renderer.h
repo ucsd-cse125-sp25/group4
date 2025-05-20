@@ -21,6 +21,10 @@ constexpr uint32_t VERTS_PER_TRI = 3;
 constexpr size_t BYTES_PER_DWORD = 4;
 constexpr size_t DRAW_CONSTANT_NUM_DWORDS = sizeof(PerDrawConstants)/BYTES_PER_DWORD;
 
+inline uint32_t alignU32(uint32_t num, uint32_t alignment) {
+	return ((num + alignment - 1) / alignment) * alignment;
+}
+
 struct LookDir {
 	// (-pi/2, pi/2)
 	// increasing pitch means looking further up
@@ -152,13 +156,14 @@ struct Texture {
 	ComPtr<ID3D12Resource> resource;
 	Descriptor descriptor;
 	
-	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *filename) {
+	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12CommandList* commandList, const wchar_t *filename) {
 		data.len = DX::ReadDataToPtr(filename, &data.ptr);
 		if (data.len <= 0) {
 			printf("ERROR: failed to read scene file\n");
 			return false;
 		}
-
+		
+		// use ddspp to decode the header and write it to a cleaner descriptor
 		ddspp::Descriptor desc;
 		ddspp::Result decodeResult = ddspp::decode_header(data.ptr, desc);
 		UNWRAP(decodeResult == ddspp::Success);
@@ -166,6 +171,8 @@ struct Texture {
 		BYTE* initialData = data.ptr + desc.headerSize;
 
 		UNWRAP(desc.type == ddspp::Texture2D); // we only support 2D textures
+		UNWRAP(desc.arraySize == 1); // we do not support arrays of textures 
+		// describes texture in the default heap
 		D3D12_RESOURCE_DESC textureDesc = {
 			.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 			.Alignment        = 0,
@@ -178,7 +185,62 @@ struct Texture {
 			.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
 			.Flags            = D3D12_RESOURCE_FLAG_NONE,
 		};
+	
+		// default heap where the texture will end up and the SRV pointing to it
+		// we don't need an SRV desc https://alextardif.com/D3D11To12P3.html
+		descriptor = descriptorAllocator->Allocate();
+		device->CreateShaderResourceView(resource.Get(), nullptr, descriptor.cpu);
+		
+		constexpr UINT MAX_TEXTURE_SUBRESOURCE_COUNT = 12; // enough for 4k textures; may need more for a lightmap
+		UINT64 textureMemorySize = 0;
+		UINT numRows[MAX_TEXTURE_SUBRESOURCE_COUNT];
+		UINT64 rowSizesInBytes[MAX_TEXTURE_SUBRESOURCE_COUNT];
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layouts[MAX_TEXTURE_SUBRESOURCE_COUNT];
+		const UINT64 numSubResources = desc.numMips * desc.arraySize;
+
+		device->GetCopyableFootprints(&textureDesc, 0, (uint32_t)numSubResources, 0, layouts, numRows, rowSizesInBytes, &textureMemorySize);
+
+		// create upload heap
+		ComPtr<ID3D12Resource> uploadHeap;
+		D3D12_HEAP_PROPERTIES uploadHeapProperties = { .Type = D3D12_HEAP_TYPE_UPLOAD };
+		CD3DX12_RESOURCE_DESC uploadResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(textureMemorySize);
+		UNWRAP(device->CreateCommittedResource(
+			&uploadHeapProperties,
+			D3D12_HEAP_FLAG_NONE,
+			&uploadResourceDesc,
+			D3D12_RESOURCE_STATE_COMMON, // maybe do copy source?
+			nullptr, 
+			IID_PPV_ARGS(&uploadHeap)
+		));
+		
+		// map memory
+		void* mapped;
+		D3D12_RANGE readRange = {};
+		UNWRAP(uploadHeap->Map(0, &readRange, &mapped));
+		
+		// copy to upload heap
+		// each mip level gets its own subresource
+		for (UINT mipIndex = 0; mipIndex < desc.numMips; mipIndex++) {
+			const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& subResourceLayout = layouts[mipIndex];
+
+			const UINT subResourceHeight = numRows[mipIndex]; 
 			
+			BYTE* destinationSubResourceMemory = (BYTE*)mapped + subResourceLayout.Offset;                                       // in CPU-GPU mapped memory
+			const UINT subResourceRowPitch = alignU32(subResourceLayout.Footprint.RowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT); // row pitch in the GPU resource
+
+			const UINT cpuDataRowPitch = ddspp::get_row_pitch(desc, mipIndex); // row pitch in the CPU buffer
+			BYTE* sourceSubResourceMemory = initialData[ddspp::get_offset(desc, mipIndex, 0)]; // in CPU-only memory
+			
+			// copy rows individually as there may be end-of-row padding in the GPU buffer
+			for (UINT height = 0; height < subResourceHeight; height++)
+			{
+				memcpy(destinationSubResourceMemory, sourceSubResourceMemory, min(subResourceRowPitch, cpuDataRowPitch));
+				destinationSubResourceMemory += subResourceRowPitch;
+				sourceSubResourceMemory += cpuDataRowPitch; 
+			}
+		}
+
+		// create default heap
 		D3D12_HEAP_PROPERTIES defaultHeapProperties = { .Type = D3D12_HEAP_TYPE_DEFAULT };
 		device->CreateCommittedResource(&defaultHeapProperties,
 										D3D12_HEAP_FLAG_NONE,
@@ -186,7 +248,22 @@ struct Texture {
 										D3D12_RESOURCE_STATE_COPY_DEST,
 										nullptr,
 										IID_PPV_ARGS(&resource));
+		
+		// copy from upload heap to 
+		for (UINT subResourceIndex = 0; subResourceIndex < desc.numMips; subResourceIndex++) {
+			D3D12_TEXTURE_COPY_LOCATION destination = {
+				.pResource = resource.Get(),
+				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+				.PlacedFootprint = layouts[subResourceIndex],
+			};
 
+			D3D12_TEXTURE_COPY_LOCATION source = {
+				.pResource = uploadHeap.Get(),
+				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+				.PlacedFootprint = layouts[subResourceIndex]
+			};
+			commandList->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
+		}
 	}
 };
 
