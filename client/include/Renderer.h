@@ -278,6 +278,7 @@ enum SceneBufferType {
 struct Scene {
 	// the whole scene file
 	Slice<BYTE> data;
+	
 	// buffers reference the data slice
 	union {
 		struct {
