@@ -1,6 +1,7 @@
 #include "ClientNetwork.h"
+#include <string>
 
-ClientNetwork::ClientNetwork(void) {
+ClientNetwork::ClientNetwork(std::string IPAddress) {
 	WSADATA wsaData;
 
 	ConnectSocket = INVALID_SOCKET;
@@ -21,7 +22,8 @@ ClientNetwork::ClientNetwork(void) {
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
 
-	iResult = getaddrinfo("127.0.0.1", DEFAULT_PORT, &hints, &result);
+	//"127.0.0.1"
+	iResult = getaddrinfo(IPAddress.c_str(), DEFAULT_PORT, &hints, &result);
 
 	if (iResult != 0) {
 		printf("getaddrinfo failed with error: %d\n", iResult);

@@ -23,12 +23,14 @@
     <ClInclude Include="..\client\include\ClientNetwork.h" />
     <ClInclude Include="..\client\include\d3dx12.h" />
     <ClInclude Include="..\client\include\Renderer.h" />
+    <ClInclude Include="InputDialog.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\client\src\ClientGame.cpp" />
     <ClCompile Include="..\client\src\ClientMain.cpp" />
     <ClCompile Include="..\client\src\ClientNetwork.cpp" />
     <ClCompile Include="..\client\src\Renderer.cpp" />
+    <ClCompile Include="InputDialog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NetworkingCore\NetworkingCore.vcxproj">

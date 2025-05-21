@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "NetworkServices.h"
 #include "NetworkData.h"
+#include <string>
 
 #define DEFAULT_BUFLEN 512
 #define DEFAULT_PORT "2333"
@@ -20,6 +21,7 @@ public:
 	SOCKET ConnectSocket;
 
 	ClientNetwork(void);
+	ClientNetwork(std::string IPAddress);
 	~ClientNetwork(void);
 
 	int receivePackets(char*);
