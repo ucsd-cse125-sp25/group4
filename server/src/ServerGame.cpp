@@ -194,6 +194,7 @@ void ServerGame::receiveFromClients()
 					if (status->selection != 0) 
 					{
 						playerPowerups[id].push_back(status->selection);
+						state->players[id].coins -= PowerupCosts[(Powerup)status->selection];
 					}
 				}
 				
