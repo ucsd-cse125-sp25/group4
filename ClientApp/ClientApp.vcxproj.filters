@@ -58,6 +58,12 @@
     <FxCompile Include="dbg_cube_vs.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="ui_vs.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="ui_ps.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\client\include\shaderShared.hlsli">

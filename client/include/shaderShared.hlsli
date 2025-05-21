@@ -63,4 +63,4 @@ struct Material {
 	int metallic;   // negated float
 	int roughness;  // negated float
 	int normal;     // tagged as default
-}
+};

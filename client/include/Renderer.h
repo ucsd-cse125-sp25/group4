@@ -345,10 +345,10 @@ struct Scene {
 			.ptr = reinterpret_cast<Material*>(materialIDSlice.after()),
 			.len = header.numMaterials,
 		};
-		Slice<TexturePath_t> texturePathSlice {
+		Slice<TexturePath_t> texturePathSlice{
 			.ptr = reinterpret_cast<TexturePath_t*>(materialSlice.after()),
 			.len = header.numTextures,
-		}
+		};
 
 		// create buffers from slices
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
@@ -437,6 +437,34 @@ struct DebugCubes {
 	}
 };
 
+// Timer UI
+struct UI {
+	Buffer<Vertex> vertexBuffer;
+
+	// Initialize the UI quad (a red box) into the bindless SRV heap
+	bool Init(ID3D12Device* device, DescriptorAllocator* descriptorAllocator) {
+		Vertex uiVerts[] = {
+		{{ 0.8f,  1.0f, 0.0f }}, // top-left
+		{{ 1.0f,  1.0f, 0.0f }}, // top-right
+		{{ 0.8f,  0.8f, 0.0f }}, // bottom-left
+
+		{{ 0.8f,  0.8f, 0.0f }}, // bottom-left
+		{{ 1.0f,  1.0f, 0.0f }}, // top-right
+		{{ 1.0f,  0.8f, 0.0f }}, // bottom-right
+		};
+		Slice<Vertex> slice = { uiVerts, _countof(uiVerts) };
+
+		// Upload to its own GPU heap + bindless SRV descriptor
+		vertexBuffer.Init(slice, device, descriptorAllocator, L"UI Vertex Buffer");
+		return true;
+	};
+
+	// Release GPU resources
+	void Release() {
+		vertexBuffer.Release();
+	}
+};
+
 class Renderer {
 public:
 	bool Init(HWND window_handle);
@@ -492,8 +520,6 @@ public:
 
 	GamePhase gamePhase;
 private:
-	DebugCubes debugCubes;
-
     D3D12_VIEWPORT m_viewport;
     D3D12_RECT m_scissorRect;
 
@@ -515,6 +541,11 @@ private:
 
 	// for debug drawing
 	ComPtr<ID3D12PipelineState> m_pipelineStateDebug;
+	DebugCubes debugCubes;
+
+	// for UI
+	ComPtr<ID3D12PipelineState> m_pipelineStateUI;
+	UI							ui;
 
 	// syncrhonization objects
 	UINT m_frameIndex;

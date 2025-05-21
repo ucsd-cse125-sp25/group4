@@ -354,6 +354,48 @@ bool Renderer::Init(HWND window_handle) {
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateDebug)));
 
 		}
+		{
+			// --------------------------------------------------------------------
+			// describe UI Pipeline State Object (PSO) 
+
+			// TODO: use slices instead
+			std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs_ui.cso");
+			std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps_ui.cso");
+
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
+				.pRootSignature = m_rootSignature.Get(),
+				.VS = {
+					.pShaderBytecode = vertexShaderBytecode.data(),
+					.BytecodeLength = vertexShaderBytecode.size(),
+				},
+				.PS = {
+					.pShaderBytecode = pixelShaderBytecode.data(),
+					.BytecodeLength = pixelShaderBytecode.size(),
+				},
+				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+				.SampleMask = UINT_MAX,
+				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+				// NO DEPTH for UI
+				.DepthStencilState = {
+					.DepthEnable = FALSE,
+					.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+					.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+					.StencilEnable = FALSE,
+				},
+				.InputLayout = {},
+				.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+				.NumRenderTargets = 1,
+				.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+				.DSVFormat = DXGI_FORMAT_D32_FLOAT,
+				.SampleDesc = {
+					.Count = 1,
+				},
+
+			};
+			psoDesc.RasterizerState.FrontCounterClockwise = true;
+
+			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateUI)));
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------
@@ -388,6 +430,12 @@ bool Renderer::Init(HWND window_handle) {
 	// create vertex buffer for player
 	{
 		debugCubes.Init(m_device.Get(), &m_resourceDescriptorAllocator);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------
+	// initialize the UI
+	{
+		ui.Init(m_device.Get(), &m_resourceDescriptorAllocator);
 	}
 		
 	// ----------------------------------------------------------------------------------------------------------------
@@ -596,6 +644,7 @@ bool Renderer::Render() {
 
 	// clear buffers
 	float clearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
+
 	// temp game phase debugging
 	if (gamePhase == GamePhase::START_MENU) {
 		clearColor[0] = 0.4f;
@@ -663,6 +712,20 @@ bool Renderer::Render() {
 		// index of transforms 
 	  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
 		m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, (UINT)debugCubes.transforms.size(), 0, 0);
+	}
+
+	// draw UI
+	{
+		PerDrawConstants drawConstants = {
+			.viewProject			= XMMatrixIdentity(),
+			.modelMatrix			= XMMatrixIdentity(),
+			.modelInverseTranspose	= XMMatrixIdentity(),
+			.vpos_idx				= ui.vertexBuffer.descriptor.index,
+			.vshade_idx				= 0, // unused by UI
+		};
+		m_commandList->SetPipelineState(m_pipelineStateUI.Get());
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+		m_commandList->DrawInstanced(ui.vertexBuffer.data.len, 1, 0, 0);
 	}
 	
 	// barrier BEFORE presenting the back buffer 
