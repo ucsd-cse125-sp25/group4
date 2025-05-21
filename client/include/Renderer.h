@@ -355,6 +355,18 @@ struct Scene {
 		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
 		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
 
+		for (uint32_t i = 0; i < materialSlice.len; ++i) {
+			Material currMaterial = materialSlice.ptr[i];
+			bool hasTexture = (currMaterial.diffuse & 0xA0000000) == 0;
+			if (hasTexture) {
+				printf("material %d has diffuse texture %s", i, texturePathSlice.ptr[currMaterial.diffuse]);
+			} else {
+				float r = (currMaterial.diffuse & 0b01111111111000000000000000000000 >> 21)/();
+			}
+			
+			
+		}
+
 		return true;
 	}
 	void Release() {
