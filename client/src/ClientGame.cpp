@@ -228,6 +228,8 @@ void ClientGame::update() {
 		{
 			ShopOptionsPayload* optionsPayload = (ShopOptionsPayload*)(network_data + HDR_SIZE);
 
+			ready = false;
+			
 			appState->gamePhase = GamePhase::SHOP_PHASE;
 			renderer.gamePhase = GamePhase::SHOP_PHASE;
 
@@ -354,6 +356,13 @@ void ClientGame::processShopInputs() {
 	if (ready)
 		return;
 
+	static bool wasDown1 = false;
+	static bool wasDown2 = false;
+	static bool wasDown3 = false;
+	bool down1 = (GetAsyncKeyState('1') & 0x8000) != 0;
+	bool down2 = (GetAsyncKeyState('2') & 0x8000) != 0;
+	bool down3 = (GetAsyncKeyState('3') & 0x8000) != 0;
+
 	// only allow one selection per tick
 	if (GetAsyncKeyState('M') & 0x8000) {
 		ready = true;
@@ -374,29 +383,32 @@ void ClientGame::processShopInputs() {
 		// how should it be displayed/ordered?
 		sendReadyStatusPacket(selection);
 	}
-	else if (GetAsyncKeyState('1') & 0x8000) {
+	else if (!down1 && wasDown1) {
 		handleShopItemSelection(0);
 	}
-	else if (GetAsyncKeyState('2') & 0x8000) {
+	else if (!down2 && wasDown2) {
 		handleShopItemSelection(1);
 	}
-	else if (GetAsyncKeyState('3') & 0x8000) {
+	else if (!down3 && wasDown3) {
 		handleShopItemSelection(2);
 	}
+	wasDown1 = down1;
+	wasDown2 = down2;
+	wasDown3 = down3;
 }
 
 void ClientGame::handleShopItemSelection(int choice) {
-	ShopItem item = shopOptions[choice];
-	int cost = PowerupCosts[item.item];
-	if (item.isSelected) 
+	ShopItem* item = &(shopOptions[choice]);
+	int cost = PowerupCosts[item->item];
+	if (item->isSelected) 
 	{
-		item.isSelected = false;
+		item->isSelected = false;
 		tempCoins += cost;
 	}
 	else
 	{
 		// Only select the item if client has enough coins
-		if (item.isBuyable)
+		if (item->isBuyable)
 		{
 			for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
 			{

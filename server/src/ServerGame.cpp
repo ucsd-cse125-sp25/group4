@@ -8,7 +8,11 @@
 using namespace std;
 unsigned int ServerGame::client_id;
 
-ServerGame::ServerGame(void) {
+ServerGame::ServerGame(void) : 
+	rng(dev()),
+	randomRunnerPowerupGen((unsigned int)Powerup::RUNNER_POWERUPS, (unsigned int)Powerup::NUM_RUNNER_POWERUPS - 1),
+	randomHunterPowerupGen((unsigned int)Powerup::HUNTER_POWERUPS, (unsigned int)Powerup::NUM_HUNTER_POWERUPS - 1)
+{
 	client_id = 0;
 	network = new ServerNetwork();
 	round_id = 0;
@@ -36,9 +40,6 @@ ServerGame::ServerGame(void) {
 	//// colors2d[i][0..3] = R, G, B, A (0–255)
 	//vector<vector<int>> colors2d;
 
-	std::mt19937 rng(dev());
-	std::uniform_int_distribution<std::mt19937::result_type> randomHunterPowerupGen((int)Powerup::HUNTER_POWERUPS, (int)Powerup::NUM_HUNTER_POWERUPS - 1);
-	std::uniform_int_distribution<std::mt19937::result_type> randomRunnerPowerupGen((int)Powerup::RUNNER_POWERUPS, (int)Powerup::NUM_RUNNER_POWERUPS - 1);
 
 	// TODO: test RNG on the atkinson hall computers
 	//cout << "Entropy: " << dev.entropy() << endl;
@@ -184,15 +185,21 @@ void ServerGame::receiveFromClients()
 			{
 				PlayerReadyPayload* status = (PlayerReadyPayload*)&(network_data[i + HDR_SIZE]);
 				printf("[CLIENT %d] PLAYER_READY_PACKET: READY=%d\n", id, status->ready);
-				state_mu.lock();
-				phaseStatus[id] = status->ready;
-				state_mu.unlock();
 
 				// Save powerup selections
 				if (appState->gamePhase == GamePhase::SHOP_PHASE)
 				{
-					playerPowerups[id].push_back(status->selection);
+					printf("Selection: %d\n", status->selection);
+					// Only save if they selected a powerup
+					if (status->selection != 0) 
+					{
+						playerPowerups[id].push_back(status->selection);
+					}
 				}
+				
+				state_mu.lock();
+				phaseStatus[id] = status->ready;
+				state_mu.unlock();
 
 				break;
 			}
@@ -211,6 +218,11 @@ void ServerGame::receiveFromClients()
 // int seconds: length of round
 void ServerGame::startARound(int seconds) {
 	round_id++;
+	for (auto [id,powerups] : playerPowerups) {
+		for (auto p : powerups) {
+			printf("Player %d Powerup: %d,\n", id, p);
+		}
+	}
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
 		state_mu.lock();
