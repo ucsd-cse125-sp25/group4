@@ -259,7 +259,7 @@ void ServerGame::handleGamePhase() {
 
 	if (ready && !phaseStatus.empty()) {
 		appState->gamePhase = GamePhase::SHOP_PHASE;
-		sendAppPhaseUpdates();
+		//sendAppPhaseUpdates();
 		startShopPhase();
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
@@ -298,12 +298,15 @@ void ServerGame::startShopPhase() {
 		{
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
 				options->options[p] = randomHunterPowerupGen(rng);
+				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
 			}
 		}
 		else
 		{
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
 				options->options[p] = randomRunnerPowerupGen(rng);
+				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
+
 			}
 		}
 		sendShopOptions(options, id);

@@ -228,6 +228,9 @@ void ClientGame::update() {
 		{
 			ShopOptionsPayload* optionsPayload = (ShopOptionsPayload*)(network_data + HDR_SIZE);
 
+			appState->gamePhase = GamePhase::SHOP_PHASE;
+			renderer.gamePhase = GamePhase::SHOP_PHASE;
+
 			for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
 			{
 				Powerup powerup = (Powerup)optionsPayload->options[i];
