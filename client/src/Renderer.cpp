@@ -268,20 +268,21 @@ bool Renderer::Init(HWND window_handle) {
 			// --------------------------------------------------------------------
 			// describe Main Pipeline State Object (PSO) 
 			
-			// TODO: use slices instead
-			std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs.cso");
-			std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps.cso");
+			Slice<BYTE> vertexShaderBytecode;
+			if (DX::ReadDataToSlice(L"vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			Slice<BYTE> pixelShaderBytecode;
+			if (DX::ReadDataToSlice(L"ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
 
 
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 				.pRootSignature = m_rootSignature.Get(),
 				.VS = {
-					.pShaderBytecode = vertexShaderBytecode.data(),
-					.BytecodeLength = vertexShaderBytecode.size(),
+					.pShaderBytecode = vertexShaderBytecode.ptr,
+					.BytecodeLength = vertexShaderBytecode.len,
 				},
 				.PS = {
-					.pShaderBytecode = pixelShaderBytecode.data(),
-					.BytecodeLength  = pixelShaderBytecode.size(),
+					.pShaderBytecode = pixelShaderBytecode.ptr,
+					.BytecodeLength  = pixelShaderBytecode.len,
 				},
 				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
 				.SampleMask = UINT_MAX,
@@ -312,19 +313,21 @@ bool Renderer::Init(HWND window_handle) {
 			// describe Debug Pipeline State Object (PSO) 
 			
 			// TODO: use slices instead
-			std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"dbg_cube_vs.cso");
-			std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"dbg_cube_ps.cso");
+			Slice<BYTE> vertexShaderBytecode;
+			if (DX::ReadDataToSlice(L"dbg_cube_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			Slice<BYTE> pixelShaderBytecode;
+			if (DX::ReadDataToSlice(L"dbg_cube_ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
 
 
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 				.pRootSignature = m_rootSignature.Get(),
 				.VS = {
-					.pShaderBytecode = vertexShaderBytecode.data(),
-					.BytecodeLength = vertexShaderBytecode.size(),
+					.pShaderBytecode = vertexShaderBytecode.ptr,
+					.BytecodeLength = vertexShaderBytecode.len,
 				},
 				.PS = {
-					.pShaderBytecode = pixelShaderBytecode.data(),
-					.BytecodeLength  = pixelShaderBytecode.size(),
+					.pShaderBytecode = pixelShaderBytecode.ptr,
+					.BytecodeLength  = pixelShaderBytecode.len,
 				},
 				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
 				.SampleMask = UINT_MAX,
@@ -348,7 +351,6 @@ bool Renderer::Init(HWND window_handle) {
 
 			// create the pipeline state object
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateDebug)));
-
 		}
 	}
 

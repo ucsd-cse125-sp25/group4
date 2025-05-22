@@ -145,7 +145,7 @@ struct Texture {
 	Descriptor descriptor;
 	
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList, const wchar_t *filename) {
-		if (DX::ReadDataToPtr(filename, data) != DX::ReadDataStatus::SUCCESS) return false;
+		if (DX::ReadDataToSlice(filename, data) != DX::ReadDataStatus::SUCCESS) return false;
 		
 		
 		// use ddspp to decode the header and write it to a cleaner descriptor
@@ -286,7 +286,7 @@ struct Scene {
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList, const wchar_t *filename) {
 		// ------------------------------------------------------------------------------------------------------------
 		// slurp data from file 
-		if (DX::ReadDataToPtr(filename, data) != DX::ReadDataStatus::SUCCESS) return false;
+		if (DX::ReadDataToSlice(filename, data) != DX::ReadDataStatus::SUCCESS) return false;
 		
 		SceneHeader* header = reinterpret_cast<SceneHeader*>(data.ptr);
 		// sanity checks

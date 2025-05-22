@@ -605,7 +605,7 @@ void ServerGame::readBoundingBoxes() {
 	
 	
 	Slice<BYTE> fileData;
-	DX::ReadDataStatus readStatus = DX::ReadDataToPtr(fileAddr, fileData, true);
+	DX::ReadDataStatus readStatus = DX::ReadDataToSlice(fileAddr, fileData, true);
 	if (readStatus != DX::ReadDataStatus::SUCCESS) {
 		fwprintf(stderr, L"Cannot read file %s\n", fileAddr);
 	};
