@@ -110,7 +110,7 @@ struct Buffer {
 	ComPtr<ID3D12Resource>     resource;   // DX12 heap handle (each buffer has its own heap)
 	void*                      shared_ptr; // GPU heap memory mapped to CPU virtual memory
 	D3D12_GPU_VIRTUAL_ADDRESS  gpu_ptr;    // address of heap start
-	Descriptor                 descriptor; // SRV descriptor in the SRV heap
+	Descriptor                 descriptor; // SRV descriptor in the SRV heapf
 
 	bool Init(Slice<T> data       , ID3D12Device *device, DescriptorAllocator *descriptorAllocator,  const wchar_t *debugName);
 	bool Init(T *ptr, uint32_t len, ID3D12Device *device, DescriptorAllocator *descriptorAllocator,  const wchar_t *debugName);
@@ -270,7 +270,7 @@ struct Scene {
 		struct {
 			Buffer<XMFLOAT3>          vertexPosition;
 			Buffer<VertexShadingData> vertexShading;
-			Buffer<uint8_t>           materialID;
+			Buffer<uint16_t>           materialID;
 			Buffer<Material>          materials;
 		};
 		Buffer<BYTE> buffers[SCENE_BUFFER_TYPE_COUNT];
@@ -318,8 +318,8 @@ struct Scene {
 			.ptr = reinterpret_cast<VertexShadingData*>(vertexPositionSlice.after()),
 			.len = numVerts
 		};
-		Slice<uint8_t> materialIDSlice {
-			.ptr = reinterpret_cast<uint8_t*>(vertexShadingSlice.after()),
+		Slice<uint16_t> materialIDSlice {
+			.ptr = reinterpret_cast<uint16_t*>(vertexShadingSlice.after()),
 			.len = numTriangles
 		};
 		Slice<Material> materialSlice {
@@ -335,7 +335,6 @@ struct Scene {
 		// create buffers from slices
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
 		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
-		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
 		materials     .Init(materialSlice      , device, descriptorAllocator, L"Scene Material Buffer");
 		
 		textures = {
@@ -345,8 +344,16 @@ struct Scene {
 
 		// load in all textures
 		for (uint32_t i = 0; i < textures.len; ++i) {	
-			textures.ptr[i].Init(device, descriptorAllocator, commandList, texturePathSlice.ptr[i]);
+			bool success = textures.ptr[i].Init(device, descriptorAllocator, commandList, texturePathSlice.ptr[i]);
+			/*
+			// load in default materials for everything if a texture cannot be loaded
+			if (!success) {
+				memset(materialIDSlice.ptr, 0, materialIDSlice.numBytes());
+				break;
+			};*/
 		}
+
+		materialID.Init(materialIDSlice, device, descriptorAllocator, L"Scene Material ID Buffer");
 		/*
 		for (uint32_t i = 0; i < materialSlice.len; ++i) {
 			Material currMaterial = materialSlice.ptr[i];

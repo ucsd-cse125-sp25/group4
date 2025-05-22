@@ -34,6 +34,8 @@ struct PSInput
 	
 	float4 positionGlobal SEMANTIC(POSITION);
     float3 normal         SEMANTIC(NORMAL0);
+    float2 texcoord       SEMANTIC(TEXCOORD0);
+    uint triangle_id      SEMANTIC(TEXCOORD1);
 };
 struct PerDrawConstants 
 {
@@ -42,7 +44,10 @@ struct PerDrawConstants
 	matrix   modelInverseTranspose; // normals model to global
     uint     vpos_idx;              // vertex positions in model space
     uint     vshade_idx;            // normals and texcoords
-	// 50 DWORDS
+    uint     material_ids_idx;
+    uint     materials_idx;
+    uint     first_texture_idx;
+	// 51 DWORDS
 };
 struct VertexPosition
 {

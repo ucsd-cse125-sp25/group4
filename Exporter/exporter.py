@@ -114,7 +114,7 @@ for material in bpy.data.materials:
     for input_type, input in d.items():
         # save images
         if isinstance(input, bpy.types.Image):
-            filepath_base = f"./textures/{material_name_file}_{input_type}.png"
+            filepath_base = f"./textures_raw/{material_name_file}_{input_type}.png"
             filepath_save = f"{filepath_base}.png"
             filepath_dds = f"{filepath_base}.dds"
             
@@ -207,10 +207,10 @@ for obj in bpy.data.objects:
 
     # material ids
     if len(obj.material_slots) == 0: # edge case: object has no materials
-        material_ids = np.zeros(len(bmesh.loop_triangles), dtype=np.int32)
+        material_ids = np.zeros(len(bmesh.loop_triangles), dtype=np.uint)
     else:
         slot_index_to_materialid = np.array([material_names_to_indices[slot.material.name] for slot in obj.material_slots])
-        triangle_to_slot_index = np.zeros(len(bmesh.loop_triangles), dtype=np.int32)
+        triangle_to_slot_index = np.zeros(len(bmesh.loop_triangles), dtype=np.uint16)
         bmesh.loop_triangles.foreach_get("material_index", triangle_to_slot_index)
         material_ids = slot_index_to_materialid[triangle_to_slot_index]
         
@@ -250,7 +250,7 @@ with open('scene.jj', 'wb') as f:
     f.write(pack_bytes("f", consolidated_mesh.vert_shade))
 
     # write material ids
-    f.write(pack_bytes("B", consolidated_mesh.material_ids))
+    f.write(pack_bytes("H", consolidated_mesh.material_ids))
 
     # write materials
     for material in materials:

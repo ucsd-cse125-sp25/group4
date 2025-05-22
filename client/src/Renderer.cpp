@@ -229,13 +229,29 @@ bool Renderer::Init(HWND window_handle) {
 		};
 		// may add more parameters in the future for indices of resources
 
+		D3D12_STATIC_SAMPLER_DESC sampler = {
+			.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT,
+			.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+			.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+			.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+			.MipLODBias = 0,
+			.MaxAnisotropy = 0,
+			.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
+			.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
+			.MinLOD = 0.0f,
+			.MaxLOD = D3D12_FLOAT32_MAX,
+			.ShaderRegister = 0,
+			.RegisterSpace = 0,
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL,
+		};
+
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {
 			.Version = D3D_ROOT_SIGNATURE_VERSION_1_1,
 			.Desc_1_1 = {
 				.NumParameters = ROOT_PARAMETERS_COUNT,
 				.pParameters = parameters,
-				.NumStaticSamplers = 0,
-				.pStaticSamplers = nullptr,
+				.NumStaticSamplers = 1,
+				.pStaticSamplers = &sampler,
 				.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED,
 			}
 		};
@@ -631,6 +647,9 @@ bool Renderer::Render() {
 			.modelInverseTranspose = XMMatrixIdentity(),
 			.vpos_idx              = m_scene.vertexPosition.descriptor.index,
 			.vshade_idx            = m_scene.vertexShading.descriptor.index,
+			.material_ids_idx      = m_scene.materialID.descriptor.index,
+			.materials_idx         = m_scene.materials.descriptor.index,
+			.first_texture_idx     = m_scene.textures.ptr[0].descriptor.index,
 		};
 	
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
