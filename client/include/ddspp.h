@@ -630,7 +630,7 @@ namespace ddspp
 		return;
 	}
 
-	bool has_alpha_channel(DXGIFormat format)
+	ddspp_constexpr bool has_alpha_channel(DXGIFormat format)
 	{
 		switch (format)
 		{

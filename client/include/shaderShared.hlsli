@@ -53,14 +53,15 @@ struct VertexShadingData {
 	float2 texcoord;
 };
 
-struct Material {
+struct Material
+{
 	// if the material parameter is texture-determined, the leading bit is 0
 	// the parameter points to the texture index in the texture array
 	// the texture array is a contiguous set of descriptors offset in the descriptor heap
 
 	// if the material parameter is not texture determined, it has a leading bit of 1
-	int base_color; // T1R10G11B10
-	int metallic;   // negated float
-	int roughness;  // negated float
-	int normal;     // tagged as default
-}
+    int base_color; // T1R10G11B10
+    int metallic; // negated float
+    int roughness; // negated float
+    int normal; // tagged as default
+};

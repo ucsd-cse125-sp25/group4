@@ -21,7 +21,7 @@ constexpr uint32_t VERTS_PER_TRI = 3;
 constexpr size_t BYTES_PER_DWORD = 4;
 constexpr size_t DRAW_CONSTANT_NUM_DWORDS = sizeof(PerDrawConstants)/BYTES_PER_DWORD;
 
-typedef char(*)[256] TexturePath_t;
+typedef char TexturePath_t[256];
 
 inline uint32_t alignU32(uint32_t num, uint32_t alignment) {
 	return ((num + alignment - 1) / alignment) * alignment;
@@ -139,10 +139,10 @@ struct Vertex {
 // TODO: unify both vertex structs; this is just for development velocity
 
 struct SceneHeader {
-	int32_t version;
-	int32_t numTriangles;
-	int32_t numMaterials;
-	int32_t numTextures;
+	uint32_t version;
+	uint32_t numTriangles;
+	uint32_t numMaterials;
+	uint32_t numTextures;
 };
 
 
@@ -159,7 +159,7 @@ struct Texture {
 	ComPtr<ID3D12Resource> resource;
 	Descriptor descriptor;
 	
-	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12CommandList* commandList, const wchar_t *filename) {
+	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList, const wchar_t *filename) {
 		data.len = DX::ReadDataToPtr(filename, &data.ptr);
 		if (data.len <= 0) {
 			printf("ERROR: failed to read scene file\n");
@@ -181,8 +181,8 @@ struct Texture {
 			.Alignment        = 0,
 			.Width            = desc.width,
 			.Height           = desc.height,
-			.DepthOrArraySize = desc.arraySize,
-			.MipLevels        = desc.numMips,
+			.DepthOrArraySize = (UINT16)desc.arraySize,
+			.MipLevels        = (UINT16)desc.numMips,
 			.Format           = (DXGI_FORMAT)desc.format,
 			.SampleDesc       = {.Count = 1, .Quality = 0},
 			.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
@@ -232,7 +232,7 @@ struct Texture {
 			const UINT subResourceRowPitch     = alignU32(subResourceLayout.Footprint.RowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT); // row pitch in the GPU resource
 
 			const UINT cpuDataRowPitch    = ddspp::get_row_pitch(desc, mipIndex);              // row pitch in the CPU buffer
-			BYTE* sourceSubResourceMemory = initialData[ddspp::get_offset(desc, mipIndex, 0)]; // in CPU-only memory
+			BYTE* sourceSubResourceMemory = &initialData[ddspp::get_offset(desc, mipIndex, 0)]; // in CPU-only memory
 			
 			// copy rows individually as there may be end-of-row padding in the GPU buffer
 			for (UINT height = 0; height < subResourceHeight; height++)
@@ -343,12 +343,12 @@ struct Scene {
 		};
 		Slice<Material> materialSlice {
 			.ptr = reinterpret_cast<Material*>(materialIDSlice.after()),
-			.len = header.numMaterials,
+			.len = header->numMaterials,
 		};
-		Slice<TexturePath_t> texturePathSlice {
+		Slice<TexturePath_t> texturePathSlice{
 			.ptr = reinterpret_cast<TexturePath_t*>(materialSlice.after()),
-			.len = header.numTextures,
-		}
+			.len = header->numTextures,
+		};
 
 		// create buffers from slices
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
@@ -357,11 +357,19 @@ struct Scene {
 
 		for (uint32_t i = 0; i < materialSlice.len; ++i) {
 			Material currMaterial = materialSlice.ptr[i];
-			bool hasTexture = (currMaterial.diffuse & 0xA0000000) == 0;
+			bool hasTexture = (currMaterial.base_color & 0xA0000000) == 0;
 			if (hasTexture) {
-				printf("material %d has diffuse texture %s", i, texturePathSlice.ptr[currMaterial.diffuse]);
+				printf("material %d has diffuse texture %s\n", i, texturePathSlice.ptr[currMaterial.base_color]);
 			} else {
-				float r = (currMaterial.diffuse & 0b01111111111000000000000000000000 >> 21)/();
+				// unpack T1R10G11B10
+				int r_quantized = (currMaterial.base_color & 0b01111111111000000000000000000000 >> 21);
+				int g_quantized = (currMaterial.base_color & 0b00000000000111111111110000000000 >> 10);
+				int b_quantized = (currMaterial.base_color & 0b00000000000000000000001111111111 >> 00);
+				float r = r_quantized/powf(2.0f, 10);
+				float g = g_quantized/powf(2.0f, 11);
+				float b = b_quantized/powf(2.0f, 10);
+
+				printf("material %d has diffuse color %f %f %f\n", i, r, g, b);
 			}
 			
 			
@@ -614,7 +622,7 @@ inline bool Buffer<T>::Init(Slice<T> inData, ID3D12Device* device, DescriptorAll
 	return true;
 }
 
-
+template<typename T>
 inline bool Buffer<T>::Init(T *ptr, uint32_t len, ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *debugName) {
 	this->Init(Slice<T>{ptr, len}, device, descriptorAllocator, debugName);
 }
