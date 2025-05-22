@@ -607,14 +607,14 @@ void ServerGame::readBoundingBoxes() {
 	Slice<BYTE> fileData;
 	DX::ReadDataStatus readStatus = DX::ReadDataToPtr(fileAddr, fileData, true);
 	if (readStatus != DX::ReadDataStatus::SUCCESS) {
-		fprintf(stderr, "Cannot read file %s\n", fileAddr);
+		fwprintf(stderr, L"Cannot read file %s\n", fileAddr);
 	};
 
 	JSON_Value* rootVal = json_parse_string(reinterpret_cast<char*>(fileData.ptr));
 	free(fileData.ptr);
 
-	if (!rootVal) { fprintf(stderr, "Cannot parse %s\n", fileAddr); }
-	else {printf("Parsed %s\n", fileAddr);}
+	if (!rootVal) { fwprintf(stderr, L"Cannot parse %s\n", fileAddr); }
+	else {wprintf(L"Parsed %s\n", fileAddr);}
 	JSON_Object* rootObj = json_value_get_object(rootVal);
 	size_t       boxCnt = json_object_get_count(rootObj);
 
