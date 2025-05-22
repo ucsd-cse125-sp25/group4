@@ -57,21 +57,6 @@ constexpr enum RootParameters : UINT8 {
 	ROOT_PARAMETERS_COUNT
 };
 
-template<typename T>
-struct Slice {
-	T*       ptr; // pointer to first element
-	uint32_t len; // length in number of elements
-
-
-	inline UINT numBytes() {
-		return len * sizeof(T);
-	}
-	
-	// returns the pointer to the first byte beyond the end of the array
-	inline BYTE* after() {
-		return reinterpret_cast<BYTE*>(&(ptr[len]));
-	}
-};
 
 struct Descriptor {
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
@@ -160,11 +145,8 @@ struct Texture {
 	Descriptor descriptor;
 	
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList, const wchar_t *filename) {
-		data.len = DX::ReadDataToPtr(filename, &data.ptr);
-		if (data.len <= 0) {
-			printf("ERROR: failed to read texture file\n");
-			return false;
-		}
+		if (DX::ReadDataToPtr(filename, data) != DX::ReadDataStatus::SUCCESS) return false;
+		
 		
 		// use ddspp to decode the header and write it to a cleaner descriptor
 		ddspp::Descriptor desc;
@@ -304,12 +286,7 @@ struct Scene {
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList, const wchar_t *filename) {
 		// ------------------------------------------------------------------------------------------------------------
 		// slurp data from file 
-		data.len = DX::ReadDataToPtr(filename, &data.ptr);
-		if (data.len <= 0) {
-			printf("ERROR: failed to read scene file\n");
-			return false;
-		}
-		assert(data.ptr != nullptr);
+		if (DX::ReadDataToPtr(filename, data) != DX::ReadDataStatus::SUCCESS) return false;
 		
 		SceneHeader* header = reinterpret_cast<SceneHeader*>(data.ptr);
 		// sanity checks

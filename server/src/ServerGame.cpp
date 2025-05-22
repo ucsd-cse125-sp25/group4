@@ -601,9 +601,18 @@ void ServerGame::readBoundingBoxes() {
 	static std::random_device rd;                                    // seed source
 	static std::mt19937       gen(rd());                             // mersenne twister engine
 	static std::uniform_int_distribution<int> distRGBA(150, 255);    // for R,G,B
-	const char* fileAddr = "bb#_bboxes.json";
+	const wchar_t* fileAddr = L"bb#_bboxes.json";
+	
+	
+	Slice<BYTE> fileData;
+	DX::ReadDataStatus readStatus = DX::ReadDataToPtr(fileAddr, fileData, true);
+	if (readStatus != DX::ReadDataStatus::SUCCESS) {
+		fprintf(stderr, "Cannot read file %s\n", fileAddr);
+	};
 
-	JSON_Value* rootVal = json_parse_file(fileAddr);
+	JSON_Value* rootVal = json_parse_string(reinterpret_cast<char*>(fileData.ptr));
+	free(fileData.ptr);
+
 	if (!rootVal) { fprintf(stderr, "Cannot parse %s\n", fileAddr); }
 	else {printf("Parsed %s\n", fileAddr);}
 	JSON_Object* rootObj = json_value_get_object(rootVal);

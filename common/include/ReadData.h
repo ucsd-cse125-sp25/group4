@@ -21,9 +21,36 @@
 #include <vector>
 #include <windows.h>
 
+template<typename T>
+struct Slice {
+	T*       ptr; // pointer to first element
+	uint32_t len; // length in number of elements
+
+
+	inline UINT numBytes() {
+		return len * sizeof(T);
+	}
+	
+	// returns the pointer to the first byte beyond the end of the array
+	inline BYTE* after() {
+		return reinterpret_cast<BYTE*>(&(ptr[len]));
+	}
+};
+
 
 namespace DX
 {
+    enum class ReadDataStatus : int {
+        SUCCESS,
+        ERROR_SYSTEM,
+        ERROR_SPLIT_PATH,
+        ERROR_MAKE_PATH,
+        ERROR_FILE_OPEN,
+        ERROR_GET_READ_POSITION,
+        ERROR_OOM,
+        ERROR_SEEK_FILE,
+        ERROR_READ,
+    };
     inline std::vector<uint8_t> ReadData(_In_z_ const wchar_t* name)
     {
         std::ifstream inFile(name, std::ios::in | std::ios::binary | std::ios::ate);
@@ -73,7 +100,7 @@ namespace DX
     }
 
 
-    inline UINT ReadDataToPtr(_In_z_ const wchar_t* name, BYTE** ptr_to_dest)
+    inline ReadDataStatus ReadDataToPtr(_In_z_ const wchar_t* name, Slice<BYTE>& slice, bool appendNullTerminator = false)
     {
         std::ifstream inFile(name, std::ios::in | std::ios::binary | std::ios::ate);
 
@@ -82,42 +109,55 @@ namespace DX
         {
             wchar_t moduleName[_MAX_PATH] = {};
             if (!GetModuleFileNameW(nullptr, moduleName, _MAX_PATH))
-                throw std::system_error(std::error_code(static_cast<int>(GetLastError()), std::system_category()), "GetModuleFileNameW");
+                return ReadDataStatus::ERROR_SYSTEM;
+                // throw std::system_error(std::error_code(static_cast<int>(GetLastError()), std::system_category()), "GetModuleFileNameW");
 
             wchar_t drive[_MAX_DRIVE];
             wchar_t path[_MAX_PATH];
 
             if (_wsplitpath_s(moduleName, drive, _MAX_DRIVE, path, _MAX_PATH, nullptr, 0, nullptr, 0))
-                throw std::runtime_error("_wsplitpath_s");
+                return ReadDataStatus::ERROR_SPLIT_PATH;
+                // throw std::runtime_error("_wsplitpath_s");
 
             wchar_t filename[_MAX_PATH];
             if (_wmakepath_s(filename, _MAX_PATH, drive, path, name, nullptr))
-                throw std::runtime_error("_wmakepath_s");
+                return ReadDataStatus::ERROR_MAKE_PATH;
+                // throw std::runtime_error("_wmakepath_s");
 
             inFile.open(filename, std::ios::in | std::ios::binary | std::ios::ate);
         }
 #endif
 
         if (!inFile)
-            throw std::runtime_error("ReadData");
+			return ReadDataStatus::ERROR_FILE_OPEN;
+            // throw std::runtime_error("ReadData");
 
         const std::streampos len = inFile.tellg();
         if (!inFile)
-            throw std::runtime_error("ReadData");
-
-        // blob.resize(size_t(len));
-        *ptr_to_dest = (BYTE *)malloc(len);
+			return ReadDataStatus::ERROR_GET_READ_POSITION;
+            // throw std::runtime_error("ReadData");
+        
+        size_t sliceLength = appendNullTerminator ? (size_t)len + 1 : (size_t)len;
+		slice = {
+			.ptr = (BYTE*)malloc(sliceLength),
+            .len = (uint32_t)sliceLength,
+		};
+        if (slice.ptr == nullptr) return ReadDataStatus::ERROR_OOM;
 
         inFile.seekg(0, std::ios::beg);
         if (!inFile)
-            throw std::runtime_error("ReadData");
+			return ReadDataStatus::ERROR_SEEK_FILE;
+            // throw std::runtime_error("ReadData");
 
-        inFile.read(reinterpret_cast<char*>(*ptr_to_dest), len);
+        inFile.read(reinterpret_cast<char*>(slice.ptr), len);
         if (!inFile)
-            throw std::runtime_error("ReadData");
-
+			return ReadDataStatus::ERROR_READ;
+            // throw std::runtime_error("ReadData");
+        if (appendNullTerminator) {
+            slice.ptr[slice.len - 1] = '\0';
+        }
         inFile.close();
 
-        return len;
+        return ReadDataStatus::SUCCESS;
     }
 }
