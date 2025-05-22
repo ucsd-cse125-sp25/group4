@@ -5,6 +5,8 @@
 #include "ClientNetwork.h"
 #include "NetworkData.h"
 #include "Renderer.h"
+#include "fmod.hpp"
+#include "fmod_errors.h"
 #include <string>
 using namespace std;
 
@@ -47,6 +49,9 @@ public:
 	GameState* gameState;
 	AppState* appState;
 	Renderer renderer;
+
+	FMOD::System *fmod_system;
+	FMOD::Sound* sound;
 
 	struct ShopItem {
 		Powerup item;

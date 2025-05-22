@@ -1,6 +1,7 @@
 ﻿#include "ClientGame.h"
 #include <algorithm>
 #include <string>
+#include <iostream>
 using namespace std;
 const wchar_t CLASS_NAME[] = L"Window Class";
 const wchar_t GAME_NAME[] = L"$GAME_NAME";
@@ -66,6 +67,25 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	appState = new AppState();
 	appState->gamePhase = GamePhase::START_MENU;
 	appState->gameState = gameState;
+
+	FMOD_RESULT result;
+	fmod_system = NULL;
+
+	result = FMOD::System_Create(&fmod_system);      // Create the main system object.
+	if (result != FMOD_OK)
+	{
+		printf("FMOD error! (%d) %s\n", result, FMOD_ErrorString(result));
+		exit(-1);
+	}
+
+	result = fmod_system->init(512, FMOD_INIT_NORMAL, 0);    // Initialize FMOD.
+	if (result != FMOD_OK)
+	{
+		printf("FMOD error! (%d) %s\n", result, FMOD_ErrorString(result));
+		exit(-1);
+	}
+
+	fmod_system->createSound("sound.wav", FMOD_DEFAULT, 0, &sound);
 }
 
 void ClientGame::sendDebugPacket(const char* message) {
@@ -222,6 +242,8 @@ void ClientGame::update() {
 			renderer.gamePhase = statusPayload->phase;
 
 			ready = false;
+
+			fmod_system->playSound(sound, 0, false, 0);
 			
 			break;
 		}
