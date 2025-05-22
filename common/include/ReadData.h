@@ -35,6 +35,13 @@ struct Slice {
 	inline BYTE* after() {
 		return reinterpret_cast<BYTE*>(&(ptr[len]));
 	}
+
+    inline void release() {
+        if (ptr == nullptr) {
+            free(ptr);
+        }
+        memset(this, 0, sizeof(*this));
+    }
 };
 
 namespace DX
@@ -92,15 +99,13 @@ namespace DX
 
         inFile.seekg(0, std::ios::beg);
         if (!inFile) {
-            free(slice.ptr);
-            memset(&slice, 0, sizeof(slice));
+            slice.release();
             return ReadDataStatus::ERROR_SEEK_FILE;
         }
 
         inFile.read(reinterpret_cast<char*>(slice.ptr), len);
         if (!inFile) {
-            free(slice.ptr);
-            memset(&slice, 0, sizeof(slice));
+            slice.release();
             return ReadDataStatus::ERROR_READ;
         }
         if (appendNullTerminator) slice.ptr[slice.len - 1] = '\0';

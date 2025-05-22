@@ -374,7 +374,7 @@ struct Scene {
 			buf.Release();
 		}
 		if (data.ptr != nullptr) free(data.ptr);
-		memset(this, 0, sizeof(this));
+		memset(this, 0, sizeof(*this));
 	}
 };
 
@@ -625,5 +625,5 @@ inline void Buffer<T>::Release()
 		resource->Unmap(0, nullptr);
 		resource->Release();
 	}
-	memset(this, 0, sizeof(this));
+	memset(this, 0, sizeof(*this));
 }
