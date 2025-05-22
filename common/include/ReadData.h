@@ -50,7 +50,11 @@ namespace DX
         ERROR_SEEK_FILE,
         ERROR_READ,
     };
-
+    
+    // reads bytes from a file into a slice
+    // a null terminator may optionally be inserted at the end of the buffer
+    // the caller is responsible for freeing the memory allocated by this function
+    // unless this function does not run successfully
     inline ReadDataStatus ReadDataToSlice(_In_z_ const wchar_t* name, Slice<BYTE>& slice, bool appendNullTerminator = false)
     {
         std::ifstream inFile(name, std::ios::in | std::ios::binary | std::ios::ate);
