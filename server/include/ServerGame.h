@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "ServerNetwork.h"
 #include "NetworkData.h"
+#include "Timer.h"
 #include <chrono>
 #include <thread>
 #include <cstdint>
@@ -8,6 +9,8 @@
 #include <array>
 #include <unordered_map>
 #include <DirectXMath.h>
+#include <random>
+#include <mutex>
 
 #define GRAVITY 0.01f
 #define JUMP_VELOCITY 0.2f
@@ -25,6 +28,7 @@ public:
 	void receiveFromClients();
 	void sendGameStateUpdates();
 	void sendAppPhaseUpdates();
+	void sendShopOptions(ShopOptionsPayload *data, int dest);
 
 	void applyMovements();
 	void applyCamera();
@@ -33,9 +37,11 @@ public:
 	void applyAttacks();
 	void applyDodge();
 	void readBoundingBoxes();
+	void handleGamePhase();
 	void handleStartMenu();
-	void handleShopPhase();
 	void startARound(int);
+	void handleShopPhase();
+	void startShopPhase();
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;
@@ -55,13 +61,23 @@ private:
 	int num_players = 4;
 	int round_id;
 
+	std::random_device dev;
+	std::mt19937 rng;
+	std::uniform_int_distribution<std::mt19937::result_type> randomHunterPowerupGen;
+	std::uniform_int_distribution<std::mt19937::result_type> randomRunnerPowerupGen;
+
+
 	/* State */
 	AppState* appState;
 	GameState* state;
+	// synchornize access to states
+	mutex state_mu;
 	std::unordered_map<uint8_t, MovePayload> latestMovement;
 	std::unordered_map<uint8_t, CameraPayload> latestCamera;
 	// indicate whether each player is ready to move on to next phase
 	std::unordered_map<uint8_t, bool> phaseStatus;
+	// One timer object
+	Timer* timer;
 
 	/* Attack */
 	std::unordered_map<unsigned, AttackPayload> latestAttacks;
@@ -98,6 +114,9 @@ private:
 	std::array<int8_t, 4> invulTicks{ 0,0,0,0 };    // frames of invulnerability left
 	std::array<int8_t, 4> dashTicks{ 0,0,0,0 };    // frames of dash‑speed left
 
+
+	// Shop
+	std::unordered_map<uint8_t, vector<uint8_t>> playerPowerups;
 
 };
 

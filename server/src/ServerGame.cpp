@@ -3,13 +3,16 @@
 #include <iostream>
 #include "ServerGame.h"
 #include "Parson.h"
-#include "Timer.h"
 
 
 using namespace std;
 unsigned int ServerGame::client_id;
 
-ServerGame::ServerGame(void) {
+ServerGame::ServerGame(void) : 
+	rng(dev()),
+	randomRunnerPowerupGen((unsigned int)Powerup::RUNNER_POWERUPS, (unsigned int)Powerup::NUM_RUNNER_POWERUPS - 1),
+	randomHunterPowerupGen((unsigned int)Powerup::HUNTER_POWERUPS, (unsigned int)Powerup::NUM_HUNTER_POWERUPS - 1)
+{
 	client_id = 0;
 	network = new ServerNetwork();
 	round_id = 0;
@@ -18,10 +21,10 @@ ServerGame::ServerGame(void) {
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f,  4.0f, 20.0f, 0.0f, 0.0f, 0.1f, 0.15f, 0, false, false, false },
+			{ 4.0f,  4.0f, 20.0f, 0.0f, 0.0f, 0.1f, 0.15f, 0, true, false, false },
 			{-2.0f,  2.0f, 20.0f, 0.0f, 0.0f, -0.1f, 0.15f, 0, false, false, false },
 			{ 2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
-			{-2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, true, false, false },
+			{-2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
 		}
 	};
 
@@ -30,10 +33,19 @@ ServerGame::ServerGame(void) {
 		.gamePhase = GamePhase::START_MENU
 	};
 
+	timer = new Timer();
+
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
 	//// colors2d[i][0..3] = R, G, B, A (0–255)
 	//vector<vector<int>> colors2d;
+
+
+	// TODO: test RNG on the atkinson hall computers
+	//cout << "Entropy: " << dev.entropy() << endl;
+	//for (int i = 0; i < 100; i++) {
+	//	cout << randomHunterPowerupGen(rng) << endl;
+	//}
 }
 
 void ServerGame::update() {
@@ -50,6 +62,8 @@ void ServerGame::update() {
 	}
 
 	receiveFromClients();
+
+	state_mu.lock();
 	switch (appState->gamePhase) {
 		case GamePhase::GAME_PHASE:
 		{
@@ -59,6 +73,7 @@ void ServerGame::update() {
 			applyAttacks();
 			applyDodge();
 			sendGameStateUpdates();
+			handleGamePhase();
 			break;
 		}
 		case GamePhase::START_MENU:
@@ -76,11 +91,11 @@ void ServerGame::update() {
 			break;
 		}
 	}
+	state_mu.unlock();
 }
 
-void ServerGame::receiveFromClients() {
-	Packet packet;
-
+void ServerGame::receiveFromClients() 
+{
 	std::map<unsigned int, SOCKET>::iterator iter;
 
 	for (auto& [id, sock] : network->sessions) {
@@ -92,7 +107,7 @@ void ServerGame::receiveFromClients() {
 			continue;
 		}
 
-		int i = 0;
+		unsigned int i = 0;
 		while (i < (unsigned int)data_length) {
 			PacketHeader* hdr = (PacketHeader*) &(network_data[i]);
 
@@ -106,7 +121,9 @@ void ServerGame::receiveFromClients() {
 
 				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
 
+				state_mu.lock();
 				phaseStatus[id] = false;
+				state_mu.unlock();
 				break;
 			}
 			case PacketType::DEBUG:
@@ -168,7 +185,23 @@ void ServerGame::receiveFromClients() {
 			{
 				PlayerReadyPayload* status = (PlayerReadyPayload*)&(network_data[i + HDR_SIZE]);
 				printf("[CLIENT %d] PLAYER_READY_PACKET: READY=%d\n", id, status->ready);
+
+				// Save powerup selections
+				if (appState->gamePhase == GamePhase::SHOP_PHASE)
+				{
+					printf("Selection: %d\n", status->selection);
+					// Only save if they selected a powerup
+					if (status->selection != 0) 
+					{
+						playerPowerups[id].push_back(status->selection);
+						state->players[id].coins -= PowerupCosts[(Powerup)status->selection];
+					}
+				}
+				
+				state_mu.lock();
 				phaseStatus[id] = status->ready;
+				state_mu.unlock();
+
 				break;
 			}
 			default:
@@ -186,11 +219,22 @@ void ServerGame::receiveFromClients() {
 // int seconds: length of round
 void ServerGame::startARound(int seconds) {
 	round_id++;
-	Timer* timer = new Timer();
+	for (auto [id,powerups] : playerPowerups) {
+		for (auto p : powerups) {
+			printf("Player %d Powerup: %d,\n", id, p);
+		}
+	}
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
-		appState->gamePhase = GamePhase::SHOP_PHASE;
-		sendAppPhaseUpdates(); // or any other packet sending logic
+		state_mu.lock();
+		// set all status to true here, handle in the main game loop
+		for (auto& [id, status] : phaseStatus) {
+			status = true;
+		}
+		// Don't send packets in timer!
+		// Socket wrapper isn't thread safe...
+		// sendAppPhaseUpdates();
+		state_mu.unlock();
 		});
 }
 
@@ -203,10 +247,33 @@ void ServerGame::handleStartMenu() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
+		num_players = phaseStatus.size();
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
 		startARound(ROUND_DURATION);
 		// reset status
+		for (auto& [id, status] : phaseStatus) {
+			status = false;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// GAME PHASE PHASE LOGIC
+// -----------------------------------------------------------------------------
+
+void ServerGame::handleGamePhase() {
+	bool ready = true;
+	for (auto& [id, status] : phaseStatus) {
+		if (!status) {
+			ready = false;
+		}
+	}
+
+	if (ready && !phaseStatus.empty()) {
+		appState->gamePhase = GamePhase::SHOP_PHASE;
+		//sendAppPhaseUpdates();
+		startShopPhase();
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
 		}
@@ -233,6 +300,29 @@ void ServerGame::handleShopPhase() {
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
 		}
+	}
+}
+
+void ServerGame::startShopPhase() {
+	// send each client their powerups
+	for (int id = 0; id < num_players; id++) {
+		ShopOptionsPayload* options = new ShopOptionsPayload();
+		if (state->players[id].isHunter)
+		{
+			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
+				options->options[p] = randomHunterPowerupGen(rng);
+				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
+			}
+		}
+		else
+		{
+			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
+				options->options[p] = randomRunnerPowerupGen(rng);
+				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
+
+			}
+		}
+		sendShopOptions(options, id);
 	}
 }
 
@@ -364,6 +454,14 @@ void ServerGame::sendAppPhaseUpdates() {
 	NetworkServices::buildPacket<AppPhasePayload>(PacketType::APP_PHASE, *data, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+}
+
+void ServerGame::sendShopOptions(ShopOptionsPayload* data, int dest) {
+	char packet_data[HDR_SIZE + sizeof(ShopOptionsPayload)];
+
+	NetworkServices::buildPacket<ShopOptionsPayload>(PacketType::SHOP_INIT, *data, packet_data);
+
+	network->sendToClient(dest, packet_data, HDR_SIZE + sizeof(ShopOptionsPayload));
 }
 
 // -----------------------------------------------------------------------------

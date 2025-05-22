@@ -5,6 +5,8 @@
 #include "ClientNetwork.h"
 #include "NetworkData.h"
 #include "Renderer.h"
+#include <string>
+using namespace std;
 
 
 // this links to the directx12 dynamic library
@@ -16,13 +18,22 @@
 
 class ClientGame {
 public:
-	ClientGame(HINSTANCE hInstance,  int nCmdShow);
+	ClientGame(HINSTANCE hInstance,  int nCmdShow, string IPAddress);
 	~ClientGame(void);
 
 	bool isWindowFocused() const;
 	bool isLocalPlayerDead() const;
+
+
+	void handleInput();
+	void processAttackInput();
+	void processDodgeInput();
 	bool processCameraInput();
 	bool processMovementInput();
+	void processShopInputs();
+
+	void handleShopItemSelection(int choice);
+	void updateBuyable();
 
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);
@@ -30,15 +41,22 @@ public:
 	void sendCameraPacket(float, float);
 	void sendAttackPacket(float origin[3], float yaw, float pitch);
 	void sendDodgePacket();
-	void sendStartMenuStatusPacket();
+	void sendReadyStatusPacket(uint8_t selection);
 	void update();
-	void processAttackInput();
-	void processDodgeInput();
-	void handleInput();
 
 	GameState* gameState;
 	AppState* appState;
 	Renderer renderer;
+
+	struct ShopItem {
+		Powerup item;
+		bool isSelected;
+		bool isBuyable;
+	};
+
+	ShopItem shopOptions[NUM_POWERUP_OPTIONS];
+
+
 private:
 	HWND hwnd;
 	unsigned int id;
@@ -51,5 +69,9 @@ private:
 	static constexpr float MOUSE_SENS = 0.002f;
 	static constexpr float ATTACK_RANGE = 4.0f;
 	bool localDead = false;
+
+	bool ready = false;
+	int tempCoins = 0;
+	std::vector<Powerup> powerups;
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);

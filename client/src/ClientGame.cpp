@@ -1,11 +1,12 @@
 ﻿#include "ClientGame.h"
 #include <algorithm>
-
+#include <string>
+using namespace std;
 const wchar_t CLASS_NAME[] = L"Window Class";
 const wchar_t GAME_NAME[] = L"$GAME_NAME";
 
-ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow) {
-	network = new ClientNetwork();
+ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
+	network = new ClientNetwork(IPAddress);
 
 	InitPayload init{};  // empty payload for now
 	char packet_data[HDR_SIZE + sizeof(InitPayload)];
@@ -114,9 +115,13 @@ void ClientGame::sendCameraPacket(float yaw, float pitch) {
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
 
-void ClientGame::sendStartMenuStatusPacket() {
+void ClientGame::sendReadyStatusPacket(uint8_t selection = 0) {
 	PlayerReadyPayload status{};
 	status.ready = true;
+	if (appState->gamePhase == GamePhase::SHOP_PHASE)
+	{
+		status.selection = selection;
+	}
 
 	char buf[HDR_SIZE + sizeof(status)];
 	NetworkServices::buildPacket(PacketType::PLAYER_READY, status, buf);
@@ -215,7 +220,28 @@ void ClientGame::update() {
 
 			appState->gamePhase = statusPayload->phase;
 			renderer.gamePhase = statusPayload->phase;
+
+			ready = false;
 			
+			break;
+		}
+		case PacketType::SHOP_INIT:
+		{
+			ShopOptionsPayload* optionsPayload = (ShopOptionsPayload*)(network_data + HDR_SIZE);
+
+			ready = false;
+			
+			appState->gamePhase = GamePhase::SHOP_PHASE;
+			renderer.gamePhase = GamePhase::SHOP_PHASE;
+
+			for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
+			{
+				Powerup powerup = (Powerup)optionsPayload->options[i];
+				shopOptions[i].item = powerup;
+				shopOptions[i].isSelected = false;
+				shopOptions[i].isBuyable = (PowerupCosts[powerup] <= gameState->players[id].coins);
+			}
+
 			break;
 		}
 		default:
@@ -326,6 +352,73 @@ void ClientGame::processDodgeInput()
 	rWasDown = rNowDown;
 }
 
+void ClientGame::processShopInputs() {
+	// if ready, player is locked in and cannot change
+	if (ready)
+		return;
+
+	static bool wasDown1 = false;
+	static bool wasDown2 = false;
+	static bool wasDown3 = false;
+	bool down1 = (GetAsyncKeyState('1') & 0x8000) != 0;
+	bool down2 = (GetAsyncKeyState('2') & 0x8000) != 0;
+	bool down3 = (GetAsyncKeyState('3') & 0x8000) != 0;
+
+	// only allow one selection per tick
+	if (GetAsyncKeyState('M') & 0x8000) {
+		ready = true;
+		gameState->players[id].coins = tempCoins;
+		uint8_t selection = 0;
+
+		// only one powerup can be selected
+		for (auto& item : shopOptions) {
+			if (item.isSelected) {
+				selection = (uint8_t)item.item;
+			}
+		}
+		// TODO: display powerup in GUI?
+		// things to consider:
+		// powerups can be passive (trap, buff) or active (item, temporary)
+		// can't have multiple of the same powerup
+		// 1 purchase per shop
+		// how should it be displayed/ordered?
+		sendReadyStatusPacket(selection);
+	}
+	else if (!down1 && wasDown1) {
+		handleShopItemSelection(0);
+	}
+	else if (!down2 && wasDown2) {
+		handleShopItemSelection(1);
+	}
+	else if (!down3 && wasDown3) {
+		handleShopItemSelection(2);
+	}
+	wasDown1 = down1;
+	wasDown2 = down2;
+	wasDown3 = down3;
+}
+
+void ClientGame::handleShopItemSelection(int choice) {
+	ShopItem* item = &(shopOptions[choice]);
+	int cost = PowerupCosts[item->item];
+	if (item->isSelected) 
+	{
+		item->isSelected = false;
+		tempCoins += cost;
+	}
+	else
+	{
+		// Only select the item if client has enough coins
+		if (item->isBuyable)
+		{
+			for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
+			{
+				shopOptions[i].isSelected = (i == choice);
+			}
+			tempCoins -= cost;
+		}
+	}
+}
 
 void ClientGame::handleInput()
 {
@@ -334,16 +427,21 @@ void ClientGame::handleInput()
 	switch (appState->gamePhase)
 	{
 	case GamePhase::START_MENU:
-	case GamePhase::SHOP_PHASE:
 	{
-		bool ready = false;
+		// Avoid sending multiple ready packets
+		if (ready)
+			break;
+
 		if (GetAsyncKeyState('M') & 0x8000) {
 			ready = true;
+			sendReadyStatusPacket();
 		}
-		if (ready) {
-			sendStartMenuStatusPacket();
-			Sleep(200); // temporary to prevent multiple inputs
-		}
+
+		break;
+	}
+	case GamePhase::SHOP_PHASE:
+	{
+		processShopInputs();
 		break;
 	}
 	case GamePhase::GAME_PHASE:

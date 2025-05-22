@@ -25,12 +25,14 @@
     <ClInclude Include="..\client\include\ddspp.h" />
     <ClInclude Include="..\client\include\Renderer.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="InputDialog.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\client\src\ClientGame.cpp" />
     <ClCompile Include="..\client\src\ClientMain.cpp" />
     <ClCompile Include="..\client\src\ClientNetwork.cpp" />
     <ClCompile Include="..\client\src\Renderer.cpp" />
+    <ClCompile Include="InputDialog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NetworkingCore\NetworkingCore.vcxproj">
