@@ -548,9 +548,11 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 }
 
 XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
+	float uniformScale = PLAYER_SCALING_FACTOR;
+	XMMATRIX scale = XMMatrixScaling(uniformScale, uniformScale, uniformScale);
 	XMMATRIX rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw);
 	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z);
-	return XMMatrixTranspose(rotate * translate);
+	return XMMatrixTranspose(scale * rotate * translate);
 }
 
 bool Renderer::Render() {

@@ -21,10 +21,10 @@ ServerGame::ServerGame(void) :
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f,  4.0f, 20.0f, 0.0f, 0.0f, 0.1f, 0.15f, 0, true, false, false },
-			{-2.0f,  2.0f, 20.0f, 0.0f, 0.0f, -0.1f, 0.15f, 0, false, false, false },
-			{ 2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
-			{-2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.1f, 0.15f, 0, true, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, -0.1f, 0.15f, 0, false, false, false },
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
 		}
 	};
 
@@ -473,28 +473,28 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 	float delta[3] = { dx, dy, dz };
 
 	// Bounding box for the current client
-	float temp = 1.0f;
+	float playerRadius = 1.0f * .075;
 
 	// Bounding box before player moves
 	BoundingBox staticPlayerBox = {
-			state->players[clientId].x - temp,
-			state->players[clientId].y - temp,
-			state->players[clientId].z - temp,
-			state->players[clientId].x + temp,
-			state->players[clientId].y + temp,
-			state->players[clientId].z + temp
+			state->players[clientId].x - playerRadius,
+			state->players[clientId].y - playerRadius,
+			state->players[clientId].z - playerRadius,
+			state->players[clientId].x + playerRadius,
+			state->players[clientId].y + playerRadius,
+			state->players[clientId].z + playerRadius
 	};
 
 	for (int i = 0; i < 3; i++) {
 		bool isColliding = false;
 
 		BoundingBox playerBox = {
-			state->players[clientId].x - temp,
-			state->players[clientId].y - temp,
-			state->players[clientId].z - temp,
-			state->players[clientId].x + temp,
-			state->players[clientId].y + temp,
-			state->players[clientId].z + temp
+			state->players[clientId].x - playerRadius,
+			state->players[clientId].y - playerRadius,
+			state->players[clientId].z - playerRadius,
+			state->players[clientId].x + playerRadius,
+			state->players[clientId].y + playerRadius,
+			state->players[clientId].z + playerRadius
 		};
 
 		if (i == 0) {
@@ -518,12 +518,12 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 			}
 
 			BoundingBox otherClientBox = {
-				state->players[c].x - temp,
-				state->players[c].y - temp,
-				state->players[c].z - temp,
-				state->players[c].x + temp,
-				state->players[c].y + temp,
-				state->players[c].z + temp,
+				state->players[c].x - playerRadius,
+				state->players[c].y - playerRadius,
+				state->players[c].z - playerRadius,
+				state->players[c].x + playerRadius,
+				state->players[c].y + playerRadius,
+				state->players[c].z + playerRadius,
 			};
 
 			if (checkCollision(playerBox, otherClientBox)) {

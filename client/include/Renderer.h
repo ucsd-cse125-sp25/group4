@@ -561,7 +561,7 @@ private:
 	UINT m_width = 1920;
 	UINT m_height = 1080;
 	float m_aspectRatio = 16.0f / 9.0f;
-	float m_fov = XMConvertToRadians(40 * (9.0/16.0)); 
+	float m_fov = XMConvertToRadians(90 * (9.0/16.0)); 
 	// ComPtr<ID3D12Resource> m_vertexBuffer;
 	// D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
@@ -586,8 +586,8 @@ private:
 	// CAMERA CONSTANTS
 	float cameraYaw   = 0.0f;
 	float cameraPitch = 0.0f;
-	static constexpr float CAMERA_DIST = 32.0f;
-	static constexpr float CAMERA_UP = 6.0f;
+	static constexpr float CAMERA_DIST = 16.0f * PLAYER_SCALING_FACTOR;
+	static constexpr float CAMERA_UP = 6.0f * PLAYER_SCALING_FACTOR;
 };
 
 

@@ -7,6 +7,8 @@
 #define NUM_POWERUP_OPTIONS 3 // Number of options that display in the shop each round
 #define ROUND_DURATION 25
 
+constexpr float PLAYER_SCALING_FACTOR = 0.025;
+
 enum class PacketType : uint32_t {
 	INIT_CONNECTION = 0,
 	DEBUG = 1,
