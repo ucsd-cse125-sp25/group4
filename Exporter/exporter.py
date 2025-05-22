@@ -114,11 +114,14 @@ for material in bpy.data.materials:
     for input_type, input in d.items():
         # save images
         if isinstance(input, bpy.types.Image):
-            filepath = f"./textures/{material_name_file}_{input_type}.png"
-            if not os.path.exists(filepath):
-                input.save(filepath=filepath, quality=100, save_copy=True)
+            filepath_base = f"./textures/{material_name_file}_{input_type}.png"
+            filepath_save = f"{filepath_base}.png"
+            filepath_dds = f"{filepath_base}.dds"
             
-            texture_paths.append(filepath)
+            if not os.path.exists(filepath_save):
+                input.save(filepath=filepath_save, quality=100, save_copy=True)
+            
+            texture_paths.append(filepath_dds)
             output[input_type] = num_textures
             num_textures += 1
         elif isinstance(input, float):

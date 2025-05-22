@@ -162,10 +162,6 @@ bool Renderer::Init(HWND window_handle) {
 		};
 		UNWRAP(m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_depthStencilDescriptorHeap)));
 	}
-	// initialize scene 
-	{
-		m_scene.Init(m_device.Get(), &m_resourceDescriptorAllocator, L"scene.jj");
-	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// create frame resources
 	{
@@ -365,7 +361,10 @@ bool Renderer::Init(HWND window_handle) {
 		nullptr,
 		IID_PPV_ARGS(&m_commandList)));
 	
-	// we don't record any commands yet
+	// initialize scene 
+	{
+		m_scene.Init(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get(), L"scene.jj");
+	}
 	UNWRAP(m_commandList->Close());
 	
 	// ----------------------------------------------------------------------------------------------------------------

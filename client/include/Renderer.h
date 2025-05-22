@@ -162,19 +162,19 @@ struct Texture {
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList, const wchar_t *filename) {
 		data.len = DX::ReadDataToPtr(filename, &data.ptr);
 		if (data.len <= 0) {
-			printf("ERROR: failed to read scene file\n");
+			printf("ERROR: failed to read texture file\n");
 			return false;
 		}
 		
 		// use ddspp to decode the header and write it to a cleaner descriptor
 		ddspp::Descriptor desc;
 		ddspp::Result decodeResult = ddspp::decode_header(data.ptr, desc);
-		UNWRAP(decodeResult == ddspp::Success);
+		if (decodeResult != ddspp::Success) return false;
 
 		BYTE* initialData = data.ptr + desc.headerSize;
 
-		UNWRAP(desc.type == ddspp::Texture2D); // we only support 2D textures
-		UNWRAP(desc.arraySize == 1); // we do not support arrays of textures 
+		if (desc.type != ddspp::Texture2D) return false; // we only support 2D textures
+		if (desc.arraySize != 1) return false; // we do not support arrays of textures 
 		// describes texture in the default heap
 		D3D12_RESOURCE_DESC textureDesc = {
 			.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
@@ -189,12 +189,8 @@ struct Texture {
 			.Flags            = D3D12_RESOURCE_FLAG_NONE,
 		};
 	
-		// default heap where the texture will end up and the SRV pointing to it
-		// we don't need an SRV desc https://alextardif.com/D3D11To12P3.html
-		descriptor = descriptorAllocator->Allocate();
-		device->CreateShaderResourceView(resource.Get(), nullptr, descriptor.cpu);
 		
-		constexpr UINT MAX_TEXTURE_SUBRESOURCE_COUNT = 12; // enough for 4k textures; may need more for a lightmap
+		constexpr UINT MAX_TEXTURE_SUBRESOURCE_COUNT = 16; // enough for 4k textures; may need more for a lightmap
 		UINT64 textureMemorySize = 0;
 		UINT numRows[MAX_TEXTURE_SUBRESOURCE_COUNT];
 		UINT64 rowSizesInBytes[MAX_TEXTURE_SUBRESOURCE_COUNT];
@@ -251,6 +247,10 @@ struct Texture {
 										D3D12_RESOURCE_STATE_COPY_DEST,
 										nullptr,
 										IID_PPV_ARGS(&resource));
+
+		// we don't need an SRV desc https://alextardif.com/D3D11To12P3.html
+		descriptor = descriptorAllocator->Allocate();
+		device->CreateShaderResourceView(resource.Get(), nullptr, descriptor.cpu);
 		
 		// copy from upload heap to default heap
 		for (UINT subResourceIndex = 0; subResourceIndex < desc.numMips; subResourceIndex++) {
@@ -276,6 +276,7 @@ enum SceneBufferType {
 	SCENE_BUFFER_TYPE_VERTEX_POSITION,
 	SCENE_BUFFER_TYPE_VERTEX_SHADING,
 	SCENE_BUFFER_TYPE_MATERIAL_ID,
+	SCENE_BUFFER_TYPE_MATERIAL,
 	SCENE_BUFFER_TYPE_COUNT
 };
 struct Scene {
@@ -288,16 +289,19 @@ struct Scene {
 			Buffer<XMFLOAT3>          vertexPosition;
 			Buffer<VertexShadingData> vertexShading;
 			Buffer<uint8_t>           materialID;
+			Buffer<Material>          materials;
 		};
 		Buffer<BYTE> buffers[SCENE_BUFFER_TYPE_COUNT];
 	};
+
+	Slice<Texture> textures;
 
 	Scene() {
 		memset(this, 0, sizeof(*this));
 	};
 	~Scene() { Release(); }
 
-	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, const wchar_t *filename) {
+	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList, const wchar_t *filename) {
 		// ------------------------------------------------------------------------------------------------------------
 		// slurp data from file 
 		data.len = DX::ReadDataToPtr(filename, &data.ptr);
@@ -355,7 +359,18 @@ struct Scene {
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
 		vertexShading .Init(vertexShadingSlice , device, descriptorAllocator, L"Scene Vertex Shading Buffer");
 		materialID    .Init(materialIDSlice    , device, descriptorAllocator, L"Scene Material ID Buffer");
+		materials     .Init(materialSlice      , device, descriptorAllocator, L"Scene Material Buffer");
+		
+		textures = {
+			.ptr = reinterpret_cast<Texture*>(malloc(texturePathSlice.len * sizeof(Texture))), 
+			.len = texturePathSlice.len
+		};
 
+		// load in all textures
+		for (uint32_t i = 0; i < textures.len; ++i) {	
+			textures.ptr[i].Init(device, descriptorAllocator, commandList, texturePathSlice.ptr[i]);
+		}
+		/*
 		for (uint32_t i = 0; i < materialSlice.len; ++i) {
 			Material currMaterial = materialSlice.ptr[i];
 			bool hasTexture = (currMaterial.base_color & 0xA0000000) == 0;
@@ -373,7 +388,7 @@ struct Scene {
 			}
 			
 			
-		}
+		}*/
 
 		return true;
 	}

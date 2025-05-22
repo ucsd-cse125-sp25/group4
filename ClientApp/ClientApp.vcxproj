@@ -24,6 +24,7 @@
     <ClInclude Include="..\client\include\d3dx12.h" />
     <ClInclude Include="..\client\include\ddspp.h" />
     <ClInclude Include="..\client\include\Renderer.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\client\src\ClientGame.cpp" />
