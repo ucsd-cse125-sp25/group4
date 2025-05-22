@@ -257,9 +257,9 @@ with open('scene.jj', 'wb') as f:
         # windows uses the wchar_t type which is utf_16_le
         path_bytes = path.encode("utf_16_le")
         # we use 256 byte strings and need room for 1 null-terminator
-        assert(len(path_bytes) < 256)
+        assert(len(path_bytes) < 512)
         # missing bytes are padded with null terminators
-        f.write(pack("256s", path_bytes))
+        f.write(pack("512s", path_bytes))
         
 print("File written successfully")
 # use this to write "scene.jj" into your working directory

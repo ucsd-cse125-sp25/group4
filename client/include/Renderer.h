@@ -21,7 +21,7 @@ constexpr uint32_t VERTS_PER_TRI = 3;
 constexpr size_t BYTES_PER_DWORD = 4;
 constexpr size_t DRAW_CONSTANT_NUM_DWORDS = sizeof(PerDrawConstants)/BYTES_PER_DWORD;
 
-typedef char TexturePath_t[256];
+typedef wchar_t TexturePath_t[256];
 
 inline uint32_t alignU32(uint32_t num, uint32_t alignment) {
 	return ((num + alignment - 1) / alignment) * alignment;
@@ -349,6 +349,7 @@ struct Scene {
 			.ptr = reinterpret_cast<TexturePath_t*>(materialSlice.after()),
 			.len = header->numTextures,
 		};
+		
 
 		// create buffers from slices
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
@@ -362,14 +363,13 @@ struct Scene {
 				printf("material %d has diffuse texture %s\n", i, texturePathSlice.ptr[currMaterial.base_color]);
 			} else {
 				// unpack T1R10G11B10
-				int r_quantized = (currMaterial.base_color & 0b01111111111000000000000000000000 >> 21);
-				int g_quantized = (currMaterial.base_color & 0b00000000000111111111110000000000 >> 10);
-				int b_quantized = (currMaterial.base_color & 0b00000000000000000000001111111111 >> 00);
-				float r = r_quantized/powf(2.0f, 10);
-				float g = g_quantized/powf(2.0f, 11);
-				float b = b_quantized/powf(2.0f, 10);
-
-				printf("material %d has diffuse color %f %f %f\n", i, r, g, b);
+				// 1 1100110011_11001100110_1100110011
+				int r_quantized = ((currMaterial.base_color & 0b01111111111000000000000000000000) >> 21);
+				int g_quantized = ((currMaterial.base_color & 0b00000000000111111111110000000000) >> 10);
+				int b_quantized = ((currMaterial.base_color & 0b00000000000000000000001111111111) >> 00);
+				float r = r_quantized/powf(2, 10);
+				float g = g_quantized/powf(2, 11);
+				float b = b_quantized/powf(2, 10);
 			}
 			
 			
