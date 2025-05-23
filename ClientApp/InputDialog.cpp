@@ -56,7 +56,7 @@ namespace {
 
     // create Cancel
     CreateWindow(
-        L"BUTTON", L"Cancel",
+        L"BUTTON", L"Local",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         dlgW - margin - btnW, margin + editH + margin, 
         btnW, btnH,
@@ -78,7 +78,7 @@ namespace {
                 return 0;
             }
             else if (LOWORD(wParam) == IDC_CANCEL) {
-                g_result.clear();
+                g_result = "127.0.0.1";
                 DestroyWindow(hWnd);
                 PostQuitMessage(0);
                 return 0;
