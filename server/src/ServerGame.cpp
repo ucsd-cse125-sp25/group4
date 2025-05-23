@@ -21,10 +21,10 @@ ServerGame::ServerGame(void) :
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.1f, 0.15f, 0, true, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, -0.1f, 0.15f, 0, false, false, false },
-			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 0, true, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 0, false, false, false },
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 0, false, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 0, false, false, false },
 		}
 	};
 
@@ -331,33 +331,48 @@ void ServerGame::startShopPhase() {
 // -----------------------------------------------------------------------------
 
 void ServerGame::applyMovements() {
-	for (auto& [id, mv] : latestMovement) {
-		//printf("[CLIENT %d] MOVE_INTENT: DIR '%c', PITCH %f, YAW %f\n", id, mv.direction, mv.pitch, mv.yaw);
-		// update direction regardless of collision
-		state->players[id].yaw = mv.yaw;
-		state->players[id].pitch = mv.pitch;
+	for (unsigned int id = 0; id < num_players; ++id) {
+		auto& player = state->players[id];
+		printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
 
-		if (mv.jump && state->players[id].isGrounded == true)
-			state->players[id].zVelocity = JUMP_VELOCITY;
+		float dx = 0, dy = 0;
+		if (latestMovement.count(id)) {
+			auto& mv = latestMovement[id];
+			// update direction regardless of collision
+			player.yaw = mv.yaw;
+			player.pitch = mv.pitch;
 
-		// normalize the direction vector
-		float magnitude = sqrt(powf(mv.direction[0], 2) + powf(mv.direction[1], 2) + powf(mv.direction[2], 2));
-		if (magnitude != 0)
-			for (int i = 0; i < 3; i++)
-				mv.direction[i] /= magnitude;
+			// normalize the direction vector
+			float magnitude = sqrt(powf(mv.direction[0], 2) + powf(mv.direction[1], 2) + powf(mv.direction[2], 2));
+			if (magnitude != 0)
+				for (int i = 0; i < 3; i++)
+					mv.direction[i] /= magnitude;
 
-		// convert intent + yaw into 2d vector
-		// CLOCKWISE positive
-		// foward x/y, actual delta x/y
-		float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), fz = 1, dx = 0, dy = 0, dz = 0;
-		
-		dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * state->players[id].speed;
+			// convert intent + yaw into 2d vector
+			// CLOCKWISE positive
+			// foward x/y, actual delta x/y
+			float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), fz = 1;
 
-		dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * state->players[id].speed;
+			dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * player.speed;
 
-		dz = 0;
+			dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * player.speed;
+		}
 
-		updateClientPositionWithCollision(id, dx, dy, dz);
+		/* physics logic embedded */
+		bool wasGrounded = player.isGrounded;
+		player.isGrounded = false;
+
+		if (latestMovement.count(id) && latestMovement[id].jump && wasGrounded == true) {
+			player.zVelocity = JUMP_VELOCITY;
+			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
+		}
+		// gravity
+		player.zVelocity -= GRAVITY;
+		if (player.zVelocity < TERMINAL_VELOCITY)
+			player.zVelocity = TERMINAL_VELOCITY;
+
+
+		updateClientPositionWithCollision(id, dx, dy, player.zVelocity);
 	}
 
 	latestMovement.clear(); // consume the movement, don't keep for next tick
@@ -372,6 +387,7 @@ void ServerGame::applyCamera() {
 }
 
 void ServerGame::applyPhysics() {
+	/*
 	for (int c = 0; c < 4; c++) {
 		// By default, assumes the player is not on the ground
 		state->players[c].isGrounded = false;
@@ -383,6 +399,7 @@ void ServerGame::applyPhysics() {
 		state->players[c].zVelocity -= GRAVITY;
 		if (state->players[c].zVelocity < TERMINAL_VELOCITY) state->players[c].zVelocity = TERMINAL_VELOCITY;
 	}
+	*/
 }
 
 void ServerGame::applyAttacks()
@@ -473,7 +490,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 	float delta[3] = { dx, dy, dz };
 
 	// Bounding box for the current client
-	float playerRadius = 1.0f * .075;
+	float playerRadius = 1.0f * PLAYER_SCALING_FACTOR;
 
 	// Bounding box before player moves
 	BoundingBox staticPlayerBox = {
@@ -527,16 +544,17 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 			};
 
 			if (checkCollision(playerBox, otherClientBox)) {
-				printf("Collision detected between client %d and client %d, %d\n", clientId, c, i);
+				// printf("[CLIENT %d] Collision detected with client %d, axis=%d\n", clientId, c, i);
 
 				float distance = findDistance(staticPlayerBox, otherClientBox, i) * (delta[i] > 0 ? 1 : -1);
 				if (abs(distance) < abs(delta[i])) delta[i] = distance;
 
 				// If the z is being changed, reset z velocity and "ground" player
 				if (i == 2) {
+					// Check with zVelocity, not dz
+					if (state->players[clientId].zVelocity < 0) state->players[clientId].isGrounded = true;
 					state->players[clientId].zVelocity = 0;
-					// The if statement here blocks climbing on the ceiling
-					if (delta[2] < 0) state->players[clientId].isGrounded = true;
+					// printf("[CLIENT %d] Collision with player detected. isGrounded=%d, zVelocity=%f\n", clientId, state->players[clientId].isGrounded ? 1 : 0, state->players[clientId].zVelocity);
 				}
 			}
 		}
@@ -553,8 +571,14 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 
 				// If the z is being changed, reset z velocity and "ground" player
 				if (i == 2) {
+					// printf("[CLIENT %d] Collision with box detected. zVelocity=%f, deltaZ=%f\n", clientId,  state->players[clientId].zVelocity, delta[2]);
+					if (state->players[clientId].zVelocity < 0) state->players[clientId].isGrounded = true;
 					state->players[clientId].zVelocity = 0;
-					if (delta[2] < 0) state->players[clientId].isGrounded = true;
+					/*
+					printf("BOXID=%llu, box.minZ=%f, box.maxZ=%f\n", b, boxes2d[b].minZ, boxes2d[b].maxZ);
+					printf("Dynamic playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", playerBox.minZ, playerBox.maxZ);
+					printf("Static  playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", staticPlayerBox.minZ, staticPlayerBox.maxZ);
+					*/
 				}
 			}
 		}
@@ -568,6 +592,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 		state->players[clientId].z = 0;
 		state->players[clientId].zVelocity = 0;
 		if (delta[2] < 0) state->players[clientId].isGrounded = true;
+		// printf("[CLIENT %d] Collision with z-plane detected. isGrounded=%d, zVelocity=%f\n", clientId, state->players[clientId].isGrounded ? 1 : 0, state->players[clientId].zVelocity);
 	}
 
 	//printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
