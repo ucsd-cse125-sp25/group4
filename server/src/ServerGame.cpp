@@ -135,7 +135,7 @@ void ServerGame::receiveFromClients()
 			case PacketType::MOVE:
 			{
 				MovePayload* mv = (MovePayload*)&(network_data[i + HDR_SIZE]);
-				printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f, JUMP %d\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw, mv->jump);
+				// printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f, JUMP %d\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw, mv->jump);
 				// register the latest movement, but do not update yet
 				latestMovement[id] = *mv;
 				break;
@@ -143,7 +143,7 @@ void ServerGame::receiveFromClients()
 			case PacketType::CAMERA:
 			{
 				CameraPayload* cam = (CameraPayload*)&(network_data[i+HDR_SIZE]);
-				printf("[CLIENT %d] CAMERA_PACKET: PITCH %f, YAW %f\n", id, cam->pitch, cam->yaw);
+				// printf("[CLIENT %d] CAMERA_PACKET: PITCH %f, YAW %f\n", id, cam->pitch, cam->yaw);
 				latestCamera[id] = *cam;
 				break;
 			}
@@ -333,7 +333,7 @@ void ServerGame::startShopPhase() {
 void ServerGame::applyMovements() {
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
-		printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
+		// printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
 
 		float dx = 0, dy = 0;
 		if (latestMovement.count(id)) {
