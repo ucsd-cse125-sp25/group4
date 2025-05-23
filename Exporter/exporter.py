@@ -114,9 +114,9 @@ for material in bpy.data.materials:
     for input_type, input in d.items():
         # save images
         if isinstance(input, bpy.types.Image):
-            filepath_base = f"./textures_raw/{material_name_file}_{input_type}.png"
-            filepath_save = f"{filepath_base}.png"
-            filepath_dds = f"{filepath_base}.dds"
+            filename = f"{material_name_file}_{input_type}"
+            filepath_save = f"./textures_raw/{filename}.png"
+            filepath_dds = f"./textures/{filename}.dds"
             
             if not os.path.exists(filepath_save):
                 input.save(filepath=filepath_save, quality=100, save_copy=True)
@@ -201,13 +201,15 @@ for obj in bpy.data.objects:
         loop_uvs = loop_uvs.reshape(-1, UV_FLOATS_PER_VERT) # (num_bmesh_loops, 2)
         uv = loop_uvs[loop_indices]
         uv = uv.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT)
+        # DirectX texture coordinates have a inverted u/y axis compared to Blender
+        uv[:, :, 1] = 1 - uv[:, :, 1]
     
     # interleave normal and uv information
     normal_uv_interleaved = np.concatenate((normals, uv), axis=-1)
 
     # material ids
     if len(obj.material_slots) == 0: # edge case: object has no materials
-        material_ids = np.zeros(len(bmesh.loop_triangles), dtype=np.uint)
+        material_ids = np.zeros(len(bmesh.loop_triangles), dtype=np.uint16)
     else:
         slot_index_to_materialid = np.array([material_names_to_indices[slot.material.name] for slot in obj.material_slots])
         triangle_to_slot_index = np.zeros(len(bmesh.loop_triangles), dtype=np.uint16)
@@ -235,7 +237,7 @@ def pack_bytes(layout : str, array : np.array) -> bytes:
 with open('scene.jj', 'wb') as f:
     # write header 
     # version
-    f.write(pack("I", 1))
+    f.write(pack("I", 2))
     # number of triangles
     f.write(pack("I", consolidated_mesh.num_tris))
     # number of materials

@@ -142,10 +142,15 @@ struct Triangles {
 struct Texture {
 	Slice<unsigned char> data; // owning slice of raw DDS File data
 	ComPtr<ID3D12Resource> resource;
+	ComPtr<ID3D12Resource> uploadHeap;
 	Descriptor descriptor;
 	
 	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList, const wchar_t *filename) {
-		if (DX::ReadDataToSlice(filename, data) != DX::ReadDataStatus::SUCCESS) return false;
+		DX::ReadDataStatus status = DX::ReadDataToSlice(filename, data);
+		if (status != DX::ReadDataStatus::SUCCESS) {
+			printf("fuck2\n");
+			return false;
+		}
 		
 		
 		// use ddspp to decode the header and write it to a cleaner descriptor
@@ -182,7 +187,6 @@ struct Texture {
 		device->GetCopyableFootprints(&textureDesc, 0, (uint32_t)numSubResources, 0, layouts, numRows, rowSizesInBytes, &textureMemorySize);
 
 		// create upload heap
-		ComPtr<ID3D12Resource> uploadHeap;
 		D3D12_HEAP_PROPERTIES uploadHeapProperties = { .Type = D3D12_HEAP_TYPE_UPLOAD };
 		CD3DX12_RESOURCE_DESC uploadResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(textureMemorySize);
 		UNWRAP(device->CreateCommittedResource(
@@ -193,6 +197,7 @@ struct Texture {
 			nullptr, 
 			IID_PPV_ARGS(&uploadHeap)
 		));
+		uploadHeap->SetName(L"Texture upload heap");
 		
 		// map memory
 		void* mapped;
@@ -229,6 +234,7 @@ struct Texture {
 										D3D12_RESOURCE_STATE_COPY_DEST,
 										nullptr,
 										IID_PPV_ARGS(&resource));
+		resource->SetName(filename);
 
 		// we don't need an SRV desc https://alextardif.com/D3D11To12P3.html
 		descriptor = descriptorAllocator->Allocate();
@@ -237,9 +243,9 @@ struct Texture {
 		// copy from upload heap to default heap
 		for (UINT subResourceIndex = 0; subResourceIndex < desc.numMips; subResourceIndex++) {
 			D3D12_TEXTURE_COPY_LOCATION destination = {
-				.pResource       = resource.Get(),
-				.Type            = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
-				.PlacedFootprint = layouts[subResourceIndex],
+				.pResource        = resource.Get(),
+				.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+				.SubresourceIndex = subResourceIndex,
 			};
 
 			D3D12_TEXTURE_COPY_LOCATION source = {
@@ -249,11 +255,26 @@ struct Texture {
 			};
 			commandList->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
 		}
+
+		{
+			D3D12_RESOURCE_BARRIER barrier = {
+				.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+				.Transition = {
+					.pResource = resource.Get(),
+					.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+					.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
+					.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+				},
+			};
+
+			commandList->ResourceBarrier(1, &barrier);
+		}
+		return true;
 	}
 };
 
 
-constexpr uint32_t SCENE_VERSION = 000'000'001;
+constexpr uint32_t SCENE_VERSION = 000'000'002;
 enum SceneBufferType {
 	SCENE_BUFFER_TYPE_VERTEX_POSITION,
 	SCENE_BUFFER_TYPE_VERTEX_SHADING,
@@ -264,13 +285,13 @@ enum SceneBufferType {
 struct Scene {
 	// the whole scene file
 	Slice<BYTE> data;
-	
+	SceneHeader *header;
 	// buffers reference the data slice
 	union {
 		struct {
 			Buffer<XMFLOAT3>          vertexPosition;
 			Buffer<VertexShadingData> vertexShading;
-			Buffer<uint16_t>           materialID;
+			Buffer<uint16_t>          materialID;
 			Buffer<Material>          materials;
 		};
 		Buffer<BYTE> buffers[SCENE_BUFFER_TYPE_COUNT];
@@ -278,17 +299,19 @@ struct Scene {
 
 	Slice<Texture> textures;
 
+	bool initialized = false;
+
 	Scene() {
 		memset(this, 0, sizeof(*this));
 	};
 	~Scene() { Release(); }
-
-	bool Init(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList, const wchar_t *filename) {
+	
+	bool ReadToCPU(const wchar_t *filename) {
 		// ------------------------------------------------------------------------------------------------------------
 		// slurp data from file 
 		if (DX::ReadDataToSlice(filename, data) != DX::ReadDataStatus::SUCCESS) return false;
 		
-		SceneHeader* header = reinterpret_cast<SceneHeader*>(data.ptr);
+		header = reinterpret_cast<SceneHeader*>(data.ptr);
 		// sanity checks
 		if (header->version != SCENE_VERSION) {
 			printf("eRROR: version of scene file is %d while version of parser is %d \n", header->version, SCENE_VERSION);
@@ -298,7 +321,10 @@ struct Scene {
 			printf("ERROR: scene has no triangles\n");
 			return false;
 		}
-		
+	
+		return true;
+	}
+	bool SendToGPU(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList) {
 		// contains scene data but not the header	
 		Slice<BYTE> SceneBuffers = {
 			.ptr = data.ptr + sizeof(SceneHeader),
@@ -338,42 +364,36 @@ struct Scene {
 		materials     .Init(materialSlice      , device, descriptorAllocator, L"Scene Material Buffer");
 		
 		textures = {
-			.ptr = reinterpret_cast<Texture*>(malloc(texturePathSlice.len * sizeof(Texture))), 
+			.ptr = reinterpret_cast<Texture*>(calloc(texturePathSlice.len, sizeof(Texture))), 
 			.len = texturePathSlice.len
 		};
 
 		// load in all textures
 		for (uint32_t i = 0; i < textures.len; ++i) {	
 			bool success = textures.ptr[i].Init(device, descriptorAllocator, commandList, texturePathSlice.ptr[i]);
-			/*
-			// load in default materials for everything if a texture cannot be loaded
 			if (!success) {
-				memset(materialIDSlice.ptr, 0, materialIDSlice.numBytes());
-				break;
-			};*/
+				for (int j = 1; j < materialSlice.len; ++j) {
+					Material mat = materialSlice.ptr[j];
+					Material defaultMaterial = materialSlice.ptr[0];
+					if (mat.base_color == i) {
+						mat.base_color = defaultMaterial.base_color;
+					}
+					if (mat.metallic == i) {
+						mat.metallic = defaultMaterial.metallic;
+					}
+					if (mat.roughness == i) {
+						mat.roughness = defaultMaterial.roughness;
+					}
+					if (mat.normal == i) {
+						mat.normal = defaultMaterial.normal;
+					}
+				}
+			}
 		}
 
-		materialID.Init(materialIDSlice, device, descriptorAllocator, L"Scene Material ID Buffer");
-		/*
-		for (uint32_t i = 0; i < materialSlice.len; ++i) {
-			Material currMaterial = materialSlice.ptr[i];
-			bool hasTexture = (currMaterial.base_color & 0xA0000000) == 0;
-			if (hasTexture) {
-				printf("material %d has diffuse texture %s\n", i, texturePathSlice.ptr[currMaterial.base_color]);
-			} else {
-				// unpack T1R10G11B10
-				// 1 1100110011_11001100110_1100110011
-				int r_quantized = ((currMaterial.base_color & 0b01111111111000000000000000000000) >> 21);
-				int g_quantized = ((currMaterial.base_color & 0b00000000000111111111110000000000) >> 10);
-				int b_quantized = ((currMaterial.base_color & 0b00000000000000000000001111111111) >> 00);
-				float r = r_quantized/powf(2, 10);
-				float g = g_quantized/powf(2, 11);
-				float b = b_quantized/powf(2, 10);
-			}
-			
-			
-		}*/
 
+		materialID.Init(materialIDSlice, device, descriptorAllocator, L"Scene Material ID Buffer");
+		initialized = true;
 		return true;
 	}
 	void Release() {

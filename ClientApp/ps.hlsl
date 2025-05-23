@@ -7,7 +7,7 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
 {
     StructuredBuffer<min16uint> material_indices = ResourceDescriptorHeap[drawConstants.material_ids_idx];
     min16uint material_idx = material_indices[input.triangle_id];
-    StructuredBuffer<Material> materials= ResourceDescriptorHeap[drawConstants.materials_idx];
+    StructuredBuffer<Material> materials = ResourceDescriptorHeap[drawConstants.materials_idx];
     Material material = materials[material_idx];
     float3 diffuseColor;
     if (material.base_color < 0)
@@ -33,7 +33,7 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     float3 toLight = lightpos - input.positionGlobal.xyz;
     float3 lightDir = normalize(toLight);
 
-    float diffuseStrength = clamp(dot(lightDir, normalize(input.normal)), 0, 1);
+    float diffuseStrength = clamp(dot(lightDir, normalize(input.normal)), 0.3, 1);
     
     float3 color = diffuseStrength * diffuseColor;
     return float4(color, 1);

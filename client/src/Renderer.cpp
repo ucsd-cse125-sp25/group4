@@ -133,6 +133,10 @@ bool Renderer::Init(HWND window_handle) {
 
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 
+	// read Scenefile
+	{
+		m_scene.ReadToCPU(L"scene.jj");
+	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// descriptor heaps 
 	{
@@ -147,11 +151,12 @@ bool Renderer::Init(HWND window_handle) {
 		UNWRAP(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		
+		uint32_t numSceneTextures = m_scene.header->numTextures;
 		// all resource descriptors go here
 		m_resourceDescriptorAllocator.Init(
 			m_device.Get(),
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-			SCENE_BUFFER_TYPE_COUNT + 3,
+			SCENE_BUFFER_TYPE_COUNT + 3 + numSceneTextures,
 			L"Resource Descriptor Heap");
 
 		// create Depth Stencil View (DSV) descriptor heap
@@ -196,7 +201,7 @@ bool Renderer::Init(HWND window_handle) {
 			.NumDescriptors = m_resourceDescriptorAllocator.capacity,
 			.BaseShaderRegister = 0,
 			.RegisterSpace = 0,
-			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC,
+			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE,
 			.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
 			}
 		};
@@ -231,9 +236,9 @@ bool Renderer::Init(HWND window_handle) {
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {
 			.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT,
-			.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-			.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-			.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+			.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 			.MipLODBias = 0,
 			.MaxAnisotropy = 0,
 			.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
@@ -379,11 +384,9 @@ bool Renderer::Init(HWND window_handle) {
 		nullptr,
 		IID_PPV_ARGS(&m_commandList)));
 	
-	// initialize scene 
-	{
-		m_scene.Init(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get(), L"scene.jj");
-	}
 	UNWRAP(m_commandList->Close());
+	
+	
 	
 	// ----------------------------------------------------------------------------------------------------------------
 	// create vertex buffer for player
@@ -584,11 +587,17 @@ bool Renderer::Render() {
 	
 	// Set necessary state
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+
+	if (!m_scene.initialized) {
+		m_scene.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
 	
 	// set heaps for constant buffer
 	ID3D12DescriptorHeap *ppHeaps[] = {m_resourceDescriptorAllocator.heap.Get()};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	m_commandList->SetGraphicsRootDescriptorTable(0, m_resourceDescriptorAllocator.gpu_base);
+	
+
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
