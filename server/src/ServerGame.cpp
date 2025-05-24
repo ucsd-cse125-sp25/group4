@@ -244,6 +244,14 @@ void ServerGame::startARound(int seconds) {
 			player.x = spawnPoints[spawn].x;
 			player.y = spawnPoints[spawn].y;
 			player.z = spawnPoints[spawn].z;
+			
+			float jiggle = 3 * PLAYER_SCALING_FACTOR;
+			if (id == 2) {
+				player.x += jiggle;
+			}
+			else if (id == 3) {
+				player.y += jiggle;
+			}
 		}
 
 		player.isDead = false;
