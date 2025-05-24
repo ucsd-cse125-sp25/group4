@@ -14,6 +14,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		L"Enter IP address of the server", 300, 120
 	);
 	if (!input.empty()) {
+		if (input == " ") {
+			input = "127.0.0.1";
+		}
 		// convert wstring to char*
 		// User clicked OK; do something with input
 		ClientGame client(hInstance, nCmdShow, input);
