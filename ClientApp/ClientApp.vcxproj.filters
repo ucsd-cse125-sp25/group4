@@ -33,7 +33,7 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="InputDialog.h">
+    <ClInclude Include="..\client\include\InputDialog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -50,7 +50,7 @@
     <ClCompile Include="..\client\src\Renderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="InputDialog.cpp">
+    <ClCompile Include="..\client\src\InputDialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

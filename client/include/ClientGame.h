@@ -33,7 +33,6 @@ public:
 	void processShopInputs();
 
 	void handleShopItemSelection(int choice);
-	void updateBuyable();
 
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);

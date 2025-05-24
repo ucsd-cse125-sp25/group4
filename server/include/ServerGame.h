@@ -19,6 +19,8 @@
 #define TERMINAL_VELOCITY -0.75f * PLAYER_SCALING_FACTOR
 #define ATTACK_RANGE 4.0f
 #define ATTACK_ANGLE_DEG 45.0f
+#define RUNNER_SPAWN_PERIOD 5
+#define HUNTER_SPAWN_PERIOD 10
 
 
 class ServerGame {
@@ -54,6 +56,22 @@ private:
 	ServerNetwork* network;
 	char network_data[MAX_PACKET_SIZE];
 
+	int runner_time, hunter_time; // times for each of the players to start moving
+	
+	Point hunterSpawn = { -1.17, 0.042, 0.068 }; // center of the carpet cross
+	
+	static constexpr int NUM_SPAWNS = 7;
+	Point spawnPoints[NUM_SPAWNS] =
+	{
+		{ -2.175f, 2.307f, 0.92f },		// desk next to sun god
+		{ -1.533f, 1.115f, 0.48f },		// on chair
+		{ -1.162f, -1.346f, 0.14f },	// in bookshelf
+		{ 2.255f, 2.054f, 0.03f },		// under bed
+		{ 2.268f, 0.339f, 0.89f },		// on top of drawers/dresser
+		{ -0.274f, -1.386f, 0.03f },	// floor next to the chimney thing
+		{ -0.976f, 2.263f, 0.03f }		// under desk
+	};
+
 	/* Collision */
 	// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	vector<BoundingBox> boxes2d;
@@ -67,6 +85,7 @@ private:
 	std::mt19937 rng;
 	std::uniform_int_distribution<std::mt19937::result_type> randomHunterPowerupGen;
 	std::uniform_int_distribution<std::mt19937::result_type> randomRunnerPowerupGen;
+	std::uniform_int_distribution<std::mt19937::result_type> randomSpawnLocationGen;
 
 
 	/* State */

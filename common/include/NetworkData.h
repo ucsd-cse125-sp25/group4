@@ -61,6 +61,10 @@ struct PacketHeader {
 };
 static constexpr size_t HDR_SIZE = sizeof(PacketHeader);
 
+struct Point {
+	float x, y, z;
+};
+
 // Define payloads for each PacketType
 
 struct InitPayload {};

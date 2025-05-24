@@ -8,10 +8,11 @@
 using namespace std;
 unsigned int ServerGame::client_id;
 
-ServerGame::ServerGame(void) : 
+ServerGame::ServerGame(void) :
 	rng(dev()),
 	randomRunnerPowerupGen((unsigned int)Powerup::RUNNER_POWERUPS, (unsigned int)Powerup::NUM_RUNNER_POWERUPS - 1),
-	randomHunterPowerupGen((unsigned int)Powerup::HUNTER_POWERUPS, (unsigned int)Powerup::NUM_HUNTER_POWERUPS - 1)
+	randomHunterPowerupGen((unsigned int)Powerup::HUNTER_POWERUPS, (unsigned int)Powerup::NUM_HUNTER_POWERUPS - 1),
+	randomSpawnLocationGen(0, (unsigned int)NUM_SPAWNS - 1)
 {
 	client_id = 0;
 	network = new ServerNetwork();
@@ -135,9 +136,13 @@ void ServerGame::receiveFromClients()
 			case PacketType::MOVE:
 			{
 				MovePayload* mv = (MovePayload*)&(network_data[i + HDR_SIZE]);
-				printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f, JUMP %d\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw, mv->jump);
 				// register the latest movement, but do not update yet
-				latestMovement[id] = *mv;
+				if ((id == 0 && state->tick > hunter_time)
+					|| (id != 0 && state->tick > runner_time))
+				{
+					printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f, JUMP %d\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw, mv->jump);
+					latestMovement[id] = *mv;
+				}
 				break;
 			}
 			case PacketType::CAMERA:
@@ -224,6 +229,29 @@ void ServerGame::startARound(int seconds) {
 			printf("Player %d Powerup: %d,\n", id, p);
 		}
 	}
+	for (unsigned int id = 0; id < num_players; ++id) {
+		auto& player = state->players[id];
+
+		// set spawn locations: center for hunter, random spots for runners
+		if (player.isHunter) {
+			player.x = hunterSpawn.x;
+			player.y = hunterSpawn.y;
+			player.z = hunterSpawn.z;
+		}
+		else
+		{
+			int spawn = randomSpawnLocationGen(rng);
+			player.x = spawnPoints[spawn].x;
+			player.y = spawnPoints[spawn].y;
+			player.z = spawnPoints[spawn].z;
+		}
+
+		player.isDead = false;
+	}
+	int start_tick = state->tick;
+	runner_time = start_tick + (RUNNER_SPAWN_PERIOD * TICKS_PER_SEC);
+	hunter_time = start_tick + (HUNTER_SPAWN_PERIOD * TICKS_PER_SEC);
+
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
 		state_mu.lock();
@@ -333,7 +361,7 @@ void ServerGame::startShopPhase() {
 void ServerGame::applyMovements() {
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
-		printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
+		//printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
 
 		float dx = 0, dy = 0;
 		if (latestMovement.count(id)) {

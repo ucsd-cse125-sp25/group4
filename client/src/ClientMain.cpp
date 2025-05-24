@@ -1,7 +1,7 @@
 #include "ClientGame.h"
 #include <thread>
 #include <string>
-#include "../../ClientApp/InputDialog.h"
+#include "InputDialog.h"
 using namespace std;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
