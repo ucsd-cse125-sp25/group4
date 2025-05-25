@@ -20,7 +20,7 @@
 #define ATTACK_ANGLE_DEG 45.0f
 #define RUNNER_SPAWN_PERIOD 5
 #define HUNTER_SPAWN_PERIOD 10
-
+#define JUMP_POWERUP 1.5f * PLAYER_SCALING_FACTOR
 
 class ServerGame {
 public:
@@ -139,6 +139,8 @@ private:
 	// Shop
 	std::unordered_map<uint8_t, vector<uint8_t>> playerPowerups;
 
+	// Powerups
+	std::unordered_map<uint8_t, float> extraJumpPowerup;
 };
 
 static bool checkCollision(BoundingBox, BoundingBox);

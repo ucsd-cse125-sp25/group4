@@ -5,7 +5,6 @@ using namespace std;
 const wchar_t CLASS_NAME[] = L"Window Class";
 const wchar_t GAME_NAME[] = L"$GAME_NAME";
 
-static std::ofstream debugLog("client_log.txt", std::ios::app);
 
 ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	network = new ClientNetwork(IPAddress);
@@ -384,7 +383,8 @@ void ClientGame::processShopInputs() {
 		// can't have multiple of the same powerup
 		// 1 purchase per shop
 		// how should it be displayed/ordered?
-		applyPowerups(selection);
+		
+		//storePowerups(selection);
 		sendReadyStatusPacket(selection);
 	}
 	else if (!down1 && wasDown1) {
@@ -423,125 +423,33 @@ void ClientGame::handleShopItemSelection(int choice) {
 		}
 	}
 
-void ClientGame::applyPowerups(int selection) {
-	// apply the powerup to the player
-	// TODO: this is a placeholder, actual implementation will depend on the powerup type
+void ClientGame::storePowerups(int selection) {
+	// actual implementation will depend on the powerup type
 	switch ((Powerup)selection) {
 		case Powerup::H_INCREASE_SPEED:
-			gameState->players[id].speed *= 1.5f;
+			//gameState->players[id].speed *= 1.5f;
 			powerups.push_back(Powerup::H_INCREASE_SPEED);
 			break;
 		case Powerup::H_INCREASE_JUMP:
-
+			//gameState->players[id].zVelocity += 5.0f * PLAYER_SCALING_FACTOR; // increase jump height
 			powerups.push_back(Powerup::H_INCREASE_JUMP);
+			break;
+		case Powerup::H_INCREASE_VISION:
+			// TODO?
+			powerups.push_back(Powerup::H_INCREASE_VISION);
+			break;
+		case Powerup::R_INCREASE_SPEED:
+			//gameState->players[id].speed *= 1.5f;
+			powerups.push_back(Powerup::R_INCREASE_SPEED);
+			break;
+		case Powerup::R_INCREASE_JUMP:
+			//gameState->players[id].zVelocity += 5.0f * PLAYER_SCALING_FACTOR; // increase jump height
+			powerups.push_back(Powerup::R_INCREASE_JUMP);
 			break;
 		default:
 			break;
 	}
 }
-
-//// ──────────────────────────────────────────────────────────────
-//// Key mapping for shop slots
-//constexpr int KeyMap[NUM_POWERUP_OPTIONS] = { '1', '2', '3' };
-//
-//// ──────────────────────────────────────────────────────────────
-//// 1) Top-level input handler called once per frame
-//void ClientGame::processShopInputs()
-//{
-//	if (ready) return;                                     // already locked in
-//
-//	handleNumberKeys();                                    // 1 / 2 / 3
-//	if (GetAsyncKeyState('M') & 0x8000) confirmPurchase(); // M = ready
-//}
-//
-//// ──────────────────────────────────────────────────────────────
-//// 2) Detect rising edge on 1 / 2 / 3 and toggle the item
-//void ClientGame::handleNumberKeys()
-//{
-//	static bool keyWasDown[NUM_POWERUP_OPTIONS] = {};      // previous frame
-//
-//	for (int i = 0; i < NUM_POWERUP_OPTIONS; ++i)
-//	{
-//		bool keyNowDown = (GetAsyncKeyState(KeyMap[i]) & 0x8000) != 0;
-//
-//		// rising edge: released → pressed (or vice-versa depending on taste)
-//		if (!keyNowDown && keyWasDown[i]) toggleShopItem(i);
-//
-//		keyWasDown[i] = keyNowDown;
-//	}
-//}
-//
-//// ──────────────────────────────────────────────────────────────
-//// 3) Select exactly one item - if affordable
-//// cost table lives somewhere in your code base
-///*───────────────────────────────────────────────────────────────
-//  Select / deselect a shop item, but never lose the old one
-//  unless the new choice is actually affordable.
-//----------------------------------------------------------------*/
-//void ClientGame::toggleShopItem(int idx)
-//{
-//	const int baseCoins = gameState->players[id].coins;
-//
-//	/*— What (if anything) is already selected? —*/
-//	int  curIdx = -1;
-//	int  curCost = 0;
-//	for (int i = 0; i < NUM_POWERUP_OPTIONS; ++i)
-//		if (shopOptions[i].isSelected) {                    // at most one
-//			curIdx = i;
-//			curCost = PowerupCosts[shopOptions[i].item];
-//			break;
-//		}
-//
-//	/*— Clicking the same slot again → deselect —*/
-//	if (idx == curIdx)
-//	{
-//		shopOptions[idx].isSelected = false;
-//		tempCoins = baseCoins;                              // restore preview
-//		debugLog << "[Shop] Deselected powerup " << (int)shopOptions[idx].item
-//			<< ", coins restored to " << baseCoins << "\n";
-//		return;
-//	}
-//
-//	/*— Can we afford the new item (with, or without, a trade-in)? —*/
-//	const int candCost = PowerupCosts[shopOptions[idx].item];
-//	const bool affordable =
-//		(curIdx == -1) ? (candCost <= baseCoins) :
-//		/* we “refund” curCost first */   (candCost <= baseCoins + curCost);
-//
-//	if (!affordable) {
-//		debugLog << "[Shop] Cannot afford powerup " << (int)shopOptions[idx].item
-//			<< " (cost: " << candCost << ", available: "
-//			<< (baseCoins + curCost) << ")\n";
-//		return;                               // keep old choice
-//	}
-//	/*— Swap selections —*/
-//	if (curIdx != -1) shopOptions[curIdx].isSelected = false;
-//	shopOptions[idx].isSelected = true;
-//
-//	/*— Update preview balance —*/
-//	tempCoins = baseCoins + curCost - candCost;
-//
-//	debugLog << "[Shop] Selected powerup " << (int)shopOptions[idx].item
-//		<< ", preview coins: " << tempCoins << "\n";
-//}
-//
-//
-//// ──────────────────────────────────────────────────────────────
-//// 4) Commit the purchase when the player presses “M”
-//void ClientGame::confirmPurchase()
-//{
-//	ready = true;
-//	gameState->players[id].coins = tempCoins;              // final balance
-//
-//	uint8_t selection = 0;                                 // 0 = bought nothing
-//	for (auto& item : shopOptions)
-//		if (item.isSelected) { selection = static_cast<uint8_t>(item.item); break; }
-//
-//	debugLog << "[Shop] Final selection: " << (int)selection
-//		<< ", coins after purchase: " << tempCoins << "\n";
-//	sendReadyStatusPacket(selection);
-//}
-
 
 void ClientGame::handleInput()
 {

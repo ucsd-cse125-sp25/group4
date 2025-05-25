@@ -6,7 +6,6 @@
 #include "NetworkData.h"
 #include "Renderer.h"
 #include <string>
-#include <fstream>
 using namespace std;
 
 
@@ -33,11 +32,8 @@ public:
 	bool processMovementInput();
 	void processShopInputs();
 
-	/*void handleNumberKeys();
-	void toggleShopItem(int idx);
-	void confirmPurchase();*/
 	void handleShopItemSelection(int choice);
-	void applyPowerups(int);
+	void storePowerups(int);
 
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);

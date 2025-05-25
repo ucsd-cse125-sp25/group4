@@ -375,8 +375,8 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
 		break;
 	case Powerup::H_INCREASE_JUMP:
-		state->players[id].zVelocity += 5.0f * PLAYER_SCALING_FACTOR; // increase jump height
-		printf("[POWERUP] Player %d jump height increased to %.2f\n", id, state->players[id].zVelocity);
+		extraJumpPowerup[id] += JUMP_POWERUP; // increase jump height
+		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
 		break;
 	case Powerup::H_INCREASE_VISION:
 		printf("[POWERUP] Player %d increase vision (place holder)", id);
@@ -386,8 +386,8 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
 		break;
 	case Powerup::R_INCREASE_JUMP:
-		state->players[id].zVelocity += 5.0f * PLAYER_SCALING_FACTOR; // increase jump height
-		printf("[POWERUP] Player %d jump height increased to %.2f\n", id, state->players[id].zVelocity);
+		extraJumpPowerup[id] += JUMP_POWERUP; // increase jump height
+		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
 		break;
 	default:
 		break;
@@ -431,7 +431,7 @@ void ServerGame::applyMovements() {
 		player.isGrounded = false;
 
 		if (latestMovement.count(id) && latestMovement[id].jump && wasGrounded == true) {
-			player.zVelocity = JUMP_VELOCITY;
+			player.zVelocity = JUMP_VELOCITY + extraJumpPowerup[id];
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}
 		// gravity
