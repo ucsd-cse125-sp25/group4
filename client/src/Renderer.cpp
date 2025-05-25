@@ -152,7 +152,8 @@ bool Renderer::Init(HWND window_handle) {
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		
 		uint32_t numSceneTextures = m_scene.header->numTextures;
-		// all resource descriptors go here
+		// all resource descriptors go here.
+		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(
 			m_device.Get(),
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
@@ -373,6 +374,55 @@ bool Renderer::Init(HWND window_handle) {
 			// create the pipeline state object
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateDebug)));
 		}
+
+		/*
+		{
+			// --------------------------------------------------------------------
+			// describe UI Pipeline State Object (PSO) 
+
+			// TODO: use slices instead
+			// std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs_ui.cso");
+			// std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps_ui.cso");
+			Slice<BYTE> vertexShaderBytecode;
+			if (DX::ReadDataToSlice(L"timerui_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			Slice<BYTE> pixelShaderBytecode;
+			if (DX::ReadDataToSlice(L"timerui_ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
+				.pRootSignature = m_rootSignature.Get(),
+				.VS = {
+					.pShaderBytecode = vertexShaderBytecode.ptr,
+					.BytecodeLength = vertexShaderBytecode.len,
+				},
+				.PS = {
+					.pShaderBytecode = pixelShaderBytecode.ptr,
+					.BytecodeLength = pixelShaderBytecode.len,
+				},
+				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+				.SampleMask = UINT_MAX,
+				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+				// NO DEPTH for UI
+				.DepthStencilState = {
+					.DepthEnable = FALSE,
+					.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+					.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+					.StencilEnable = FALSE,
+				},
+				.InputLayout = {},
+				.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+				.NumRenderTargets = 1,
+				.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+				.DSVFormat = DXGI_FORMAT_D32_FLOAT,
+				.SampleDesc = {
+					.Count = 1,
+				},
+
+			};
+			psoDesc.RasterizerState.FrontCounterClockwise = true;
+
+			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateTimerUI)));
+		}
+		*/
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------
@@ -405,10 +455,20 @@ bool Renderer::Init(HWND window_handle) {
 			m_vertexBufferBindless.Init(cubeVertsSlice, m_device.Get(), &m_resourceDescriptorAllocator, L"Player Vertex Buffer");
 	}
 	// ----------------------------------------------------------------------------------------------------------------
-	// create vertex buffer for player
+	// create vertex buffer for debug cubes
+	/*
 	{
 		debugCubes.Init(m_device.Get(), &m_resourceDescriptorAllocator);
 	}
+	*/
+
+	// ----------------------------------------------------------------------------------------------------------------
+	// create vertex buffer for timer UI
+	/*
+	{
+		ui.Init(m_device.Get(), &m_resourceDescriptorAllocator);
+	}
+	*/
 		
 	// ----------------------------------------------------------------------------------------------------------------
 	// create constant buffer 
@@ -695,6 +755,22 @@ bool Renderer::Render() {
 	  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
 		m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, (UINT)debugCubes.transforms.size(), 0, 0);
 	}
+
+	// draw Timer UI
+	/*
+	{
+		PerDrawConstants drawConstants = {
+			.viewProject = XMMatrixIdentity(),
+			.modelMatrix = XMMatrixIdentity(),
+			.modelInverseTranspose = XMMatrixIdentity(),
+			.vpos_idx = ui.vertexBuffer.descriptor.index,
+			.vshade_idx = 0, // unused by UI
+		};
+		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+		m_commandList->DrawInstanced(ui.vertexBuffer.data.len, 1, 0, 0);
+	}
+	*/
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {

@@ -476,6 +476,37 @@ struct DebugCubes {
 	}
 };
 
+
+// Timer UI
+/*
+struct UI {
+	Buffer<Vertex> vertexBuffer;
+
+	// initialize memory
+	bool Init(ID3D12Device* device, DescriptorAllocator* descriptorAllocator) {
+		Vertex uiVerts[] = {
+		{{ 0.8f,  1.0f, 0.0f }}, // top-left
+		{{ 1.0f,  1.0f, 0.0f }}, // top-right
+		{{ 0.8f,  0.8f, 0.0f }}, // bottom-left
+
+		{{ 0.8f,  0.8f, 0.0f }}, // bottom-left
+		{{ 1.0f,  1.0f, 0.0f }}, // top-right
+		{{ 1.0f,  0.8f, 0.0f }}, // bottom-right
+		};
+		Slice<Vertex> slice = { uiVerts, _countof(uiVerts) };
+
+		// upload the buffer
+		vertexBuffer.Init(slice, device, descriptorAllocator, L"UI Vertex Buffer");
+		return true;
+	};
+
+	// Release GPU resources
+	void Release() {
+		vertexBuffer.Release();
+	}
+};
+*/
+
 class Renderer {
 public:
 	bool Init(HWND window_handle);
@@ -554,6 +585,12 @@ private:
 
 	// for debug drawing
 	ComPtr<ID3D12PipelineState> m_pipelineStateDebug;
+
+	// for timer UI
+	/*
+	ComPtr<ID3D12PipelineState> m_pipelineStateTimerUI;
+	UI							ui;
+	*/
 
 	// syncrhonization objects
 	UINT m_frameIndex;
