@@ -478,34 +478,82 @@ struct DebugCubes {
 
 
 // Timer UI
-/*
-struct UI {
-	Buffer<Vertex> vertexBuffer;
+
+struct UIVertex {
+	float3 pos;
+	float2 uv;
+};
+
+struct TimerUI {
+	Slice<Texture> uiTextures; // clock base, hand, top
+	Buffer<UIVertex> vertexBuffer;
+
+	XMMATRIX ortho;
+	float timerHandAngle = 1;  // TODO: adjust later in client game loop
+
+	// TODO these should really be adjustable.... i can't access them yet
+	float screenW = 1920.0f, screenH = 1080.0f;
+	float side = 0.3f * screenH;
+	float inset = 0.0f;
+
+	bool initialized = false;
 
 	// initialize memory
 	bool Init(ID3D12Device* device, DescriptorAllocator* descriptorAllocator) {
-		Vertex uiVerts[] = {
-		{{ 0.8f,  1.0f, 0.0f }}, // top-left
-		{{ 1.0f,  1.0f, 0.0f }}, // top-right
-		{{ 0.8f,  0.8f, 0.0f }}, // bottom-left
+		float leftX = screenW - side - inset;
+		float rightX = screenW - inset;
+		float topY = screenH - inset;
+		float botY = topY - side;
 
-		{{ 0.8f,  0.8f, 0.0f }}, // bottom-left
-		{{ 1.0f,  1.0f, 0.0f }}, // top-right
-		{{ 1.0f,  0.8f, 0.0f }}, // bottom-right
+		// patchwork fix for upside-down textures... just invert UV coordinates.
+		UIVertex uiVerts[6] = {
+			{{leftX, botY, 0}, {0, 1}},
+			{{leftX, topY, 0}, {0, 0}},
+			{{rightX,topY,0}, {1, 0}},
+
+			{{leftX, botY, 0}, {0, 1}},
+			{{rightX,topY,0}, {1, 0}},
+			{{rightX,botY,0}, {1, 1}},
 		};
-		Slice<Vertex> slice = { uiVerts, _countof(uiVerts) };
+		Slice<UIVertex> slice = { uiVerts, _countof(uiVerts) };
+
+		// vertices are in pixel coordinates, then are projected using ortho projection
+		ortho = XMMatrixTranspose(XMMatrixOrthographicOffCenterLH(
+			0.0f, float(1920),
+			0.0f, float(1080),
+			0.0f, 1.0f
+		));
 
 		// upload the buffer
 		vertexBuffer.Init(slice, device, descriptorAllocator, L"UI Vertex Buffer");
 		return true;
 	};
 
+	bool SendToGPU(ID3D12Device* device, DescriptorAllocator* descriptorAllocator, ID3D12GraphicsCommandList* commandList) {
+		uiTextures = { reinterpret_cast<Texture*>(calloc(3, sizeof(Texture))), 3 };
+		const wchar_t* clockFiles[3] = {
+			L"textures\\clock_base.dds",
+			L"textures\\clock_hand.dds",
+			L"textures\\clock_top.dds"
+		};
+		for (uint32_t i = 0; i < 3; ++i) {
+			bool ok = uiTextures.ptr[i].Init(
+				device,
+				descriptorAllocator,
+				commandList,
+				clockFiles[i]);
+			if (!ok) return false;
+		}
+		initialized = true;
+		return true;
+	}
+
 	// Release GPU resources
 	void Release() {
 		vertexBuffer.Release();
 	}
 };
-*/
+
 
 class Renderer {
 public:
@@ -587,10 +635,9 @@ private:
 	ComPtr<ID3D12PipelineState> m_pipelineStateDebug;
 
 	// for timer UI
-	/*
+	
 	ComPtr<ID3D12PipelineState> m_pipelineStateTimerUI;
-	UI							ui;
-	*/
+	TimerUI							m_TimerUI;
 
 	// syncrhonization objects
 	UINT m_frameIndex;

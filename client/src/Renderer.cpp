@@ -152,12 +152,13 @@ bool Renderer::Init(HWND window_handle) {
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		
 		uint32_t numSceneTextures = m_scene.header->numTextures;
+		uint32_t numTimerUITextures = 3; // clock base, hand, top,
 		// all resource descriptors go here.
 		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(
 			m_device.Get(),
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-			SCENE_BUFFER_TYPE_COUNT + 3 + numSceneTextures,
+			SCENE_BUFFER_TYPE_COUNT + 4 + numSceneTextures + numTimerUITextures,
 			L"Resource Descriptor Heap");
 
 		// create Depth Stencil View (DSV) descriptor heap
@@ -375,10 +376,10 @@ bool Renderer::Init(HWND window_handle) {
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateDebug)));
 		}
 
-		/*
+		
 		{
 			// --------------------------------------------------------------------
-			// describe UI Pipeline State Object (PSO) 
+			// describe Timer UI Pipeline State Object (PSO) 
 
 			// TODO: use slices instead
 			// std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs_ui.cso");
@@ -387,6 +388,24 @@ bool Renderer::Init(HWND window_handle) {
 			if (DX::ReadDataToSlice(L"timerui_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
 			Slice<BYTE> pixelShaderBytecode;
 			if (DX::ReadDataToSlice(L"timerui_ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+
+			// alpha blending for UI:
+			D3D12_BLEND_DESC blendDesc = {
+				.AlphaToCoverageEnable = FALSE,
+				.IndependentBlendEnable = FALSE,
+			};
+			blendDesc.RenderTarget[0] = {
+				.BlendEnable = TRUE,
+				.LogicOpEnable = FALSE,
+				.SrcBlend = D3D12_BLEND_SRC_ALPHA,
+				.DestBlend = D3D12_BLEND_INV_SRC_ALPHA,
+				.BlendOp = D3D12_BLEND_OP_ADD,
+				.SrcBlendAlpha = D3D12_BLEND_ONE,
+				.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA,
+				.BlendOpAlpha = D3D12_BLEND_OP_ADD,
+				.LogicOp = D3D12_LOGIC_OP_NOOP,
+				.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL,
+			};
 
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 				.pRootSignature = m_rootSignature.Get(),
@@ -398,7 +417,7 @@ bool Renderer::Init(HWND window_handle) {
 					.pShaderBytecode = pixelShaderBytecode.ptr,
 					.BytecodeLength = pixelShaderBytecode.len,
 				},
-				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+				.BlendState = blendDesc,
 				.SampleMask = UINT_MAX,
 				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
 				// NO DEPTH for UI
@@ -419,10 +438,11 @@ bool Renderer::Init(HWND window_handle) {
 
 			};
 			psoDesc.RasterizerState.FrontCounterClockwise = true;
+			psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
 
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateTimerUI)));
 		}
-		*/
+		
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------
@@ -456,20 +476,19 @@ bool Renderer::Init(HWND window_handle) {
 	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// create vertex buffer for debug cubes
-	/*
+	
 	{
 		debugCubes.Init(m_device.Get(), &m_resourceDescriptorAllocator);
 	}
-	*/
+	
 
 	// ----------------------------------------------------------------------------------------------------------------
 	// create vertex buffer for timer UI
-	/*
+	
 	{
-		ui.Init(m_device.Get(), &m_resourceDescriptorAllocator);
+		m_TimerUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
 	}
-	*/
-		
+	
 	// ----------------------------------------------------------------------------------------------------------------
 	// create constant buffer 
     // {
@@ -651,6 +670,10 @@ bool Renderer::Render() {
 	if (!m_scene.initialized) {
 		m_scene.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
 	}
+
+	if (!m_TimerUI.initialized) {
+		m_TimerUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
 	
 	// set heaps for constant buffer
 	ID3D12DescriptorHeap *ppHeaps[] = {m_resourceDescriptorAllocator.heap.Get()};
@@ -757,20 +780,40 @@ bool Renderer::Render() {
 	}
 
 	// draw Timer UI
-	/*
 	{
-		PerDrawConstants drawConstants = {
-			.viewProject = XMMatrixIdentity(),
+		PerDrawConstants dc = {
+			.viewProject = m_TimerUI.ortho,
 			.modelMatrix = XMMatrixIdentity(),
 			.modelInverseTranspose = XMMatrixIdentity(),
-			.vpos_idx = ui.vertexBuffer.descriptor.index,
-			.vshade_idx = 0, // unused by UI
+			.vpos_idx = m_TimerUI.vertexBuffer.descriptor.index,
+			.vshade_idx = m_scene.vertexShading.descriptor.index,
+			.first_texture_idx = m_TimerUI.uiTextures.ptr[0].descriptor.index,
 		};
+		// Base layer
 		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
-		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
-		m_commandList->DrawInstanced(ui.vertexBuffer.data.len, 1, 0, 0);
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_TimerUI.vertexBuffer.data.len, 1, 0, 0);
+
+		// Hand layer
+		{
+			float centerX = m_TimerUI.screenW - m_TimerUI.inset - m_TimerUI.side * 0.5f;
+			float centerY = m_TimerUI.screenH - m_TimerUI.inset - m_TimerUI.side * 0.5f;
+			// minus timer angle so that the timerHandAngle represents a clockwise rotation.
+			XMMATRIX M = XMMatrixTranslation(-centerX, -centerY, 0) * XMMatrixRotationZ(-m_TimerUI.timerHandAngle) * XMMatrixTranslation(centerX, centerY, 0);
+
+			dc.modelMatrix = XMMatrixTranspose(M);
+			dc.first_texture_idx = m_TimerUI.uiTextures.ptr[1].descriptor.index;
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+			m_commandList->DrawInstanced(m_TimerUI.vertexBuffer.data.len, 1, 0, 0);
+		}
+
+		// Top Layer
+		dc.modelMatrix = XMMatrixIdentity();
+		dc.first_texture_idx = m_TimerUI.uiTextures.ptr[2].descriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_TimerUI.vertexBuffer.data.len, 1, 0, 0);
 	}
-	*/
+	
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {

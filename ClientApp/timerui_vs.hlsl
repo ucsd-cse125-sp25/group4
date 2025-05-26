@@ -8,15 +8,19 @@ ConstantBuffer<PerDrawConstants> drawConstants : register(b1);
 
 struct PSInput_UI
 {
-    float4 position : SV_POSITION;
+    float4 pos : SV_POSITION;
+    float2 uv : TEXCOORD0;
 };
 
 PSInput_UI VSMain(uint vid : SV_VertexID)
 {
-    StructuredBuffer<VertexPosition> vbuffer = ResourceDescriptorHeap[drawConstants.vpos_idx];
-    float4 position = float4(vbuffer[vid].position, 1);
+    StructuredBuffer<UIVertexPosition> vbuffer = ResourceDescriptorHeap[drawConstants.vpos_idx];
+    float4 rawPos = float4(vbuffer[vid].position, 1);
+    float4 worldPos = mul(rawPos, drawConstants.modelMatrix);
+    float4 clipPos = mul(worldPos, drawConstants.viewProject);
 
     PSInput_UI result;
-    result.position = position;
+    result.pos = clipPos;
+    result.uv = vbuffer[vid].uv;
     return result;
 }

@@ -53,6 +53,11 @@ struct VertexPosition
 {
 	float3 position;
 };
+struct UIVertexPosition
+{
+    float3 position;
+    float2 uv;
+};
 struct VertexShadingData {
 	float3 normal;
 	float2 texcoord;
