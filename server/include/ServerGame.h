@@ -17,11 +17,10 @@
 #define JUMP_VELOCITY 1.5f * PLAYER_SCALING_FACTOR
 #define PLAYER_INIT_SPEED 1.0f * PLAYER_SCALING_FACTOR
 #define TERMINAL_VELOCITY -9999.0f * PLAYER_SCALING_FACTOR
-#define ATTACK_RANGE 4.0f
 #define ATTACK_ANGLE_DEG 45.0f
-#define RUNNER_SPAWN_PERIOD 1
-#define HUNTER_SPAWN_PERIOD 3
-
+#define RUNNER_SPAWN_PERIOD 5
+#define HUNTER_SPAWN_PERIOD 10
+#define JUMP_POWERUP 1.5f * PLAYER_SCALING_FACTOR
 
 class ServerGame {
 public:
@@ -46,6 +45,7 @@ public:
 	void startARound(int);
 	void handleShopPhase();
 	void startShopPhase();
+	void applyPowerups(uint8_t, uint8_t);
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;
@@ -139,6 +139,8 @@ private:
 	// Shop
 	std::unordered_map<uint8_t, vector<uint8_t>> playerPowerups;
 
+	// Powerups
+	std::unordered_map<uint8_t, float> extraJumpPowerup;
 };
 
 static bool checkCollision(BoundingBox, BoundingBox);

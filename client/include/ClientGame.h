@@ -33,6 +33,7 @@ public:
 	void processShopInputs();
 
 	void handleShopItemSelection(int choice);
+	void storePowerups(int);
 
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);
@@ -66,7 +67,7 @@ private:
 	float yaw = 0.0;
 	float pitch = 0.0;
 	static constexpr float MOUSE_SENS = 0.002f;
-	static constexpr float ATTACK_RANGE = 4.0f;
+	static constexpr float ATTACK_RANGE = 10.0f * PLAYER_SCALING_FACTOR;
 	bool localDead = false;
 
 	bool ready = false;

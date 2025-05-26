@@ -10,8 +10,8 @@ unsigned int ServerGame::client_id;
 
 ServerGame::ServerGame(void) :
 	rng(dev()),
-	randomRunnerPowerupGen((unsigned int)Powerup::RUNNER_POWERUPS, (unsigned int)Powerup::NUM_RUNNER_POWERUPS - 1),
-	randomHunterPowerupGen((unsigned int)Powerup::HUNTER_POWERUPS, (unsigned int)Powerup::NUM_HUNTER_POWERUPS - 1),
+	randomRunnerPowerupGen((unsigned int)Powerup::RUNNER_POWERUPS + 1, (unsigned int)Powerup::NUM_RUNNER_POWERUPS - 1),
+	randomHunterPowerupGen((unsigned int)Powerup::HUNTER_POWERUPS + 1, (unsigned int)Powerup::NUM_HUNTER_POWERUPS - 1),
 	randomSpawnLocationGen(0, (unsigned int)NUM_SPAWNS - 1)
 {
 	client_id = 0;
@@ -22,10 +22,10 @@ ServerGame::ServerGame(void) :
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 0, true, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 0, false, false, false },
-			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 0, false, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 0, false, false, false },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, true, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
 		}
 	};
 
@@ -198,7 +198,7 @@ void ServerGame::receiveFromClients()
 					// Only save if they selected a powerup
 					if (status->selection != 0) 
 					{
-						playerPowerups[id].push_back(status->selection);
+						applyPowerups(id, status->selection);
 						state->players[id].coins -= PowerupCosts[(Powerup)status->selection];
 					}
 				}
@@ -219,6 +219,7 @@ void ServerGame::receiveFromClients()
 	}
 
 }
+
 
 // Start a round
 // int seconds: length of round
@@ -255,6 +256,8 @@ void ServerGame::startARound(int seconds) {
 		}
 
 		player.isDead = false;
+		// print player coin
+		printf("[round %d] Player %d coins: %d\n", round_id, id, player.coins);
 	}
 	int start_tick = state->tick;
 	runner_time = start_tick + (RUNNER_SPAWN_PERIOD * TICKS_PER_SEC);
@@ -362,6 +365,35 @@ void ServerGame::startShopPhase() {
 	}
 }
 
+void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
+{
+	playerPowerups[id].push_back(selection);
+	// TODO: add more powerups here
+	switch ((Powerup)selection) {
+	case Powerup::H_INCREASE_SPEED:
+		state->players[id].speed *= 1.5f;
+		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
+		break;
+	case Powerup::H_INCREASE_JUMP:
+		extraJumpPowerup[id] += JUMP_POWERUP; // increase jump height
+		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
+		break;
+	case Powerup::H_INCREASE_VISION:
+		printf("[POWERUP] Player %d increase vision (place holder)", id);
+		break;
+	case Powerup::R_INCREASE_SPEED:
+		state->players[id].speed *= 1.5f;
+		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
+		break;
+	case Powerup::R_INCREASE_JUMP:
+		extraJumpPowerup[id] += JUMP_POWERUP; // increase jump height
+		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
+		break;
+	default:
+		break;
+	}
+}
+
 // -----------------------------------------------------------------------------
 // GAME PHASE
 // -----------------------------------------------------------------------------
@@ -399,7 +431,7 @@ void ServerGame::applyMovements() {
 		player.isGrounded = false;
 
 		if (latestMovement.count(id) && latestMovement[id].jump && wasGrounded == true) {
-			player.zVelocity = JUMP_VELOCITY;
+			player.zVelocity = JUMP_VELOCITY + extraJumpPowerup[id];
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}
 		// gravity

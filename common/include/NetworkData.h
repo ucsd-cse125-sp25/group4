@@ -28,20 +28,18 @@ enum class PacketType : uint32_t {
 };
 
 enum class Powerup : uint8_t {
-	DEFAULT = 0,
 	// HUNTER POWERUPS
-	HUNTER_POWERUPS = 1,
-	H_INCREASE_SPEED = 1,
+	HUNTER_POWERUPS = 0,
+	H_INCREASE_SPEED,
 	H_INCREASE_JUMP,
 	H_INCREASE_VISION,
 	// ...
-
 	NUM_HUNTER_POWERUPS,
+
 	RUNNER_POWERUPS = 100,
-	R_INCREASE_SPEED = 100,
+	R_INCREASE_SPEED,
 	R_INCREASE_JUMP,
 	// ...
-
 	NUM_RUNNER_POWERUPS
 };
 
@@ -50,6 +48,7 @@ static std::unordered_map<Powerup, int> PowerupCosts{
 	{ Powerup::H_INCREASE_SPEED, 2 },
 	{ Powerup::H_INCREASE_VISION, 3 },
 	{ Powerup::R_INCREASE_SPEED, 1 },
+	{ Powerup::R_INCREASE_JUMP, 2 },
 };
 
 // The packet header preceeds every packet
