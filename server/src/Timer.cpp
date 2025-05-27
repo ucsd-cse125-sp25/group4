@@ -10,6 +10,14 @@ Timer::~Timer()
 
 }
 
+void Timer::cancelTimer() {
+	// cancels the timer by setting end to an uninitialized time_point
+	mu.lock();
+	end = std::chrono::steady_clock::time_point{};
+	mu.unlock();
+	printf("Timer cancelled\n");
+}
+
 void Timer::startTimer(int seconds, std::function<void()> onComplete) {
 	// spawns a new thread to keep track of time
 	// needs synch protection

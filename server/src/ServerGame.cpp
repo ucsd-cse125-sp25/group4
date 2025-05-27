@@ -35,8 +35,9 @@ ServerGame::ServerGame(void) :
 	};
 
 	timer = new Timer();
+	tiebreaker = false;
 
-	winningPointThreshold = 50; 
+	winningPointThreshold = 3;
 
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
@@ -268,44 +269,68 @@ void ServerGame::startARound(int seconds) {
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
 		state_mu.lock();
-		// Check if the game is still going on. If yes, then that means THE SURVIVORS WON THE ROUND.
-		if (appState->gamePhase == GamePhase::GAME_PHASE) {
-			// set all status to true here, handle in the main game loop
-			for (auto& [id, status] : phaseStatus) {
-				status = true;
-			}
-			// Give points to survivors.
-			printf("[round %d] Survivors won the round!\n", round_id);
 
-			// Count how many survivors survived the round
-			unsigned int num_survivors = 0;
-			unsigned int hunter_id = 0;
-			for (unsigned int id = 0; id < num_players; ++id) {
-				if (!state->players[id].isDead && !state->players[id].isHunter) {
-					num_survivors++;
-				}
-				if (state->players[id].isHunter) {
-					hunter_id = id; // save hunter id
-				}
+		// check if it is a tiebreaker round
+		if (tiebreaker) {
+			// the points will never be the same for both teams.
+			if (runner_points > hunter_points) {
+				printf("[round %d] Tiebreaker round ended, survivors win!\n", round_id);
 			}
-			// For each survivor surviving the round, they get 10 points. Hunter gets 10 coins.
-			for (unsigned int id = 0; id < num_players; ++id) {
-				if (!state->players[id].isDead && !state->players[id].isHunter) {
-					runner_points += 10;
-					state->players[hunter_id].coins += 10;
-					printf("[round %d] Survivor %d survived and the survivor side got 10 points!\n", round_id, id);
-				}
+			else {
+				printf("[round %d] Tiebreaker round ended, hunter wins!\n", round_id);
 			}
-			// For each survivor dead, every survivor gets 10 coins.
-			for (unsigned int id = 0; id < num_players; ++id) {
-				if (!state->players[id].isHunter) {
-					state->players[id].coins += num_survivors * 10;
-				}
-			}
-			
+			tiebreaker = false; // reset tiebreaker
+			return;
+		}
+		// set all status to true here, handle in the main game loop
+		for (auto& [id, status] : phaseStatus) {
+			status = true;
+		}
 
-			// Check if anyone won the game	
-			if (anyWinners()) {
+		// Count how many survivors survived the round
+		unsigned int num_survivors = 0;
+		unsigned int hunter_id = 0;
+		for (unsigned int id = 0; id < num_players; ++id) {
+			if (!state->players[id].isDead && !state->players[id].isHunter) {
+				num_survivors++;
+			}
+			if (state->players[id].isHunter) {
+				hunter_id = id; // save hunter id
+			}
+		}
+		// Determine who wins this round
+		if (num_survivors == 0) {
+			printf("[round %d] No survivors survived the round, hunter wins!\n", round_id);
+		}
+		else {
+			printf("[round %d] %d survivors survived the round!\n", round_id, num_survivors);
+		}
+
+		// Add points to survivors and hunter
+		runner_points += num_survivors;
+		hunter_points += 3 - num_survivors; // hunter gets 1 points for each survivor dead
+		printf("[round %d] Runner points: %d, Hunter points: %d\n", round_id, runner_points, hunter_points);
+
+		// Survivors each get ${3-sum_survivors} coins, Hunter gets ${sum_survivors}.
+		for (unsigned int id = 0; id < num_players; ++id) {
+			if (!state->players[id].isHunter) {
+				state->players[id].coins += 3 - num_survivors;
+				printf("[round %d] Player %d coins: %d\n", round_id, id, state->players[id].coins);
+			}
+			else {
+				state->players[id].coins += num_survivors; // hunter gets more coins if more survivors are alive
+				//printf("adding %d coins to hunter %d\n", 3 - num_survivors, id);
+				printf("[round %d] Hunter %d coins: %d\n", round_id, id, state->players[id].coins);
+			}
+		}
+
+		// Check if anyone won the game	
+		if (anyWinners()) {
+			if (runner_points == hunter_points) {
+				printf("[round %d] Game over! It's a tie! Starting a tiebreaker round. \n", round_id);
+				tiebreaker = true;
+			}
+			else {
 				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= winningPointThreshold) ? "survivors" : "hunter");
 				appState->gamePhase = GamePhase::GAME_END;
 				sendAppPhaseUpdates();
@@ -318,7 +343,7 @@ void ServerGame::startARound(int seconds) {
 		// Socket wrapper isn't thread safe...
 		// sendAppPhaseUpdates();
 		state_mu.unlock();
-		});
+	});
 }
 
 void ServerGame::handleStartMenu() {
@@ -536,12 +561,6 @@ void ServerGame::applyAttacks()
 				printf("[HIT] attacker %u hits victim %u (tick %llu)\n",
 					attackerId, victimId, state->tick);
 
-				// simple reward: +1 coin
-				state->players[attackerId].coins++;
-				
-				// for each player killed, the hunter gets +10 points
-				hunter_points += 10;
-
 				// mark victim as dead
 				state->players[victimId].isDead = true;
 				printf("[HIT] victim %u is dead\n", victimId);
@@ -554,6 +573,7 @@ void ServerGame::applyAttacks()
 			}
 		}
 	}
+	if (latestAttacks.empty()) return; // no attacks this tick
 	// check if everyone is dead
 	bool allDead = true;
 	for (unsigned int id = 0; id < num_players; ++id) {
@@ -563,20 +583,8 @@ void ServerGame::applyAttacks()
 		}
 	}
 	if (allDead) {
-		printf("[GAME PHASE] All players are dead, checking if anyone won\n");
-		if (anyWinners()) {
-			printf("[GAME PHASE] Game over! Winners: %d\n", (runner_points >= winningPointThreshold) ? 0 : 1);
-			appState->gamePhase = GamePhase::GAME_END;
-			sendAppPhaseUpdates();
-			// reset points
-			runner_points = 0;
-			hunter_points = 0;
-		}
-		else {
-			printf("[GAME PHASE] No winners, going into shop phase\n");
-			appState->gamePhase = GamePhase::SHOP_PHASE;
-			sendAppPhaseUpdates();
-		}
+		printf("[GAME PHASE] All players are dead, cancelling the timer\n");
+		timer->cancelTimer(); // cancel the timer
 	}
 	latestAttacks.clear();
 }

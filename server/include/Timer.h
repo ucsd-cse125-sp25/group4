@@ -8,6 +8,7 @@ class Timer {
 		~Timer(void);
 
 		void startTimer(int, std::function<void()>);
+		void cancelTimer(void);
 		long long getRemainingMs();
 
 private:

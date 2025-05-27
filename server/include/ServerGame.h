@@ -83,6 +83,7 @@ private:
 
 	int num_players = 4;
 	int round_id;
+	bool tiebreaker;
 
 	std::random_device dev;
 	std::mt19937 rng;
