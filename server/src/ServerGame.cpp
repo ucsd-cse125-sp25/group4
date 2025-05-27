@@ -145,7 +145,7 @@ void ServerGame::receiveFromClients()
 					|| (id != 0 && state->tick > runner_time))
 				{
 					//printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f, JUMP %d\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw, mv->jump);
-					latestMovement[id] = *mv;
+ 					latestMovement[id] = *mv;
 				}
 				break;
 			}
