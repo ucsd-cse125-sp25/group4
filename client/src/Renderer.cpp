@@ -152,13 +152,18 @@ bool Renderer::Init(HWND window_handle) {
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		
 		uint32_t numSceneTextures = m_scene.header->numTextures;
-		uint32_t numTimerUITextures = 3; // clock base, hand, top,
+		uint32_t numTimerUITextures = 3; // clock base, hand, top
+		uint32_t numTimerUIVertexBuffers = 1;
+		uint32_t capacity = SCENE_BUFFER_TYPE_COUNT
+			+ 3
+			+ numSceneTextures
+			+ numTimerUITextures + numTimerUIVertexBuffers;
 		// all resource descriptors go here.
 		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(
 			m_device.Get(),
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-			SCENE_BUFFER_TYPE_COUNT + 4 + numSceneTextures + numTimerUITextures,
+			capacity,
 			L"Resource Descriptor Heap");
 
 		// create Depth Stencil View (DSV) descriptor heap
