@@ -158,6 +158,7 @@ bool Renderer::Init(HWND window_handle) {
 			+ 3
 			+ numSceneTextures
 			+ numTimerUITextures + numTimerUIVertexBuffers;
+
 		// all resource descriptors go here.
 		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(

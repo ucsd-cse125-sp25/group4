@@ -156,11 +156,17 @@ struct Texture {
 		// use ddspp to decode the header and write it to a cleaner descriptor
 		ddspp::Descriptor desc;
 		ddspp::Result decodeResult = ddspp::decode_header(data.ptr, desc);
-		if (decodeResult != ddspp::Success) return false;
+		if (decodeResult != ddspp::Success) {
+			printf("fuck2\n");
+			return false;
+		}
 
 		BYTE* initialData = data.ptr + desc.headerSize;
 
-		if (desc.type != ddspp::Texture2D) return false; // we only support 2D textures
+		if (desc.type != ddspp::Texture2D) {
+			printf("fuck2\n");
+			return false; // we only support 2D textures
+		}
 		if (desc.arraySize != 1) return false; // we do not support arrays of textures 
 		// describes texture in the default heap
 		D3D12_RESOURCE_DESC textureDesc = {
