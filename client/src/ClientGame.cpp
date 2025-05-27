@@ -242,7 +242,7 @@ void ClientGame::update() {
 				Powerup powerup = (Powerup)optionsPayload->options[i];
 				shopOptions[i].item = powerup;
 				shopOptions[i].isSelected = false;
-				shopOptions[i].isBuyable = (PowerupCosts[powerup] <= gameState->players[id].coins);
+				shopOptions[i].isBuyable = (PowerupInfo[powerup].cost <= gameState->players[id].coins);
 			}
 
 			break;
@@ -405,7 +405,7 @@ void ClientGame::processShopInputs() {
  
 void ClientGame::handleShopItemSelection(int choice) {
 		ShopItem* item = &(shopOptions[choice]);
-		int cost = PowerupCosts[item->item];
+		int cost = PowerupInfo[item->item].cost;
 		if (item->isSelected) 
 		{
 			item->isSelected = false;

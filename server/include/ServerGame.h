@@ -137,7 +137,7 @@ private:
 
 
 	// Shop
-	std::unordered_map<uint8_t, vector<uint8_t>> playerPowerups;
+	std::unordered_map<uint8_t, vector<Powerup>> playerPowerups;
 
 	// Powerups
 	std::unordered_map<uint8_t, float> extraJumpPowerup;

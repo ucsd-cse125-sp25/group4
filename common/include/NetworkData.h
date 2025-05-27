@@ -1,7 +1,8 @@
 ﻿#pragma once
 #include <cstdint>
 #include <cstring>
-#include <unordered_map>
+#include <string>
+#include <map>
 
 #define MAX_PACKET_SIZE 1000
 #define NUM_POWERUP_OPTIONS 3 // Number of options that display in the shop each round
@@ -27,6 +28,9 @@ enum class PacketType : uint32_t {
 	SHOP_UPDATE			// client sends what was purchased
 };
 
+// when adding powerups
+// make sure to update the metadata below
+// ensure the ordering too!!
 enum class Powerup : uint8_t {
 	// HUNTER POWERUPS
 	HUNTER_POWERUPS = 0,
@@ -39,16 +43,27 @@ enum class Powerup : uint8_t {
 	RUNNER_POWERUPS = 100,
 	R_INCREASE_SPEED,
 	R_INCREASE_JUMP,
+	R_DECREASE_DODGE_CD,
 	// ...
-	NUM_RUNNER_POWERUPS
+	NUM_RUNNER_POWERUPS,
 };
 
-static std::unordered_map<Powerup, int> PowerupCosts{
-	{ Powerup::H_INCREASE_JUMP, 1 },
-	{ Powerup::H_INCREASE_SPEED, 2 },
-	{ Powerup::H_INCREASE_VISION, 3 },
-	{ Powerup::R_INCREASE_SPEED, 1 },
-	{ Powerup::R_INCREASE_JUMP, 2 },
+struct PowerupMetadata {
+	uint8_t textureIdx = 0;
+	uint8_t cost = 0;
+	std::string name;
+	std::string fileLocation;
+};
+
+// KEEP THIS IN SAME ORDER AS ENUM
+// map is sorted based on key, which is crucial for loading in correct textures
+static std::map<Powerup, PowerupMetadata> PowerupInfo{
+	{ Powerup::H_INCREASE_SPEED,	{0, 2, "H_SWIFTIES",	"TODO"} },
+	{ Powerup::H_INCREASE_JUMP,		{1, 1, "H_HOPPERS",		"TODO"} },
+	{ Powerup::H_INCREASE_VISION,	{2, 3, "H_INSTINCT",	"TODO"} },
+	{ Powerup::R_INCREASE_SPEED,	{3, 2, "R_SWIFTIES",	"TODO"} },
+	{ Powerup::R_INCREASE_JUMP,		{4, 1, "R_HOPPERS",		"TODO"} },
+	{ Powerup::R_DECREASE_DODGE_CD,	{5, 3, "R_READBEAR",	"TODO"} },
 };
 
 // The packet header preceeds every packet

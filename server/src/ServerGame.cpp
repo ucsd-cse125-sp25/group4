@@ -203,7 +203,7 @@ void ServerGame::receiveFromClients()
 					if (status->selection != 0) 
 					{
 						applyPowerups(id, status->selection);
-						state->players[id].coins -= PowerupCosts[(Powerup)status->selection];
+						state->players[id].coins -= PowerupInfo[(Powerup)status->selection].cost;
 					}
 				}
 				
@@ -230,9 +230,11 @@ void ServerGame::receiveFromClients()
 void ServerGame::startARound(int seconds) {
 	round_id++;
 	for (auto [id,powerups] : playerPowerups) {
+		printf("Player %d Powerups: ", id);
 		for (auto p : powerups) {
-			printf("Player %d Powerup: %d,\n", id, p);
+			printf("%s, ", PowerupInfo[p].name.c_str());
 		}
+		printf("\n");
 	}
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
@@ -354,15 +356,17 @@ void ServerGame::startShopPhase() {
 		if (state->players[id].isHunter)
 		{
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = randomHunterPowerupGen(rng);
-				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
+				Powerup hunterPowerup = static_cast<Powerup>(randomHunterPowerupGen(rng));
+				options->options[p] = (uint8_t) hunterPowerup;
+				printf("Hunter option %d: %s\n", p+1, PowerupInfo[hunterPowerup].name.c_str());
 			}
 		}
 		else
 		{
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = randomRunnerPowerupGen(rng);
-				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
+				Powerup runnerPowerup = static_cast<Powerup>(randomRunnerPowerupGen(rng));
+				options->options[p] = (uint8_t) runnerPowerup;
+				printf("Runner %d option %d: %s\n", id, p+1, PowerupInfo[runnerPowerup].name.c_str());
 
 			}
 		}
@@ -372,7 +376,7 @@ void ServerGame::startShopPhase() {
 
 void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 {
-	playerPowerups[id].push_back(selection);
+	playerPowerups[id].push_back(static_cast<Powerup>(selection));
 	// TODO: add more powerups here
 	switch ((Powerup)selection) {
 	case Powerup::H_INCREASE_SPEED:
