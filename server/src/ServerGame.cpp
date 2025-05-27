@@ -26,7 +26,8 @@ ServerGame::ServerGame(void) :
 			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
 			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
 			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
-		}
+		},
+		.timerFrac = 0.0f,
 	};
 
 	appState = new AppState{
@@ -53,6 +54,9 @@ void ServerGame::update() {
 	auto now = std::chrono::steady_clock::now();
 	if (now < next_tick) {
 		std::this_thread::sleep_for(next_tick - now);
+	}
+	else {
+		printf("[WARNING] Tick %llu time surpassed expected time\n", state->tick);
 	}
 	next_tick = std::chrono::steady_clock::now() + TICK_DURATION;
 	++state->tick;
@@ -302,6 +306,7 @@ void ServerGame::handleStartMenu() {
 // -----------------------------------------------------------------------------
 
 void ServerGame::handleGamePhase() {
+	state->timerFrac = timer->getFracElapsed();
 	bool ready = true;
 	for (auto& [id, status] : phaseStatus) {
 		if (!status) {

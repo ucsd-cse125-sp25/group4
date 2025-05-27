@@ -608,6 +608,10 @@ public:
 		cameraPitch = pitch;
 	}
 
+	void updateTimer(float timerFrac) {
+		m_TimerUI.timerHandAngle = XM_2PI * timerFrac;
+	}
+
 	GamePhase gamePhase;
 private:
 	DebugCubes debugCubes;
@@ -637,7 +641,7 @@ private:
 	// for timer UI
 	
 	ComPtr<ID3D12PipelineState> m_pipelineStateTimerUI;
-	TimerUI							m_TimerUI;
+	TimerUI						m_TimerUI;
 
 	// syncrhonization objects
 	UINT m_frameIndex;

@@ -181,9 +181,11 @@ void ClientGame::update() {
 				renderer.players[i].lookDir.yaw = gameState->players[i].yaw;
 			}
 
-			// cache own “dead” flag for input handling
+			// cache own dead flag for input handling
 			localDead = gameState->players[renderer.currPlayer.playerId].isDead;
 
+			// update timer
+			renderer.updateTimer(gameState->timerFrac);
 			
 			break;
 		}

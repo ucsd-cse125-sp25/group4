@@ -8,9 +8,9 @@ class Timer {
 		~Timer(void);
 
 		void startTimer(int, std::function<void()>);
-		long long getRemainingMs();
+		float getFracElapsed();
 
 private:
 	std::mutex mu;
-	std::chrono::steady_clock::time_point end;
+	std::chrono::steady_clock::time_point start, end;
 };

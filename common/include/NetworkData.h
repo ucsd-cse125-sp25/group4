@@ -117,7 +117,8 @@ struct GameStatePayload {
 struct GameState {
 	uint64_t tick;
 	// float position[4][3]; // x y z
-	PlayerState players[4];
+	PlayerState players[4]; // player state
+	float timerFrac; // fraction of time elapsed for timer
 };
 
 struct AppState {
