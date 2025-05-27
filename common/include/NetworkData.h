@@ -5,7 +5,7 @@
 
 #define MAX_PACKET_SIZE 1000
 #define NUM_POWERUP_OPTIONS 3 // Number of options that display in the shop each round
-#define ROUND_DURATION 25
+#define ROUND_DURATION 60
 
 constexpr float PLAYER_SCALING_FACTOR = 0.025;
 

@@ -293,7 +293,7 @@ void ServerGame::startARound(int seconds) {
 				if (!state->players[id].isDead && !state->players[id].isHunter) {
 					runner_points += 10;
 					state->players[hunter_id].coins += 10;
-					printf("[round %d] Survivor %d survived and got 10 points!\n", round_id, id);
+					printf("[round %d] Survivor %d survived and the survivor side got 10 points!\n", round_id, id);
 				}
 			}
 			// For each survivor dead, every survivor gets 10 coins.
@@ -306,7 +306,7 @@ void ServerGame::startARound(int seconds) {
 
 			// Check if anyone won the game	
 			if (anyWinners()) {
-				printf("[round %d] Game over! Winners: %d\n", round_id, (runner_points >= winningPointThreshold) ? 0 : 1);
+				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= winningPointThreshold) ? "survivors" : "hunter");
 				appState->gamePhase = GamePhase::GAME_END;
 				sendAppPhaseUpdates();
 				// reset points
@@ -557,7 +557,7 @@ void ServerGame::applyAttacks()
 	// check if everyone is dead
 	bool allDead = true;
 	for (unsigned int id = 0; id < num_players; ++id) {
-		if (!state->players[id].isDead) {
+		if (!state->players[id].isDead && !state->players[id].isHunter) {
 			allDead = false;
 			break;
 		}
