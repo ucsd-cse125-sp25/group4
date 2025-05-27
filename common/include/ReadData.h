@@ -37,7 +37,7 @@ struct Slice {
 	}
 
     inline void release() {
-        if (ptr == nullptr) {
+        if (ptr != nullptr) {
             free(ptr);
         }
         memset(this, 0, sizeof(*this));
