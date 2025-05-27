@@ -216,9 +216,7 @@ for obj in bpy.data.objects:
     if len(bmesh.uv_layers) == 0: # edge case: object has no UVs
         uv = np.full((len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT), 0.5) # sample from the center of the texture
     else:
-        uv_layer = bmesh.uv_layers[0].uv
-        loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype = np.int32)
-        bmesh.loop_triangles.foreach_get("loops", loop_indices)
+        uv_layer = bmesh.uv_layers[0].uv # WARNING: must be changed later for lighmaps
         loop_uvs = np.zeros(UV_FLOATS_PER_VERT * len(uv_layer), dtype = np.float32) # (num_bmesh_loops * 2)
         uv_layer.foreach_get("vector", loop_uvs)
         loop_uvs = loop_uvs.reshape(-1, UV_FLOATS_PER_VERT) # (num_bmesh_loops, 2)
