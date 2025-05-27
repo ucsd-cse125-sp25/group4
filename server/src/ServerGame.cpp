@@ -266,9 +266,20 @@ void ServerGame::startARound(int seconds) {
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
 		state_mu.lock();
-		// set all status to true here, handle in the main game loop
-		for (auto& [id, status] : phaseStatus) {
-			status = true;
+		// Check if the game is still going on. If yes, then that means the survivors won the round.
+		if (appState->gamePhase == GamePhase::GAME_PHASE) {
+			// set all status to true here, handle in the main game loop
+			for (auto& [id, status] : phaseStatus) {
+				status = true;
+			}
+			// Give every survivor 2 coins
+			for (unsigned int id = 0; id < num_players; ++id) {
+				if (state->players[id].isHunter) {
+					continue;
+				}
+				state->players[id].coins += 2;
+				printf("[round %d] Player %d coins: %d\n", round_id, id, state->players[id].coins);
+			}
 		}
 		// Don't send packets in timer!
 		// Socket wrapper isn't thread safe...
@@ -499,6 +510,19 @@ void ServerGame::applyAttacks()
 
 			}
 		}
+	}
+	// check if everyone is dead
+	bool allDead = true;
+	for (unsigned int id = 0; id < num_players; ++id) {
+		if (!state->players[id].isDead) {
+			allDead = false;
+			break;
+		}
+	}
+	if (allDead) {
+		printf("[GAME PHASE] All players are dead, starting a new round\n");
+		appState->gamePhase = GamePhase::SHOP_PHASE;
+		sendAppPhaseUpdates();
 	}
 	latestAttacks.clear();
 }
