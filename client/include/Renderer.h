@@ -567,7 +567,11 @@ struct ShopUI {
 	XMMATRIX ortho;
 
 	float screenW = 1920.0f, screenH = 1080.0f;
-	float cardW = 724.0f/1.5, cardH = 1236.0f/1.5;
+	float centerX = screenW * 0.5f, centerY = screenH * 0.5f, spacing = 50.0f;
+	float cardW = 724.0f/1.5, cardH = 1236.0f/1.5; // magic numbers for scale!!
+
+	uint8_t powerupIdxs[3] = {0, 0, 0};
+	uint8_t currSelected = 3; // surpasses 0, 1, 2!
 
 	bool initialized = false;
 
@@ -595,17 +599,16 @@ struct ShopUI {
 	}
 
 	bool SendToGPU(ID3D12Device* device, DescriptorAllocator* descriptorAllocator, ID3D12GraphicsCommandList* commandList) {
-		cardTextures = { reinterpret_cast<Texture*>(calloc(1, sizeof(Texture))), 1 };
-		const wchar_t* clockFiles[1] = {
-			L"textures\\cards_swifties.dds"
-		};
-		for (uint32_t i = 0; i < 1; ++i) {
+		cardTextures = { reinterpret_cast<Texture*>(calloc(PowerupInfo.size(), sizeof(Texture))), (uint32_t) PowerupInfo.size() };
+		auto it = PowerupInfo.begin();
+		for (uint32_t i = 0; i < PowerupInfo.size(); ++i) {
 			bool ok = cardTextures.ptr[i].Init(
 				device,
 				descriptorAllocator,
 				commandList,
-				clockFiles[i]);
+				it->second.fileLocation.c_str());
 			if (!ok) return false;
+			++it;
 		}
 		initialized = true;
 		return true;
@@ -672,6 +675,16 @@ public:
 
 	void updateTimer(float timerFrac) {
 		m_TimerUI.timerHandAngle = XM_2PI * timerFrac;
+	}
+
+	void updatePowerups(Powerup p0, Powerup p1, Powerup p2) {
+		m_ShopUI.powerupIdxs[0] = PowerupInfo[p0].textureIdx;
+		m_ShopUI.powerupIdxs[1] = PowerupInfo[p1].textureIdx;
+		m_ShopUI.powerupIdxs[2] = PowerupInfo[p2].textureIdx;
+	}
+
+	void selectPowerup(uint8_t selection) {
+		m_ShopUI.currSelected = selection;
 	}
 
 	GamePhase gamePhase;

@@ -52,18 +52,18 @@ struct PowerupMetadata {
 	uint8_t textureIdx = 0;
 	uint8_t cost = 0;
 	std::string name;
-	std::string fileLocation;
+	std::wstring fileLocation;
 };
 
 // KEEP THIS IN SAME ORDER AS ENUM
 // map is sorted based on key, which is crucial for loading in correct textures
 static std::map<Powerup, PowerupMetadata> PowerupInfo{
-	{ Powerup::H_INCREASE_SPEED,	{0, 2, "H_SWIFTIES",	"TODO"} },
-	{ Powerup::H_INCREASE_JUMP,		{1, 1, "H_HOPPERS",		"TODO"} },
-	{ Powerup::H_INCREASE_VISION,	{2, 3, "H_INSTINCT",	"TODO"} },
-	{ Powerup::R_INCREASE_SPEED,	{3, 2, "R_SWIFTIES",	"TODO"} },
-	{ Powerup::R_INCREASE_JUMP,		{4, 1, "R_HOPPERS",		"TODO"} },
-	{ Powerup::R_DECREASE_DODGE_CD,	{5, 3, "R_READBEAR",	"TODO"} },
+	{ Powerup::H_INCREASE_SPEED,	{0, 2, "H_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
+	{ Powerup::H_INCREASE_JUMP,		{1, 1, "H_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
+	{ Powerup::H_INCREASE_VISION,	{2, 3, "H_INSTINCT",	L"textures\\cards\\h_instinct.dds"} },
+	{ Powerup::R_INCREASE_SPEED,	{3, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
+	{ Powerup::R_INCREASE_JUMP,		{4, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
+	{ Powerup::R_DECREASE_DODGE_CD,	{5, 3, "R_REDBEAR",		L"textures\\cards\\r_bear.dds"} },
 };
 
 // The packet header preceeds every packet

@@ -155,7 +155,7 @@ bool Renderer::Init(HWND window_handle) {
 		uint32_t numTimerUITextures = 3; // clock base, hand, top
 		uint32_t numTimerUIVertexBuffers = 1;
 		uint32_t numShopUIVertexBuffers = 1;
-		uint32_t numShopUITextures = 1;
+		uint32_t numShopUITextures = PowerupInfo.size();
 		uint32_t capacity = SCENE_BUFFER_TYPE_COUNT
 			+ 3
 			+ numSceneTextures
@@ -810,14 +810,24 @@ bool Renderer::Render() {
 			.modelInverseTranspose = XMMatrixIdentity(),
 			.vpos_idx = m_ShopUI.vertexBuffer.descriptor.index,
 			.vshade_idx = m_scene.vertexShading.descriptor.index,
-			.first_texture_idx = m_ShopUI.cardTextures.ptr[0].descriptor.index, 
 		};
-		// Base layer
+
 		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
-		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
-		m_commandList->DrawInstanced(m_ShopUI.vertexBuffer.data.len, 1, 0, 0);
+		for (int i = 0; i < 3; i++) {
+			float tx = m_ShopUI.centerX - m_ShopUI.cardW * 0.5f
+				+ (i - 1) * (m_ShopUI.cardW + m_ShopUI.spacing);
+			float ty = m_ShopUI.centerY - m_ShopUI.cardH * 0.5f;
+
+			XMMATRIX m = XMMatrixTranslation(tx, ty, 0);
+			if (i == m_ShopUI.currSelected) {
+				m = XMMatrixScaling(1.2, 1.2, 1) * m;
+			}
+			dc.modelMatrix = XMMatrixTranspose(m);
+			dc.first_texture_idx = m_ShopUI.cardTextures.ptr[m_ShopUI.powerupIdxs[i]].descriptor.index;
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+			m_commandList->DrawInstanced(m_ShopUI.vertexBuffer.data.len, 1, 0, 0);
+		}
 	}
-	
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {

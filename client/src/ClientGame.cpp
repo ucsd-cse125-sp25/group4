@@ -244,6 +244,7 @@ void ClientGame::update() {
 				shopOptions[i].isSelected = false;
 				shopOptions[i].isBuyable = (PowerupInfo[powerup].cost <= gameState->players[id].coins);
 			}
+			renderer.updatePowerups(shopOptions[0].item, shopOptions[1].item, shopOptions[2].item);
 
 			break;
 		}
@@ -409,6 +410,7 @@ void ClientGame::handleShopItemSelection(int choice) {
 		if (item->isSelected) 
 		{
 			item->isSelected = false;
+			renderer.selectPowerup(3); // exceeds option
 			tempCoins += cost;
 		}
 		else
@@ -420,6 +422,7 @@ void ClientGame::handleShopItemSelection(int choice) {
 				{
 					shopOptions[i].isSelected = (i == choice);
 				}
+				renderer.selectPowerup((uint8_t) choice);
 				tempCoins -= cost;
 			}
 		}
