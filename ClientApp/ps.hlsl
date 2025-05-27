@@ -5,7 +5,7 @@ SamplerState g_sampler : register(s0);
 ConstantBuffer<PerDrawConstants> drawConstants : register(b1);
 float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
 {
-    return float4(normalize(input.normal), 1);
+    // return float4(normalize(input.normal), 1);
     StructuredBuffer<min16uint> material_indices = ResourceDescriptorHeap[drawConstants.material_ids_idx];
     min16uint material_idx = material_indices[input.triangle_id];
     StructuredBuffer<Material> materials = ResourceDescriptorHeap[drawConstants.materials_idx];

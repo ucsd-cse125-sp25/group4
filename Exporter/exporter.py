@@ -156,13 +156,17 @@ for material in used_materials:
             
     materials.append(Material(**output))
             
-
+SCENE = bpy.data.scenes[0]
 for obj in bpy.data.objects:
     if obj.type != "MESH" or obj.name[:3] == "bb#":
         continue
     
     print(f"processing object {obj.name}")
-    bmesh = obj.data
+    # apply modifiers
+    # from https://blenderartists.org/t/alternative-to-bpy-ops-object-convert-target-mesh-command/1177790/3
+    dependencies_graph = bpy.context.evaluated_depsgraph_get()
+    bmesh = obj.evaluated_get(dependencies_graph).data.copy()
+    
     model_to_world_translation   = np.array(obj.matrix_world.to_translation(), dtype=np.float32)
     model_to_world_linear        = np.array(obj.matrix_world.to_3x3(), dtype=np.float32)
     model_to_world_adj_transpose = np.array(obj.matrix_world.to_3x3().adjugated().transposed(), dtype=np.float32)
@@ -184,17 +188,27 @@ for obj in bpy.data.objects:
     verts = verts.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, POS_FLOATS_PER_VERT)
 
     # normals
-    normals = np.zeros(NORMAL_FLOATS_PER_VERT * VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.float32)
-    bmesh.loop_triangles.foreach_get("split_normals", normals)
-    normals = normals.reshape(-1, NORMAL_FLOATS_PER_VERT)
+    # normals = np.zeros(NORMAL_FLOATS_PER_VERT * VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.float32)
+    loop_normals = np.zeros(NORMAL_FLOATS_PER_VERT * len(bmesh.loops), dtype = np.float32)
+    bmesh.loops.foreach_get("normal", loop_normals)
+    loop_normals = loop_normals.reshape(len(bmesh.loops), NORMAL_FLOATS_PER_VERT)
+    loop_normals = np.dot(loop_normals, model_to_world_adj_transpose.T)
+    loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.int32)
+    bmesh.loop_triangles.foreach_get("loops", loop_indices)
+    normals = loop_normals[loop_indices]
+    print(loop_normals.shape)
+    print(loop_indices.shape)
+    print(normals.shape)
+    # bmesh.loop_triangles.foreach_get("split_normals", normals)
+    # normals = normals.reshape(-1, NORMAL_FLOATS_PER_VERT)
     EPS = 10e-6
-    # assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
-    norm = np.linalg.norm(normals, axis=-1)
-    normals[abs(norm-1) > EPS, :] = np.array([0, 0, 1])
-    normals = np.dot(normals, model_to_world_adj_transpose.T)
+    # # assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
+    # norm = np.linalg.norm(normals, axis=-1)
+    # normals[abs(norm-1) > EPS, :] = np.array([0, 0, 1])
+    # normals = np.dot(normals, model_to_world_adj_transpose.T)
     norm = np.linalg.norm(normals, axis=-1)[:, np.newaxis]
     normals /= norm
-    assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
+    # assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
 
     normals = normals.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
 
