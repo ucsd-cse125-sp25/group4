@@ -36,6 +36,8 @@ ServerGame::ServerGame(void) :
 
 	timer = new Timer();
 
+	winningPointThreshold = 50; 
+
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
 	//// colors2d[i][0..3] = R, G, B, A (0–255)
@@ -266,19 +268,50 @@ void ServerGame::startARound(int seconds) {
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
 		state_mu.lock();
-		// Check if the game is still going on. If yes, then that means the survivors won the round.
+		// Check if the game is still going on. If yes, then that means THE SURVIVORS WON THE ROUND.
 		if (appState->gamePhase == GamePhase::GAME_PHASE) {
 			// set all status to true here, handle in the main game loop
 			for (auto& [id, status] : phaseStatus) {
 				status = true;
 			}
-			// Give every survivor 2 coins
+			// Give points to survivors.
+			printf("[round %d] Survivors won the round!\n", round_id);
+
+			// Count how many survivors survived the round
+			unsigned int num_survivors = 0;
+			unsigned int hunter_id = 0;
 			for (unsigned int id = 0; id < num_players; ++id) {
-				if (state->players[id].isHunter) {
-					continue;
+				if (!state->players[id].isDead && !state->players[id].isHunter) {
+					num_survivors++;
 				}
-				state->players[id].coins += 2;
-				printf("[round %d] Player %d coins: %d\n", round_id, id, state->players[id].coins);
+				if (state->players[id].isHunter) {
+					hunter_id = id; // save hunter id
+				}
+			}
+			// For each survivor surviving the round, they get 10 points. Hunter gets 10 coins.
+			for (unsigned int id = 0; id < num_players; ++id) {
+				if (!state->players[id].isDead && !state->players[id].isHunter) {
+					runner_points += 10;
+					state->players[hunter_id].coins += 10;
+					printf("[round %d] Survivor %d survived and got 10 points!\n", round_id, id);
+				}
+			}
+			// For each survivor dead, every survivor gets 10 coins.
+			for (unsigned int id = 0; id < num_players; ++id) {
+				if (!state->players[id].isHunter) {
+					state->players[id].coins += num_survivors * 10;
+				}
+			}
+			
+
+			// Check if anyone won the game	
+			if (anyWinners()) {
+				printf("[round %d] Game over! Winners: %d\n", round_id, (runner_points >= winningPointThreshold) ? 0 : 1);
+				appState->gamePhase = GamePhase::GAME_END;
+				sendAppPhaseUpdates();
+				// reset points
+				runner_points = 0;
+				hunter_points = 0;
 			}
 		}
 		// Don't send packets in timer!
@@ -306,6 +339,13 @@ void ServerGame::handleStartMenu() {
 			status = false;
 		}
 	}
+}
+
+// -----------------------------------------------------------------------------
+// GAME DEV HELPING FUNCTION
+// -----------------------------------------------------------------------------
+bool ServerGame::anyWinners() {
+	return (runner_points >= winningPointThreshold || hunter_points >= winningPointThreshold);
 }
 
 // -----------------------------------------------------------------------------
@@ -498,6 +538,9 @@ void ServerGame::applyAttacks()
 
 				// simple reward: +1 coin
 				state->players[attackerId].coins++;
+				
+				// for each player killed, the hunter gets +10 points
+				hunter_points += 10;
 
 				// mark victim as dead
 				state->players[victimId].isDead = true;
@@ -520,9 +563,20 @@ void ServerGame::applyAttacks()
 		}
 	}
 	if (allDead) {
-		printf("[GAME PHASE] All players are dead, starting a new round\n");
-		appState->gamePhase = GamePhase::SHOP_PHASE;
-		sendAppPhaseUpdates();
+		printf("[GAME PHASE] All players are dead, checking if anyone won\n");
+		if (anyWinners()) {
+			printf("[GAME PHASE] Game over! Winners: %d\n", (runner_points >= winningPointThreshold) ? 0 : 1);
+			appState->gamePhase = GamePhase::GAME_END;
+			sendAppPhaseUpdates();
+			// reset points
+			runner_points = 0;
+			hunter_points = 0;
+		}
+		else {
+			printf("[GAME PHASE] No winners, going into shop phase\n");
+			appState->gamePhase = GamePhase::SHOP_PHASE;
+			sendAppPhaseUpdates();
+		}
 	}
 	latestAttacks.clear();
 }

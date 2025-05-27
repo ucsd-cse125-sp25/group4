@@ -46,6 +46,7 @@ public:
 	void handleShopPhase();
 	void startShopPhase();
 	void applyPowerups(uint8_t, uint8_t);
+	bool anyWinners();
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;
@@ -57,6 +58,8 @@ private:
 	char network_data[MAX_PACKET_SIZE];
 
 	int runner_time, hunter_time; // times for each of the players to start moving
+	int runner_points, hunter_points; // points for each of the players
+	int winningPointThreshold; // points needed to win the game
 	
 	Point hunterSpawn = { -1.17, 0.042, 0.068 }; // center of the carpet cross
 	

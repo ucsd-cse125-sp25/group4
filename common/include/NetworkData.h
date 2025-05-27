@@ -76,6 +76,7 @@ enum class GamePhase {
 	START_MENU,
 	GAME_PHASE,
 	SHOP_PHASE,
+	GAME_END,
 
 
 	NUM_SCREENS,
