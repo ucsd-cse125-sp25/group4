@@ -37,8 +37,6 @@ ServerGame::ServerGame(void) :
 	timer = new Timer();
 	tiebreaker = false;
 
-	winningPointThreshold = 3;
-
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
 	//// colors2d[i][0..3] = R, G, B, A (0–255)
@@ -268,8 +266,6 @@ void ServerGame::startARound(int seconds) {
 
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
-		state_mu.lock();
-
 		// check if it is a tiebreaker round
 		if (tiebreaker) {
 			// the points will never be the same for both teams.
@@ -282,6 +278,9 @@ void ServerGame::startARound(int seconds) {
 			tiebreaker = false; // reset tiebreaker
 			return;
 		}
+		
+		state_mu.lock();
+
 		// set all status to true here, handle in the main game loop
 		for (auto& [id, status] : phaseStatus) {
 			status = true;
@@ -324,21 +323,6 @@ void ServerGame::startARound(int seconds) {
 			}
 		}
 
-		// Check if anyone won the game	
-		if (anyWinners()) {
-			if (runner_points == hunter_points) {
-				printf("[round %d] Game over! It's a tie! Starting a tiebreaker round. \n", round_id);
-				tiebreaker = true;
-			}
-			else {
-				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= winningPointThreshold) ? "survivors" : "hunter");
-				appState->gamePhase = GamePhase::GAME_END;
-				sendAppPhaseUpdates();
-				// reset points
-				runner_points = 0;
-				hunter_points = 0;
-			}
-		}
 		// Don't send packets in timer!
 		// Socket wrapper isn't thread safe...
 		// sendAppPhaseUpdates();
@@ -355,6 +339,10 @@ void ServerGame::handleStartMenu() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
+		// START A ROUND
+		runner_points = 0;
+		hunter_points = 0;
+		tiebreaker = false;
 		num_players = phaseStatus.size();
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
@@ -386,9 +374,26 @@ void ServerGame::handleGamePhase() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
+		// Check if anyone won the game	
+		if (anyWinners()) {
+			if (runner_points == hunter_points) {
+				printf("[round %d] Game over! It's a tie! Starting a tiebreaker round. \n", round_id);
+				tiebreaker = true;
 		appState->gamePhase = GamePhase::SHOP_PHASE;
-		//sendAppPhaseUpdates();
+				startShopPhase();
+			}
+			else {
+				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= winningPointThreshold) ? "survivors" : "hunter");
+				appState->gamePhase = GamePhase::GAME_END;
+				sendAppPhaseUpdates();
+			}
+		}
+		else
+		{
+			appState->gamePhase = GamePhase::SHOP_PHASE;
 		startShopPhase();
+		}
+
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
 		}
