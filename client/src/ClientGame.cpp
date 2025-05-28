@@ -78,21 +78,6 @@ void ClientGame::sendDebugPacket(const char* message) {
 	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(DebugPayload));
 }
 
-/*
-void ClientGame::sendGameStatePacket(float posDelta[4]) {
-	GameState* state = new GameState{ {0} };
-	//sprintf_s(state.position, sizeof(state.position), "debug: tick %llu", tick);
-	for (int i = 0; i < 4; i++) {
-		state->position[id][i] = posDelta[i];
-	}
-
-	char packet_data[HDR_SIZE + sizeof(GameState)];
-	NetworkServices::buildPacket<GameState>(PacketType::MOVE, *state, packet_data);
-	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(GameState));
-	delete state;
-}
-*/
-
 void ClientGame::sendMovePacket(float direction[3], float yaw, float pitch, bool jump) {
 	MovePayload mv{};
 	for (int i = 0; i < 3; i++)
