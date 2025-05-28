@@ -734,19 +734,26 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 			// simple AABB overlap test in 2D (X vs X, Y vs Y)
 			if (checkCollision(playerBox, boxes2d[b]))
 			{
-				float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
-				if (abs(distance) < abs(delta[i])) delta[i] = distance;
+				// If the z is being changed DOWNWARDS and collides, reset z velocity and "ground" player
+				if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
+					// printf("[CLIENT %d] Collision DOWNWARD with box detected. zVelocity=%f, deltaZ=%f\n", clientId,  state->players[clientId].zVelocity, delta[2]);
 
-				// If the z is being changed, reset z velocity and "ground" player
-				if (i == 2) {
-					// printf("[CLIENT %d] Collision with box detected. zVelocity=%f, deltaZ=%f\n", clientId,  state->players[clientId].zVelocity, delta[2]);
-					if (state->players[clientId].zVelocity < 0) state->players[clientId].isGrounded = true;
+					// newZ - playerRadius	= surfaceZ
+					// newZ					= surfaceZ + playerRadius
+					// currentZ + deltaZ	= surfaceZ + playerRadius
+					// deltaZ				= surfaceZ + playerRadius - currentZ
+					delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
+					state->players[clientId].isGrounded = true;
 					state->players[clientId].zVelocity = 0;
 					/*
 					printf("BOXID=%llu, box.minZ=%f, box.maxZ=%f\n", b, boxes2d[b].minZ, boxes2d[b].maxZ);
 					printf("Dynamic playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", playerBox.minZ, playerBox.maxZ);
 					printf("Static  playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", staticPlayerBox.minZ, staticPlayerBox.maxZ);
 					*/
+				}
+				else {
+					float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
+					if (abs(distance) < abs(delta[i])) delta[i] = distance;
 				}
 			}
 		}
