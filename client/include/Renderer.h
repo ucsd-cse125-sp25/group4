@@ -569,6 +569,7 @@ struct ShopUI {
 	float screenW = 1920.0f, screenH = 1080.0f;
 	float centerX = screenW * 0.5f, centerY = screenH * 0.5f, spacing = 50.0f;
 	float cardW = 724.0f/1.5, cardH = 1236.0f/1.5; // magic numbers for scale!!
+	float cardCenterX = cardW / 2, cardCenterY = cardH / 2;
 
 	uint8_t powerupIdxs[3] = {0, 0, 0};
 	uint8_t currSelected = 3; // surpasses 0, 1, 2!

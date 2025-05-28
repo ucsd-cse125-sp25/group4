@@ -813,14 +813,17 @@ bool Renderer::Render() {
 		};
 
 		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+		float ty = m_ShopUI.centerY - m_ShopUI.cardCenterY;
 		for (int i = 0; i < 3; i++) {
-			float tx = m_ShopUI.centerX - m_ShopUI.cardW * 0.5f
+			float tx = m_ShopUI.centerX - m_ShopUI.cardCenterX
 				+ (i - 1) * (m_ShopUI.cardW + m_ShopUI.spacing);
-			float ty = m_ShopUI.centerY - m_ShopUI.cardH * 0.5f;
 
 			XMMATRIX m = XMMatrixTranslation(tx, ty, 0);
 			if (i == m_ShopUI.currSelected) {
-				m = XMMatrixScaling(1.2, 1.2, 1) * m;
+				m = XMMatrixTranslation(-m_ShopUI.cardCenterX, -m_ShopUI.cardCenterY, 0)
+					* XMMatrixScaling(1.2, 1.2, 1)
+					* XMMatrixTranslation(m_ShopUI.cardCenterX, m_ShopUI.cardCenterY, 0)
+					* m;
 			}
 			dc.modelMatrix = XMMatrixTranspose(m);
 			dc.first_texture_idx = m_ShopUI.cardTextures.ptr[m_ShopUI.powerupIdxs[i]].descriptor.index;
