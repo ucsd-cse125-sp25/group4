@@ -73,7 +73,7 @@ static std::map<Powerup, PowerupMetadata> PowerupInfo{
 	{ Powerup::H_INCREASE_VISION,	{2, 3, "H_INSTINCT",	L"textures\\cards\\h_instinct.dds"} },
 	{ Powerup::R_INCREASE_SPEED,	{3, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
 	{ Powerup::R_INCREASE_JUMP,		{4, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
-	{ Powerup::R_DECREASE_DODGE_CD,	{5, 3, "R_REDBEAR",		L"textures\\cards\\r_bear.dds"} },
+	{ Powerup::R_DECREASE_DODGE_CD,	{5, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
 };
 
 // The packet header preceeds every packet

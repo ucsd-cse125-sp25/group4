@@ -679,6 +679,8 @@ public:
 	}
 
 	void updatePowerups(Powerup p0, Powerup p1, Powerup p2) {
+		// deselect when updating powerup selection
+		m_ShopUI.currSelected = 3;
 		m_ShopUI.powerupIdxs[0] = PowerupInfo[p0].textureIdx;
 		m_ShopUI.powerupIdxs[1] = PowerupInfo[p1].textureIdx;
 		m_ShopUI.powerupIdxs[2] = PowerupInfo[p2].textureIdx;
