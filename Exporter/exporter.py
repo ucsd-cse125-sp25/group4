@@ -62,7 +62,15 @@ class MaterialData:
     roughness  : bpy.types.Image | float
     normal     : bpy.types.Image | bpy.types.bpy_prop_array
 
-material_names_to_indices : dict[str, int] = {"default_material" : 0} | {mat.name : i+1 for i, mat in enumerate(bpy.data.materials)}
+
+used_materials : list[bpy.types.Material]= []
+for material in bpy.data.materials:
+    no_users       : bool = material.users == 0
+    only_fake_user : bool = material.users == 1 and material.use_fake_user
+    if no_users or only_fake_user:
+        continue
+    used_materials.append(material)
+    
 num_textures = 0
 
 consolidated_mesh : Mesh = None
@@ -85,13 +93,14 @@ def get_node_input(input : bpy.types.NodeSocket)-> int | float | bpy.types.bpy_p
     else:
         return input.default_value
     
+material_names_to_indices : dict[str, int] = {"default_material" : 0}
 # process materials
-for material in bpy.data.materials:
-    no_users       : bool = material.users == 0
-    only_fake_user : bool = material.users == 1 and material.use_fake_user
-    if no_users or only_fake_user:
+i = 1
+for material in used_materials:
+    if material.name in material_names_to_indices:
         continue
-    
+    material_names_to_indices |= {material.name : i}
+    i += 1
     output = material.node_tree.get_output_node("ALL")
     principled = output.inputs["Surface"].links[0].from_node
 
@@ -227,8 +236,17 @@ for obj in bpy.data.objects:
     consolidated_mesh = new_mesh.merge(consolidated_mesh)
     assert(consolidated_mesh is not None)
 
+print("there are", len(materials), "materials in the array")
+print("there are", len(material_names_to_indices), "materials in the dict")
 
+print(material_names_to_indices)
+
+for name, i in material_names_to_indices.items():
+    print(i)
+    print(name)
+    print(materials[i])
     
+print("num_textures:", num_textures)    
 
 def pack_bytes(layout : str, array : np.array) -> bytes:
     return pack(f"{array.size}{layout}", *array.flatten())

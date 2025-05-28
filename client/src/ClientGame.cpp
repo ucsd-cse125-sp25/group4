@@ -181,9 +181,11 @@ void ClientGame::update() {
 				renderer.players[i].lookDir.yaw = gameState->players[i].yaw;
 			}
 
-			// cache own “dead” flag for input handling
+			// cache own dead flag for input handling
 			localDead = gameState->players[renderer.currPlayer.playerId].isDead;
 
+			// update timer
+			renderer.updateTimer(gameState->timerFrac);
 			
 			break;
 		}
@@ -240,8 +242,9 @@ void ClientGame::update() {
 				Powerup powerup = (Powerup)optionsPayload->options[i];
 				shopOptions[i].item = powerup;
 				shopOptions[i].isSelected = false;
-				shopOptions[i].isBuyable = (PowerupCosts[powerup] <= gameState->players[id].coins);
+				shopOptions[i].isBuyable = (PowerupInfo[powerup].cost <= gameState->players[id].coins);
 			}
+			renderer.updatePowerups(shopOptions[0].item, shopOptions[1].item, shopOptions[2].item);
 
 			break;
 		}
@@ -403,10 +406,11 @@ void ClientGame::processShopInputs() {
  
 void ClientGame::handleShopItemSelection(int choice) {
 		ShopItem* item = &(shopOptions[choice]);
-		int cost = PowerupCosts[item->item];
+		int cost = PowerupInfo[item->item].cost;
 		if (item->isSelected) 
 		{
 			item->isSelected = false;
+			renderer.selectPowerup(3); // exceeds option
 			tempCoins += cost;
 		}
 		else
@@ -418,6 +422,7 @@ void ClientGame::handleShopItemSelection(int choice) {
 				{
 					shopOptions[i].isSelected = (i == choice);
 				}
+				renderer.selectPowerup((uint8_t) choice);
 				tempCoins -= cost;
 			}
 		}

@@ -156,11 +156,17 @@ struct Texture {
 		// use ddspp to decode the header and write it to a cleaner descriptor
 		ddspp::Descriptor desc;
 		ddspp::Result decodeResult = ddspp::decode_header(data.ptr, desc);
-		if (decodeResult != ddspp::Success) return false;
+		if (decodeResult != ddspp::Success) {
+			printf("fuck2\n");
+			return false;
+		}
 
 		BYTE* initialData = data.ptr + desc.headerSize;
 
-		if (desc.type != ddspp::Texture2D) return false; // we only support 2D textures
+		if (desc.type != ddspp::Texture2D) {
+			printf("fuck2\n");
+			return false; // we only support 2D textures
+		}
 		if (desc.arraySize != 1) return false; // we do not support arrays of textures 
 		// describes texture in the default heap
 		D3D12_RESOURCE_DESC textureDesc = {
@@ -519,13 +525,13 @@ struct TimerUI {
 
 		// vertices are in pixel coordinates, then are projected using ortho projection
 		ortho = XMMatrixTranspose(XMMatrixOrthographicOffCenterLH(
-			0.0f, float(1920),
-			0.0f, float(1080),
+			0.0f, screenW,
+			0.0f, screenH,
 			0.0f, 1.0f
 		));
 
 		// upload the buffer
-		vertexBuffer.Init(slice, device, descriptorAllocator, L"UI Vertex Buffer");
+		vertexBuffer.Init(slice, device, descriptorAllocator, L"Timer UI Vertex Buffer");
 		return true;
 	};
 
@@ -550,10 +556,70 @@ struct TimerUI {
 
 	// Release GPU resources
 	void Release() {
+		uiTextures.release();
 		vertexBuffer.Release();
 	}
 };
 
+struct ShopUI {
+	Slice<Texture> cardTextures;
+	Buffer<UIVertex> vertexBuffer;
+	XMMATRIX ortho;
+
+	float screenW = 1920.0f, screenH = 1080.0f;
+	float centerX = screenW * 0.5f, centerY = screenH * 0.5f, spacing = 50.0f;
+	float cardW = 724.0f/1.5, cardH = 1236.0f/1.5; // magic numbers for scale!!
+	float cardCenterX = cardW / 2, cardCenterY = cardH / 2;
+
+	uint8_t powerupIdxs[3] = {0, 0, 0};
+	uint8_t currSelected = 3; // surpasses 0, 1, 2!
+
+	bool initialized = false;
+
+	bool Init(ID3D12Device* device, DescriptorAllocator* descriptorAllocator) {
+		// patchwork fix for upside-down textures... just invert UV coordinates.
+		UIVertex uiVerts[6] = {
+			{{0,     0,     0}, {0, 1}},
+			{{0,     cardH, 0}, {0, 0}},
+			{{cardW, cardH, 0}, {1, 0}},
+
+			{{0,     0,     0}, {0, 1}},
+			{{cardW, cardH, 0}, {1, 0}},
+			{{cardW, 0,     0}, {1, 1}},
+		};
+		Slice<UIVertex> slice = { uiVerts, _countof(uiVerts) };
+
+		ortho = XMMatrixTranspose(XMMatrixOrthographicOffCenterLH(
+			0.0f, screenW,
+			0.0f, screenH,
+			0.0f, 1.0f
+		));
+
+		vertexBuffer.Init(slice, device, descriptorAllocator, L"Shop UI Vertex Buffer");
+		return true;
+	}
+
+	bool SendToGPU(ID3D12Device* device, DescriptorAllocator* descriptorAllocator, ID3D12GraphicsCommandList* commandList) {
+		cardTextures = { reinterpret_cast<Texture*>(calloc(PowerupInfo.size(), sizeof(Texture))), (uint32_t) PowerupInfo.size() };
+		auto it = PowerupInfo.begin();
+		for (uint32_t i = 0; i < PowerupInfo.size(); ++i) {
+			bool ok = cardTextures.ptr[i].Init(
+				device,
+				descriptorAllocator,
+				commandList,
+				it->second.fileLocation.c_str());
+			if (!ok) return false;
+			++it;
+		}
+		initialized = true;
+		return true;
+	}
+
+	bool Release() {
+		cardTextures.release();
+		vertexBuffer.Release();
+	}
+};
 
 class Renderer {
 public:
@@ -608,6 +674,20 @@ public:
 		cameraPitch = pitch;
 	}
 
+	void updateTimer(float timerFrac) {
+		m_TimerUI.timerHandAngle = XM_2PI * timerFrac;
+	}
+
+	void updatePowerups(Powerup p0, Powerup p1, Powerup p2) {
+		m_ShopUI.powerupIdxs[0] = PowerupInfo[p0].textureIdx;
+		m_ShopUI.powerupIdxs[1] = PowerupInfo[p1].textureIdx;
+		m_ShopUI.powerupIdxs[2] = PowerupInfo[p2].textureIdx;
+	}
+
+	void selectPowerup(uint8_t selection) {
+		m_ShopUI.currSelected = selection;
+	}
+
 	GamePhase gamePhase;
 private:
 	DebugCubes debugCubes;
@@ -637,7 +717,10 @@ private:
 	// for timer UI
 	
 	ComPtr<ID3D12PipelineState> m_pipelineStateTimerUI;
-	TimerUI							m_TimerUI;
+	TimerUI						m_TimerUI;
+
+	// for shop UI
+	ShopUI						m_ShopUI;
 
 	// syncrhonization objects
 	UINT m_frameIndex;

@@ -152,13 +152,21 @@ bool Renderer::Init(HWND window_handle) {
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		
 		uint32_t numSceneTextures = m_scene.header->numTextures;
-		uint32_t numTimerUITextures = 3; // clock base, hand, top,
+		uint32_t numTimerUITextures = 3; // clock base, hand, top
+		uint32_t numTimerUIVertexBuffers = 1;
+		uint32_t numShopUIVertexBuffers = 1;
+		uint32_t numShopUITextures = PowerupInfo.size();
+		uint32_t capacity = SCENE_BUFFER_TYPE_COUNT
+			+ 3
+			+ numSceneTextures
+			+ numTimerUITextures + numTimerUIVertexBuffers
+			+ numShopUITextures + numShopUIVertexBuffers;
 		// all resource descriptors go here.
 		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(
 			m_device.Get(),
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-			SCENE_BUFFER_TYPE_COUNT + 4 + numSceneTextures + numTimerUITextures,
+			capacity,
 			L"Resource Descriptor Heap");
 
 		// create Depth Stencil View (DSV) descriptor heap
@@ -237,7 +245,7 @@ bool Renderer::Init(HWND window_handle) {
 		// may add more parameters in the future for indices of resources
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {
-			.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT,
+			.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
 			.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 			.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 			.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
@@ -488,38 +496,14 @@ bool Renderer::Init(HWND window_handle) {
 	{
 		m_TimerUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------
+	// create vertex buffer for shop UI
+
+	{
+		m_ShopUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
+	}
 	
-	// ----------------------------------------------------------------------------------------------------------------
-	// create constant buffer 
-    // {
-    // 	m_constantBufferData.viewProject = computeViewProject(playerState.pos, playerState.lookDir);
-    // 
-    // 	const UINT constantBufferSize = sizeof(SceneConstantBuffer);
-    // 	D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD); 
-    // 	D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
-    // 	UNWRAP(m_device->CreateCommittedResource(
-    // 			&heapProperties,
-    // 			D3D12_HEAP_FLAG_NONE,
-    // 			&bufferDesc,
-    // 			D3D12_RESOURCE_STATE_GENERIC_READ,
-    // 			nullptr,
-    // 			IID_PPV_ARGS(&m_constantBuffer)
-    // 	));
-    // 
-    // 	// create constant buffer view
-    // 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-    // 		.BufferLocation = m_constantBuffer->GetGPUVirtualAddress(),
-    // 		.SizeInBytes = constantBufferSize,
-    // 	};
-    // 	m_device->CreateConstantBufferView(&cbvDesc, m_resourceHeap->GetCPUDescriptorHandleForHeapStart());
-    // 	
-    // 	// initialize constant buffer
-    // 	// we don't unmap until the app closes
-    // 	D3D12_RANGE readRange = { 0, 0 };
-    // 	UNWRAP(m_constantBuffer->Map(0, &readRange, (void **)(&m_pCbvDataBegin)));
-    // 	memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
-    // }
-	// ----------------------------------------------------------------------------------------------------------------
 	// create depth stencil buffer 
 	{
 		D3D12_DEPTH_STENCIL_VIEW_DESC depthStencilDesc = {
@@ -674,6 +658,10 @@ bool Renderer::Render() {
 	if (!m_TimerUI.initialized) {
 		m_TimerUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
 	}
+
+	if (!m_ShopUI.initialized) {
+		m_ShopUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
 	
 	// set heaps for constant buffer
 	ID3D12DescriptorHeap *ppHeaps[] = {m_resourceDescriptorAllocator.heap.Get()};
@@ -813,7 +801,36 @@ bool Renderer::Render() {
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
 		m_commandList->DrawInstanced(m_TimerUI.vertexBuffer.data.len, 1, 0, 0);
 	}
-	
+
+	// draw SHOP if in shop...
+	if (gamePhase == GamePhase::SHOP_PHASE) {
+		PerDrawConstants dc = {
+			.viewProject = m_ShopUI.ortho,
+			.modelMatrix = XMMatrixIdentity(),
+			.modelInverseTranspose = XMMatrixIdentity(),
+			.vpos_idx = m_ShopUI.vertexBuffer.descriptor.index,
+			.vshade_idx = m_scene.vertexShading.descriptor.index,
+		};
+
+		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+		float ty = m_ShopUI.centerY - m_ShopUI.cardCenterY;
+		for (int i = 0; i < 3; i++) {
+			float tx = m_ShopUI.centerX - m_ShopUI.cardCenterX
+				+ (i - 1) * (m_ShopUI.cardW + m_ShopUI.spacing);
+
+			XMMATRIX m = XMMatrixTranslation(tx, ty, 0);
+			if (i == m_ShopUI.currSelected) {
+				m = XMMatrixTranslation(-m_ShopUI.cardCenterX, -m_ShopUI.cardCenterY, 0)
+					* XMMatrixScaling(1.2, 1.2, 1)
+					* XMMatrixTranslation(m_ShopUI.cardCenterX, m_ShopUI.cardCenterY, 0)
+					* m;
+			}
+			dc.modelMatrix = XMMatrixTranspose(m);
+			dc.first_texture_idx = m_ShopUI.cardTextures.ptr[m_ShopUI.powerupIdxs[i]].descriptor.index;
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+			m_commandList->DrawInstanced(m_ShopUI.vertexBuffer.data.len, 1, 0, 0);
+		}
+	}
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {
