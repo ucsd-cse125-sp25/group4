@@ -638,7 +638,7 @@ void ServerGame::sendAppPhaseUpdates() {
 
 	NetworkServices::buildPacket<AppPhasePayload>(PacketType::APP_PHASE, *data, packet_data);
 
-	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(AppPhasePayload));
 }
 
 void ServerGame::sendShopOptions(ShopOptionsPayload* data, int dest) {
