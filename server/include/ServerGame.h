@@ -13,15 +13,6 @@
 #include <random>
 #include <mutex>
 
-#define GRAVITY 0.075f * PLAYER_SCALING_FACTOR
-#define JUMP_VELOCITY 1.5f * PLAYER_SCALING_FACTOR
-#define PLAYER_INIT_SPEED 1.0f * PLAYER_SCALING_FACTOR
-#define TERMINAL_VELOCITY -9999.0f * PLAYER_SCALING_FACTOR
-#define ATTACK_ANGLE_DEG 45.0f
-#define RUNNER_SPAWN_PERIOD 1
-#define HUNTER_SPAWN_PERIOD 3
-#define JUMP_POWERUP 1.5f * PLAYER_SCALING_FACTOR
-
 class ServerGame {
 public:
 	ServerGame(void);
@@ -59,7 +50,6 @@ private:
 
 	int runner_time, hunter_time; // times for each of the players to start moving
 	int runner_points, hunter_points; // points for each of the players
-	static constexpr int winningPointThreshold = 4; // points needed to win the game
 	
 	Point hunterSpawn = { -1.17, 0.042, 0.068 }; // center of the carpet cross
 	

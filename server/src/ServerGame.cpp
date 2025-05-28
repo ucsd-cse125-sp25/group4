@@ -364,7 +364,7 @@ void ServerGame::handleStartMenu() {
 // GAME DEV HELPING FUNCTION
 // -----------------------------------------------------------------------------
 bool ServerGame::anyWinners() {
-	return (runner_points >= winningPointThreshold || hunter_points >= winningPointThreshold);
+	return (runner_points >= WIN_THRESHOLD || hunter_points >= WIN_THRESHOLD);
 }
 
 // -----------------------------------------------------------------------------
@@ -390,7 +390,7 @@ void ServerGame::handleGamePhase() {
 				startShopPhase();
 			}
 			else {
-				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= winningPointThreshold) ? "survivors" : "hunter");
+				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= WIN_THRESHOLD) ? "survivors" : "hunter");
 				appState->gamePhase = GamePhase::GAME_END;
 				sendAppPhaseUpdates();
 			}
