@@ -10,12 +10,17 @@ NORMAL_FLOATS_PER_VERT = 3
 POS_FLOATS_PER_VERT = 3
 UV_FLOATS_PER_VERT = 2
 
+BONES_PER_VERT = 4
+
 @dataclass
 class Mesh:
     num_tris       : int
     vert_positions : np.array # (tris, VERTS_PER_TRI, POS_FLOATS_PER_VERT)
     vert_shade     : np.array # (tris, VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
     material_ids   : np.array # (tris)
+
+    bone_indices : np.array
+    vertex_weights : np.array
     
     def merge(self, other):
         if other is not None:
@@ -172,7 +177,6 @@ for obj in bpy.data.objects:
     model_to_world_adj_transpose = np.array(obj.matrix_world.to_3x3().adjugated().transposed(), dtype=np.float32)
 
 
-    print("model_to_world_adj:", model_to_world_adj_transpose)
 
     # vertex positions
     verts = np.zeros(POS_FLOATS_PER_VERT * len(bmesh.vertices), dtype=np.float32) # (num_bmesh_verts * 3)
@@ -196,9 +200,6 @@ for obj in bpy.data.objects:
     loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.int32)
     bmesh.loop_triangles.foreach_get("loops", loop_indices)
     normals = loop_normals[loop_indices]
-    print(loop_normals.shape)
-    print(loop_indices.shape)
-    print(normals.shape)
     # bmesh.loop_triangles.foreach_get("split_normals", normals)
     # normals = normals.reshape(-1, NORMAL_FLOATS_PER_VERT)
     EPS = 10e-6
@@ -248,17 +249,7 @@ for obj in bpy.data.objects:
     consolidated_mesh = new_mesh.merge(consolidated_mesh)
     assert(consolidated_mesh is not None)
 
-print("there are", len(materials), "materials in the array")
-print("there are", len(material_names_to_indices), "materials in the dict")
 
-print(material_names_to_indices)
-
-for name, i in material_names_to_indices.items():
-    print(i)
-    print(name)
-    print(materials[i])
-    
-print("num_textures:", num_textures)    
 
 def pack_bytes(layout : str, array : np.array) -> bytes:
     return pack(f"{array.size}{layout}", *array.flatten())
