@@ -193,6 +193,8 @@ struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a plac
 
 struct ShopOptionsPayload {
 	uint8_t options[NUM_POWERUP_OPTIONS];
+	uint8_t runner_score;
+	uint8_t hunter_score;
 };
 
 struct Packet {

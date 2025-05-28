@@ -231,6 +231,14 @@ void ClientGame::update() {
 			}
 			renderer.updatePowerups(shopOptions[0].item, shopOptions[1].item, shopOptions[2].item);
 
+			if (id == 0) {
+				// really sketch isHunter check...
+				renderer.updateCurrency(gameState->players[id].coins, optionsPayload->hunter_score);
+			}
+			else {
+				renderer.updateCurrency(gameState->players[id].coins, optionsPayload->runner_score);
+			}
+
 			break;
 		}
 		default:

@@ -563,22 +563,35 @@ struct TimerUI {
 
 struct ShopUI {
 	Slice<Texture> cardTextures;
-	Buffer<UIVertex> vertexBuffer;
+	Slice<Texture> soulsTextures;
+	Slice<Texture> coinsTextures;
+	Buffer<UIVertex> cardVertexBuffer;
+	Buffer<UIVertex> counterVertexBuffer;
 	XMMATRIX ortho;
+
+	XMMATRIX cardModelMatrix[3];
+	XMMATRIX cardSelectedModelMatrix[3];
+	XMMATRIX coinsModelMatrix;
+	XMMATRIX soulsModelMatrix;
 
 	float screenW = 1920.0f, screenH = 1080.0f;
 	float centerX = screenW * 0.5f, centerY = screenH * 0.5f, spacing = 50.0f;
+
 	float cardW = 724.0f/1.5, cardH = 1236.0f/1.5; // magic numbers for scale!!
 	float cardCenterX = cardW / 2, cardCenterY = cardH / 2;
 
+	float counterW = 400.0f/1.5f, counterH = 200.0f/1.5f;
+
 	uint8_t powerupIdxs[3] = {0, 0, 0};
-	uint8_t currSelected = 3; // surpasses 0, 1, 2!
+	uint8_t currSelected = 3; // surpasses 0, 1, 2, so that nothing gets highlighted!
+	uint8_t coins;
+	uint8_t souls;
 
 	bool initialized = false;
 
 	bool Init(ID3D12Device* device, DescriptorAllocator* descriptorAllocator) {
 		// patchwork fix for upside-down textures... just invert UV coordinates.
-		UIVertex uiVerts[6] = {
+		UIVertex cardVerts[6] = {
 			{{0,     0,     0}, {0, 1}},
 			{{0,     cardH, 0}, {0, 0}},
 			{{cardW, cardH, 0}, {1, 0}},
@@ -587,7 +600,18 @@ struct ShopUI {
 			{{cardW, cardH, 0}, {1, 0}},
 			{{cardW, 0,     0}, {1, 1}},
 		};
-		Slice<UIVertex> slice = { uiVerts, _countof(uiVerts) };
+		Slice<UIVertex> cardSlice = { cardVerts, _countof(cardVerts) };
+
+		UIVertex counterVerts[6] = {
+			{{0,		0,			0}, {0, 1}},
+			{{0,		counterH,	0}, {0, 0}},
+			{{counterW, counterH,	0}, {1, 0}},
+
+			{{0,		0,			0}, {0, 1}},
+			{{counterW, counterH,	0}, {1, 0}},
+			{{counterW, 0,			0}, {1, 1}},
+		};
+		Slice<UIVertex> counterSlice = { counterVerts, _countof(counterVerts) };
 
 		ortho = XMMatrixTranspose(XMMatrixOrthographicOffCenterLH(
 			0.0f, screenW,
@@ -595,7 +619,24 @@ struct ShopUI {
 			0.0f, 1.0f
 		));
 
-		vertexBuffer.Init(slice, device, descriptorAllocator, L"Shop UI Vertex Buffer");
+		cardVertexBuffer.Init(cardSlice, device, descriptorAllocator, L"Shop Card Vertex Buffer");
+		counterVertexBuffer.Init(counterSlice, device, descriptorAllocator, L"Shop Counter Vertex Buffer");
+
+		float ty = centerY - cardCenterY;
+		for (int i = 0; i < 3; i++) {
+			float tx = centerX - cardCenterX
+				+ (i - 1) * (cardW + spacing);
+
+			XMMATRIX m = XMMatrixTranslation(tx, ty, 0);
+			cardModelMatrix[i] = XMMatrixTranspose(m);
+			m = XMMatrixTranslation(-cardCenterX, -cardCenterY, 0)
+				* XMMatrixScaling(1.2, 1.2, 1)
+				* XMMatrixTranslation(cardCenterX, cardCenterY, 0)
+				* m;
+			cardSelectedModelMatrix[i] = XMMatrixTranspose(m);
+		}
+		coinsModelMatrix = XMMatrixTranspose(XMMatrixTranslation(screenW - counterW - 20.0f, 20.0f + counterH, 0));
+		soulsModelMatrix = XMMatrixTranspose(XMMatrixTranslation(screenW - counterW - 20.0f, 20.0f, 0));
 		return true;
 	}
 
@@ -611,13 +652,45 @@ struct ShopUI {
 			if (!ok) return false;
 			++it;
 		}
+
+		{
+			coinsTextures = { reinterpret_cast<Texture*>(calloc(10, sizeof(Texture))), 10 };
+			coinsTextures.ptr[0].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_0.dds");
+			coinsTextures.ptr[1].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_1.dds");
+			coinsTextures.ptr[2].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_2.dds");
+			coinsTextures.ptr[3].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_3.dds");
+			coinsTextures.ptr[4].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_4.dds");
+			coinsTextures.ptr[5].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_5.dds");
+			coinsTextures.ptr[6].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_6.dds");
+			coinsTextures.ptr[7].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_7.dds");
+			coinsTextures.ptr[8].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_8.dds");
+			coinsTextures.ptr[9].Init(device, descriptorAllocator, commandList, L"textures\\coins\\coin_9.dds");
+		}
+		
+		{
+			soulsTextures = { reinterpret_cast<Texture*>(calloc(10, sizeof(Texture))), 10 };
+			soulsTextures.ptr[0].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_0.dds");
+			soulsTextures.ptr[1].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_1.dds");
+			soulsTextures.ptr[2].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_2.dds");
+			soulsTextures.ptr[3].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_3.dds");
+			soulsTextures.ptr[4].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_4.dds");
+			soulsTextures.ptr[5].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_5.dds");
+			soulsTextures.ptr[6].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_6.dds");
+			soulsTextures.ptr[7].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_7.dds");
+			soulsTextures.ptr[8].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_8.dds");
+			soulsTextures.ptr[9].Init(device, descriptorAllocator, commandList, L"textures\\souls\\soul_9.dds");
+		}
+
 		initialized = true;
 		return true;
 	}
 
 	bool Release() {
 		cardTextures.release();
-		vertexBuffer.Release();
+		coinsTextures.release();
+		soulsTextures.release();
+		cardVertexBuffer.Release();
+		counterVertexBuffer.Release();
 	}
 };
 
@@ -688,6 +761,11 @@ public:
 
 	void selectPowerup(uint8_t selection) {
 		m_ShopUI.currSelected = selection;
+	}
+
+	void updateCurrency(uint8_t coins, uint8_t souls) {
+		m_ShopUI.coins = coins;
+		m_ShopUI.souls = souls;
 	}
 
 	GamePhase gamePhase;

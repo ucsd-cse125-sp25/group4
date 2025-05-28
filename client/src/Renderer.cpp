@@ -154,8 +154,8 @@ bool Renderer::Init(HWND window_handle) {
 		uint32_t numSceneTextures = m_scene.header->numTextures;
 		uint32_t numTimerUITextures = 3; // clock base, hand, top
 		uint32_t numTimerUIVertexBuffers = 1;
-		uint32_t numShopUIVertexBuffers = 1;
-		uint32_t numShopUITextures = PowerupInfo.size();
+		uint32_t numShopUIVertexBuffers = 2;
+		uint32_t numShopUITextures = PowerupInfo.size() + 20; // 10 for each counter of souls and coins
 		uint32_t capacity = SCENE_BUFFER_TYPE_COUNT
 			+ 3
 			+ numSceneTextures
@@ -808,28 +808,35 @@ bool Renderer::Render() {
 			.viewProject = m_ShopUI.ortho,
 			.modelMatrix = XMMatrixIdentity(),
 			.modelInverseTranspose = XMMatrixIdentity(),
-			.vpos_idx = m_ShopUI.vertexBuffer.descriptor.index,
+			.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index,
 			.vshade_idx = m_scene.vertexShading.descriptor.index,
 		};
 
 		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
 		float ty = m_ShopUI.centerY - m_ShopUI.cardCenterY;
 		for (int i = 0; i < 3; i++) {
-			float tx = m_ShopUI.centerX - m_ShopUI.cardCenterX
-				+ (i - 1) * (m_ShopUI.cardW + m_ShopUI.spacing);
-
-			XMMATRIX m = XMMatrixTranslation(tx, ty, 0);
 			if (i == m_ShopUI.currSelected) {
-				m = XMMatrixTranslation(-m_ShopUI.cardCenterX, -m_ShopUI.cardCenterY, 0)
-					* XMMatrixScaling(1.2, 1.2, 1)
-					* XMMatrixTranslation(m_ShopUI.cardCenterX, m_ShopUI.cardCenterY, 0)
-					* m;
+				dc.modelMatrix = m_ShopUI.cardSelectedModelMatrix[i];
 			}
-			dc.modelMatrix = XMMatrixTranspose(m);
+			else {
+				dc.modelMatrix = m_ShopUI.cardModelMatrix[i];
+			}
 			dc.first_texture_idx = m_ShopUI.cardTextures.ptr[m_ShopUI.powerupIdxs[i]].descriptor.index;
 			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
-			m_commandList->DrawInstanced(m_ShopUI.vertexBuffer.data.len, 1, 0, 0);
+			m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
 		}
+
+		// draw counter for coins and souls
+		dc.vpos_idx = m_ShopUI.counterVertexBuffer.descriptor.index;
+		dc.modelMatrix = m_ShopUI.coinsModelMatrix;
+		dc.first_texture_idx = m_ShopUI.coinsTextures.ptr[m_ShopUI.coins].descriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+
+		dc.modelMatrix = m_ShopUI.soulsModelMatrix;
+		dc.first_texture_idx = m_ShopUI.soulsTextures.ptr[m_ShopUI.souls].descriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
 	}
 	
 	// barrier BEFORE presenting the back buffer 

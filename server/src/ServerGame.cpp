@@ -386,7 +386,7 @@ void ServerGame::handleGamePhase() {
 			if (runner_points == hunter_points) {
 				printf("[round %d] Game over! It's a tie! Starting a tiebreaker round. \n", round_id);
 				tiebreaker = true;
-		appState->gamePhase = GamePhase::SHOP_PHASE;
+				appState->gamePhase = GamePhase::SHOP_PHASE;
 				startShopPhase();
 			}
 			else {
@@ -398,7 +398,7 @@ void ServerGame::handleGamePhase() {
 		else
 		{
 			appState->gamePhase = GamePhase::SHOP_PHASE;
-		startShopPhase();
+			startShopPhase();
 		}
 
 		for (auto& [id, status] : phaseStatus) {
@@ -451,6 +451,8 @@ void ServerGame::startShopPhase() {
 
 			}
 		}
+		options->runner_score = runner_points;
+		options->hunter_score = hunter_points;
 		sendShopOptions(options, id);
 	}
 }
