@@ -160,8 +160,8 @@ void ClientGame::update() {
 				//renderer.players[i].isDead = state->players[i].isDead;      // NEW
 				//renderer.players[i].isHunter = state->players[i].isHunter;  // NEW
 
-				// update the rotation from other players only.
-				if (i == renderer.currPlayer.playerId) continue;
+				// update the rotation from other players only (only for game phase)
+				if (i == renderer.currPlayer.playerId && appState->gamePhase == GamePhase::GAME_PHASE) continue;
 				renderer.players[i].lookDir.pitch = gameState->players[i].pitch;
 				renderer.players[i].lookDir.yaw = gameState->players[i].yaw;
 			}
@@ -184,8 +184,6 @@ void ClientGame::update() {
 
 			id = idPayload->id;
 			renderer.currPlayer.playerId = id;
-			renderer.players[id].lookDir.pitch = 0.0f;
-			renderer.players[id].lookDir.yaw = 0.0f;
 			char message[128];
 
 			strcpy_s(message, std::to_string(id).c_str());
@@ -364,7 +362,7 @@ void ClientGame::processShopInputs() {
 	bool down3 = (GetAsyncKeyState('3') & 0x8000) != 0;
 
 	// only allow one selection per tick
-	if (GetAsyncKeyState('M') & 0x8000) {
+	if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
 		ready = true;
 		gameState->players[id].coins = tempCoins;
 		uint8_t selection = 0;
@@ -458,12 +456,16 @@ void ClientGame::handleInput()
 	switch (appState->gamePhase)
 	{
 	case GamePhase::START_MENU:
+	case GamePhase::GAME_END:
 	{
+		yaw = startYaw;
+		pitch = startPitch;
+		
 		// Avoid sending multiple ready packets
 		if (ready)
 			break;
 
-		if (GetAsyncKeyState('M') & 0x8000) {
+		if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
 			ready = true;
 			sendReadyStatusPacket();
 		}

@@ -33,6 +33,8 @@ public:
 	void readBoundingBoxes();
 	void handleGamePhase();
 	void handleStartMenu();
+	void handleEndPhase();
+	void newGame();
 	void resetGamePos();
 
 	void startARound(int);
@@ -75,9 +77,6 @@ private:
 		{ -2.15, 2.536, 0.913247 },
 		{ -2.075, 2.536, 0.913247 },
 	};
-
-	float startYaw = 0.0f;
-	float startPitch = 0.0f;
 
 	/* Collision */
 	// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}

@@ -768,7 +768,7 @@ bool Renderer::Render() {
 	}
 
 	// draw Timer UI
-	{
+	if (gamePhase != GamePhase::START_MENU) {
 		PerDrawConstants dc = {
 			.viewProject = m_TimerUI.ortho,
 			.modelMatrix = XMMatrixIdentity(),

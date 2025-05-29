@@ -18,7 +18,12 @@
 #define HUNTER_SPAWN_PERIOD 3
 #define JUMP_POWERUP 0.25f * PLAYER_SCALING_FACTOR
 
+#define PLAYER_INIT_COINS 5
+
 constexpr float PLAYER_SCALING_FACTOR = 0.025;
+
+constexpr float startYaw = 0.0f;
+constexpr float startPitch = 0.0f;
 
 enum class PacketType : uint32_t {
 	INIT_CONNECTION = 0,

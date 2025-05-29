@@ -22,10 +22,10 @@ ServerGame::ServerGame(void) :
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, true, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
-			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
 		},
 		.timerFrac = 0.0f,
 	};
@@ -94,7 +94,8 @@ void ServerGame::update() {
 		}
 		case GamePhase::GAME_END:
 		{
-			//handleEndPhase();
+			handleEndPhase();
+			break;
 		}
 		default:
 		{
@@ -359,9 +360,6 @@ void ServerGame::handleStartMenu() {
 
 	if (ready && !phaseStatus.empty()) {
 		// START A ROUND
-		runner_points = 0;
-		hunter_points = 0;
-		tiebreaker = false;
 		num_players = phaseStatus.size();
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
@@ -370,6 +368,20 @@ void ServerGame::handleStartMenu() {
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
 		}
+	}
+}
+
+void ServerGame::newGame()
+{
+	round_id = 0;
+	tiebreaker = false;
+	playerPowerups.clear();
+	runner_points = 0;
+	hunter_points = 0;
+	for (int i = 0; i < num_players; i++) {
+		state->players[i].coins = PLAYER_INIT_COINS;
+		state->players[i].speed = PLAYER_INIT_SPEED;
+		state->players[i].isDead = false;
 	}
 }
 
@@ -385,6 +397,29 @@ void ServerGame::resetGamePos()
 	}
 
 	sendGameStateUpdates();
+}
+
+void ServerGame::handleEndPhase() {
+	bool ready = true;
+	for (auto& [id, status] : phaseStatus) {
+		if (!status) {
+			ready = false;
+		}
+	}
+
+
+	if (ready && !phaseStatus.empty()) {
+		newGame();
+		appState->gamePhase = GamePhase::START_MENU;
+		sendAppPhaseUpdates();
+		// reset status
+		for (auto& [id, status] : phaseStatus) {
+			status = false;
+		}
+	}
+	else {
+		resetGamePos();
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -420,7 +455,6 @@ void ServerGame::handleGamePhase() {
 				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= WIN_THRESHOLD) ? "survivors" : "hunter");
 				appState->gamePhase = GamePhase::GAME_END;
 				sendAppPhaseUpdates();
-				resetGamePos();
 			}
 		}
 		else
