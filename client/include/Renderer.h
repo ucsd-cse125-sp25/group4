@@ -20,8 +20,11 @@ using Microsoft::WRL::ComPtr;
 constexpr uint32_t VERTS_PER_TRI = 3;
 constexpr size_t BYTES_PER_DWORD = 4;
 constexpr size_t DRAW_CONSTANT_NUM_DWORDS = sizeof(PerDrawConstants)/BYTES_PER_DWORD;
-
+constexpr size_t BONES_PER_VERT = 4;
 typedef wchar_t TexturePath_t[256];
+
+typedef uint32_t BoneIndices[BONES_PER_VERT];
+typedef float BoneWeights[BONES_PER_VERT];
 
 inline uint32_t alignU32(uint32_t num, uint32_t alignment) {
 	return ((num + alignment - 1) / alignment) * alignment;
@@ -128,6 +131,7 @@ struct SceneHeader {
 	uint32_t numTriangles;
 	uint32_t numMaterials;
 	uint32_t numTextures;
+	bool     containsArmature;
 };
 
 
@@ -280,12 +284,14 @@ struct Texture {
 };
 
 
-constexpr uint32_t SCENE_VERSION = 000'000'002;
+constexpr uint32_t SCENE_VERSION = 000'000'003;
 enum SceneBufferType {
 	SCENE_BUFFER_TYPE_VERTEX_POSITION,
 	SCENE_BUFFER_TYPE_VERTEX_SHADING,
 	SCENE_BUFFER_TYPE_MATERIAL_ID,
 	SCENE_BUFFER_TYPE_MATERIAL,
+	SCENE_BUFFER_TYPE_VERTEX_BONE_IDX,
+	SCENE_BUFFER_TYPE_VERTEX_BONE_WEIGHT,
 	SCENE_BUFFER_TYPE_COUNT
 };
 struct Scene {
@@ -299,6 +305,8 @@ struct Scene {
 			Buffer<VertexShadingData> vertexShading;
 			Buffer<uint16_t>          materialID;
 			Buffer<Material>          materials;
+			Buffer<BoneIndices>       vertexBoneIdx;
+			Buffer<BoneWeights>       vertexBoneWeight;
 		};
 		Buffer<BYTE> buffers[SCENE_BUFFER_TYPE_COUNT];
 	};
@@ -362,7 +370,14 @@ struct Scene {
 			.ptr = reinterpret_cast<TexturePath_t*>(materialSlice.after()),
 			.len = header->numTextures,
 		};
-		
+		Slice<BoneIndices> vertexBoneIdxSlice {
+			.ptr = reinterpret_cast<BoneIndices*>(texturePathSlice.after()),
+			.len = numVerts,
+		};
+		Slice<BoneWeights> vertexBoneIdxSlice {
+			.ptr = reinterpret_cast<BoneWeights*>(vertexBoneIdxSlice.after()),
+			.len = numVerts,
+		}
 
 		// create buffers from slices
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");

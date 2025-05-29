@@ -163,14 +163,16 @@ for material in used_materials:
             
     materials.append(Material(**output))
 
+SCENE = bpy.data.scenes[0]
+
 armature = None
 if len(bpy.data.armatures) > 1:
     print("ERROR: scene has more than one armature")
     exit(1)
-elif len(bpy.data.armaturues) == 1:
+elif len(bpy.data.armatures) == 1:
     armature = bpy.data.armatures[0]
+    bone_name_to_index = {bone.name : i for i, bone in enumerate(armature.bones)}
             
-SCENE = bpy.data.scenes[0]
 for obj in bpy.data.objects:
     if obj.type != "MESH" or obj.name[:3] == "bb#":
         continue
@@ -201,7 +203,6 @@ for obj in bpy.data.objects:
     verts = verts.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, POS_FLOATS_PER_VERT)
 
     # normals
-    # normals = np.zeros(NORMAL_FLOATS_PER_VERT * VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.float32)
     loop_normals = np.zeros(NORMAL_FLOATS_PER_VERT * len(bmesh.loops), dtype = np.float32)
     bmesh.loops.foreach_get("normal", loop_normals)
     loop_normals = loop_normals.reshape(len(bmesh.loops), NORMAL_FLOATS_PER_VERT)
@@ -209,16 +210,9 @@ for obj in bpy.data.objects:
     loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.int32)
     bmesh.loop_triangles.foreach_get("loops", loop_indices)
     normals = loop_normals[loop_indices]
-    # bmesh.loop_triangles.foreach_get("split_normals", normals)
-    # normals = normals.reshape(-1, NORMAL_FLOATS_PER_VERT)
     EPS = 10e-6
-    # # assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
-    # norm = np.linalg.norm(normals, axis=-1)
-    # normals[abs(norm-1) > EPS, :] = np.array([0, 0, 1])
-    # normals = np.dot(normals, model_to_world_adj_transpose.T)
     norm = np.linalg.norm(normals, axis=-1)[:, np.newaxis]
     normals /= norm
-    # assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
 
     normals = normals.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
 
@@ -248,12 +242,54 @@ for obj in bpy.data.objects:
         material_ids = slot_index_to_materialid[triangle_to_slot_index]
         
 
-    # add batch dimension for easy concatenation with other meshes
+    # vertex groups for skinning
+    bone_indices =  None
+    bone_weights = None
+    if armature is not None:
+        bone_indices = np.zeros((len(bmesh.vertices), BONES_PER_VERT), dtype=np.int32)
+        bone_weights = np.zeros((len(bmesh.vertices), BONES_PER_VERT), dtype=np.float32)
+        if obj.parent_type == "BONE":
+            bone_indices[:, 0] = bone_name_to_index[obj.parent_bone]
+            bone_weights[:, 0] = 1
+        elif obj.find_armature() is not None:
+            # map object vertex groups to bone indices
+            vertex_group_names = [group.name for group in obj.vertex_groups]
+            vertex_group_to_bone = np.array([bone_name_to_index[vertex_group_name] for vertex_group_name in vertex_group_names], dtype=np.int32)
+        
+            for i, vertex in enumerate(bmesh.vertices):
+
+                num_written = min(len(vertex.groups), BONES_PER_VERT)
+                vertex_groups = np.zeros(len(vertex.groups), dtype=np.int32)
+                vertex_weights = np.zeros(len(vertex.groups), dtype=np.float32)
+                vertex.groups.foreach_get("group", vertex_groups)
+                vertex.groups.foreach_get("weight", vertex_weights)
+
+                if len(vertex.groups) > BONES_PER_VERT:
+                    # get the indices of the most influential BONES_PER_VERT weights/group indices
+                    top_selection = np.argpartition(vertex_weights, -BONES_PER_VERT)[-BONES_PER_VERT:]
+                    vertex_weights = vertex_weights[top_selection]
+                    vertex_groups = vertex_groups[top_selection]
+
+                # normalize vertex weights to add up to 1
+                vertex_weights /= np.sum(vertex_weights)
+
+                # convert indices of vertex groups in object to indices of bones in armature
+                vertex_bone_indices = vertex_group_to_bone[vertex_groups]
+
+                
+                bone_indices[i, :num_written] = vertex_bone_indices
+                assert(all(vertex_bone_indices < len(bone_name_to_index)))
+                bone_weights[i, :num_written] = vertex_weights
+            
+            
+    
     new_mesh = Mesh(
-                       num_tris       = len(bmesh.loop_triangles),
-                       vert_positions = verts,
-                       vert_shade     = normal_uv_interleaved,
-                       material_ids   = material_ids
+                       num_tris            = len(bmesh.loop_triangles),
+                       vert_positions      = verts,
+                       vert_shade          = normal_uv_interleaved,
+                       material_ids        = material_ids,
+                       vert_bone_indices   = bone_indices,
+                       vert_bone_weights   = bone_weights,
     )
     consolidated_mesh = new_mesh.merge(consolidated_mesh)
     assert(consolidated_mesh is not None)
@@ -276,16 +312,16 @@ with open('scene.jj', 'wb') as f:
     f.write(pack("I", len(texture_paths)))
     # whether there are vertex weights
     f.write(pack("?", armature is not None))
-    
+
     # write vertex positions
     f.write(pack_bytes("f", consolidated_mesh.vert_positions))
-
     # write shading data
     f.write(pack_bytes("f", consolidated_mesh.vert_shade))
 
     # write material ids
     f.write(pack_bytes("H", consolidated_mesh.material_ids))
 
+    
     # write materials
     for material in materials:
         f.write(material.serialize())
@@ -297,6 +333,11 @@ with open('scene.jj', 'wb') as f:
         assert(len(path_bytes) < 512)
         # missing bytes are padded with null terminators
         f.write(pack("512s", path_bytes))
+    
+    if armature is not None:    
+        # write vertex groups
+        f.write(pack_bytes("f", consolidated_mesh.vert_bone_indices))
+        f.write(pack_bytes("f", consolidated_mesh.vert_bone_weights))
         
 print("File written successfully")
 # use this to write "scene.jj" into your working directory
