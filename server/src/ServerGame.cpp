@@ -173,16 +173,15 @@ void ServerGame::receiveFromClients()
 			case PacketType::ATTACK:
 			{
 				if (id != 0) break;                               // not the hunter
-				if (state->tick < hunterBusyUntil) break;         // still in pipeline
+				if (state->tick < hunterEndSlowdown) break;         // still in pipeline
 
 				auto* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
 				pendingSwing = DelayedAttack{ *atk, state->tick + windupTicks };
 				hunterStartSlowdown = state->tick + windupTicks; // start slowing down after windup
-				hunterBusyUntil = hunterStartSlowdown + cdTicks;
-				tempHunterSpeed = state->players[id].speed;       // save current speed
+				hunterEndSlowdown = hunterStartSlowdown + cdTicks;
 
 				printf("[HUNTER] swing queued (hit @ %llu, busy until %llu)\n",
-					pendingSwing->hitTick, hunterBusyUntil);
+					pendingSwing->hitTick, hunterEndSlowdown);
 				break;
 			}
 			case PacketType::DODGE:
@@ -574,11 +573,13 @@ void ServerGame::applyMovements() {
 		// printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
 
 		// TODO: hunter slow debuff
-		//if (id == 0 && hunterStartSlowdown < state->tick && state->tick < hunterBusyUntil) {
-		//	player.speed = hunterSlowSpeed; // slow down hunter
-		//} else if (id == 0 && state->tick >= hunterBusyUntil) {
-		//	player.speed = tempHunterSpeed; // reset speed after cooldown
-		//}
+		if (player.isHunter && state->tick == hunterStartSlowdown) {
+			player.speed *= hunterSlowFactor;
+			printf("[HUNTER] hunter %d is now slowed down\n", id);
+		} else if (player.isHunter && state->tick == hunterEndSlowdown) {
+			player.speed /= hunterSlowFactor;
+			printf("[HUNTER] hunter %d is no longer slowed down\n", id);
+		}
 
 		float dx = 0, dy = 0;
 		if (latestMovement.count(id)) {
@@ -672,6 +673,8 @@ void ServerGame::applyAttacks()
 			}
 		}
 		pendingSwing.reset();   // swing consumed
+
+		//state->players[0].speed *= hunterSlowFactor; // slow down hunter after swing
 	}
 
 	/* ---------- win-condition check ------------------------- */

@@ -134,14 +134,14 @@ private:
 	static constexpr uint32_t windupTicks = 32;                    // 0.5 s
 	static constexpr uint32_t cdTicks = TICKS_PER_SEC * 2;     // 2 s
 	static constexpr uint32_t slowTicks = 32;                    // 0.5 s
+	static constexpr float hunterSlowFactor = 0.2f;
 
-	uint64_t hunterBusyUntil = 0;   // wind-up + cool-down window ends at tick
 	uint64_t hunterStartSlowdown = 0;
+	uint64_t hunterEndSlowdown = 0;   // wind-up + cool-down window ends at tick
 
 	struct DelayedAttack { AttackPayload attack; uint64_t hitTick; };
 	std::optional<DelayedAttack> pendingSwing;
 
-	float tempHunterSpeed = 0;
 
 
 	// Dodge
