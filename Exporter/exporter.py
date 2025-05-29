@@ -9,7 +9,6 @@ VERTS_PER_TRI = 3
 NORMAL_FLOATS_PER_VERT = 3
 POS_FLOATS_PER_VERT = 3
 UV_FLOATS_PER_VERT = 2
-
 BONES_PER_VERT = 4
 
 @dataclass
@@ -18,9 +17,8 @@ class Mesh:
     vert_positions : np.array # (tris, VERTS_PER_TRI, POS_FLOATS_PER_VERT)
     vert_shade     : np.array # (tris, VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
     material_ids   : np.array # (tris)
-
-    bone_indices : np.array
-    vertex_weights : np.array
+    vert_bone_indices : np.array = None # (verts, BONES_PER_VERT)
+    vert_bone_weights : np.array = None # (verts, BONES_PER_VERT)
     
     def merge(self, other):
         if other is not None:
@@ -28,6 +26,14 @@ class Mesh:
             self.vert_positions = np.concatenate((self.vert_positions, other.vert_positions))
             self.vert_shade     = np.concatenate((self.vert_shade    , other.vert_shade))
             self.material_ids   = np.concatenate((self.material_ids  , other.material_ids))
+
+            if self.vert_bone_indices is not None:
+                assert(self.vert_bone_weights) is not None
+                assert(other.vert_bone_indices) is not None
+                assert(other.vert_bone_weights) is not None
+
+                self.vert_bone_indices = np.concatentate((self.vert_bone_indices, other.vert_bone_indices))
+                self.vert_bone_weights = np.concatentate((self.vert_bone_weights, other.vert_bone_weights))
         return self
 
 @dataclass
@@ -51,10 +57,6 @@ class Material:
         normal     = 1 << 31)
 
     def serialize(self) -> bytes:
-        print(type(self.base_color), self.base_color)
-        print(type(self.metallic), self.metallic)
-        print(type(self.roughness), self.roughness)
-        print(type(self.normal), self.normal)
         metallic_format = "I" if isinstance(self.metallic, int) else "f"
         roughness_format = "I" if isinstance(self.roughness, int) else "f"
 
@@ -160,6 +162,13 @@ for material in used_materials:
             output[input_type] = packed
             
     materials.append(Material(**output))
+
+armature = None
+if len(bpy.data.armatures) > 1:
+    print("ERROR: scene has more than one armature")
+    exit(1)
+elif len(bpy.data.armaturues) == 1:
+    armature = bpy.data.armatures[0]
             
 SCENE = bpy.data.scenes[0]
 for obj in bpy.data.objects:
@@ -258,14 +267,16 @@ def pack_bytes(layout : str, array : np.array) -> bytes:
 with open('scene.jj', 'wb') as f:
     # write header 
     # version
-    f.write(pack("I", 2))
+    f.write(pack("I", 3))
     # number of triangles
     f.write(pack("I", consolidated_mesh.num_tris))
     # number of materials
     f.write(pack("I", len(materials)))
     # number of textures
     f.write(pack("I", len(texture_paths)))
-
+    # whether there are vertex weights
+    f.write(pack("?", armature is not None))
+    
     # write vertex positions
     f.write(pack_bytes("f", consolidated_mesh.vert_positions))
 
