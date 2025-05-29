@@ -183,7 +183,13 @@ void ClientGame::update() {
 			IDPayload* idPayload = (IDPayload*)(network_data + HDR_SIZE);
 
 			id = idPayload->id;
-			renderer.currPlayer.playerId = id;
+			if (id != 4) {
+				renderer.currPlayer.playerId = id;
+			}
+			else {
+				renderer.currPlayer.playerId = 0;
+			}
+
 			char message[128];
 
 			strcpy_s(message, std::to_string(id).c_str());
@@ -251,7 +257,12 @@ void ClientGame::update() {
 	// ---------------------------------------------------------------	
 	// Client Input Handling 
 
-	handleInput();
+	if (id != -1 && id != 4) {
+		handleInput();
+	}
+	else if (id == 4) {
+		handleSpectatorInput();
+	}
 
 	// ---------------------------------------------------------------	
 	// Update GPU data and render 
@@ -302,6 +313,36 @@ bool ClientGame::processCameraInput()
 	return true;
 }
 
+bool ClientGame::processSpectatorCameraInput()
+{
+	POINT  p;  GetCursorPos(&p);
+	RECT   rc; GetClientRect(hwnd, &rc);
+	POINT centre{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
+	ClientToScreen(hwnd, &centre);
+
+	int dx = p.x - centre.x;
+	int dy = p.y - centre.y;
+	if (!dx && !dy) return false;
+
+	yaw += -dx * MOUSE_SENS;
+	pitch += -dy * MOUSE_SENS; // invert y makes more sense
+	pitch = std::clamp(pitch,
+		XMConvertToRadians(-89.0f),
+		XMConvertToRadians(+89.0f));
+
+	SetCursorPos(centre.x, centre.y);
+	// spectator does not update player model orientation, server updates does.
+	return true;
+}
+
+void ClientGame::processSpectatorKeyboardInput()
+{
+	if (GetAsyncKeyState('1') & 0x8000) renderer.currPlayer.playerId = 0;
+	if (GetAsyncKeyState('2') & 0x8000) renderer.currPlayer.playerId = 1;
+	if (GetAsyncKeyState('3') & 0x8000) renderer.currPlayer.playerId = 2;
+	if (GetAsyncKeyState('4') & 0x8000) renderer.currPlayer.playerId = 3;
+}
+
 bool ClientGame::processMovementInput()
 {
 	float direction[3] = { 0, 0, 0 };
@@ -321,7 +362,6 @@ bool ClientGame::processMovementInput()
 void ClientGame::processAttackInput()
 {
 	if (renderer.currPlayer.playerId != 0) return;   // only hunter
-	static bool wasDown = false;
 	bool  isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
 
 	if (isDown && !wasDown)            // rising edge
@@ -499,6 +539,40 @@ void ClientGame::handleInput()
 	}
 }
 
+void ClientGame::handleSpectatorInput()
+{
+	if (!isWindowFocused()) return;
+
+	switch (appState->gamePhase)
+	{
+	case GamePhase::START_MENU:
+	case GamePhase::GAME_END:
+	{
+		// TODO: spectator logic should be same (focus on player) for all game phase
+		// except shop, shop UI should be special for spectator
+		yaw = startYaw;
+		pitch = startPitch;
+		break;
+	}
+	case GamePhase::SHOP_PHASE:
+	{
+		//processShopInputs();
+		break;
+	}
+	case GamePhase::GAME_PHASE:
+	{
+
+		// camera is always allowed (even dead players can spectate)
+		processSpectatorKeyboardInput();
+		processSpectatorCameraInput();
+		break;
+	}
+	default:
+	{
+		break;
+	}
+	}
+}
 
 inline ClientGame *GetState(HWND window_handle) {
 	LONG_PTR ptr = GetWindowLongPtr(window_handle, GWLP_USERDATA);

@@ -132,15 +132,19 @@ void ServerGame::receiveFromClients()
 
 				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
 
-				state_mu.lock();
-				phaseStatus[id] = false;
-				state_mu.unlock();
-
-				state->players[id].x = playerSpawns[id].x;
-				state->players[id].y = playerSpawns[id].y;
-				state->players[id].z = playerSpawns[id].z;
-				state->players[id].yaw = startYaw;
-				state->players[id].pitch = startPitch;
+				if (id != 4) {
+					state_mu.lock();
+					phaseStatus[id] = false;
+					state_mu.unlock();
+					state->players[id].x = playerSpawns[id].x;
+					state->players[id].y = playerSpawns[id].y;
+					state->players[id].z = playerSpawns[id].z;
+					state->players[id].yaw = startYaw;
+					state->players[id].pitch = startPitch;
+				}
+				else {
+					printf("[CLIENT %d] SPECTATOR INIT\n", id);
+				}
 
 				sendGameStateUpdates();
 
