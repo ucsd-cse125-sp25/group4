@@ -160,8 +160,8 @@ void ClientGame::update() {
 				//renderer.players[i].isDead = state->players[i].isDead;      // NEW
 				//renderer.players[i].isHunter = state->players[i].isHunter;  // NEW
 
-				// update the rotation from other players only (only for game phase)
-				if (i == renderer.currPlayer.playerId && appState->gamePhase == GamePhase::GAME_PHASE) continue;
+				// update the rotation from other players only (only if not spectator, otherwise gotta update everything) (only for game phase)
+				if (id != 4 && i == renderer.currPlayer.playerId && appState->gamePhase == GamePhase::GAME_PHASE) continue;
 				renderer.players[i].lookDir.pitch = gameState->players[i].pitch;
 				renderer.players[i].lookDir.yaw = gameState->players[i].yaw;
 			}
