@@ -172,10 +172,17 @@ void ServerGame::receiveFromClients()
 			}
 			case PacketType::ATTACK:
 			{
-				AttackPayload* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
-				latestAttacks[id] = *atk;      // overwrite if multiple swings this tick
-				printf("[CLIENT %d] ATTACK at %.1f, %.1f, %.1f  yaw=%.2f  pitch=%.2f\n",
-					id, atk->originX, atk->originY, atk->originZ, atk->yaw, atk->pitch);
+				if (id != 0) break;                               // not the hunter
+				if (state->tick < hunterBusyUntil) break;         // still in pipeline
+
+				auto* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
+				pendingSwing = DelayedAttack{ *atk, state->tick + windupTicks };
+				hunterStartSlowdown = state->tick + windupTicks; // start slowing down after windup
+				hunterBusyUntil = hunterStartSlowdown + cdTicks;
+				tempHunterSpeed = state->players[id].speed;       // save current speed
+
+				printf("[HUNTER] swing queued (hit @ %llu, busy until %llu)\n",
+					pendingSwing->hitTick, hunterBusyUntil);
 				break;
 			}
 			case PacketType::DODGE:
@@ -566,6 +573,13 @@ void ServerGame::applyMovements() {
 		auto& player = state->players[id];
 		// printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
 
+		// TODO: hunter slow debuff
+		//if (id == 0 && hunterStartSlowdown < state->tick && state->tick < hunterBusyUntil) {
+		//	player.speed = hunterSlowSpeed; // slow down hunter
+		//} else if (id == 0 && state->tick >= hunterBusyUntil) {
+		//	player.speed = tempHunterSpeed; // reset speed after cooldown
+		//}
+
 		float dx = 0, dy = 0;
 		if (latestMovement.count(id)) {
 			auto& mv = latestMovement[id];
@@ -635,45 +649,43 @@ void ServerGame::applyPhysics() {
 
 void ServerGame::applyAttacks()
 {
-	for (auto& [attackerId, atk] : latestAttacks)
+	/* ---------- resolve hunter's queued swing ------------------------- */
+	if (pendingSwing && state->tick >= pendingSwing->hitTick)
 	{
-		for (unsigned victimId = 0; victimId < 4; ++victimId)
+		for (unsigned victimId = 1; victimId < 4; ++victimId)      // only survivors
 		{
-			if (victimId == attackerId) continue;	// skip self
-			if (state->players[victimId].isDead) continue;	// skip dead players
-			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
+			if (state->players[victimId].isDead)   continue;
+			if (invulTicks[victimId] > 0)          continue;
 
-			if (isHit(atk, state->players[victimId]))
+			if (isHit(pendingSwing->attack, state->players[victimId]))
 			{
-				printf("[HIT] attacker %u hits victim %u (tick %llu)\n",
-					attackerId, victimId, state->tick);
-
-				// mark victim as dead
 				state->players[victimId].isDead = true;
-				printf("[HIT] victim %u is dead\n", victimId);
 
-				HitPayload hp{ attackerId, victimId };
+				/* notify victim */
+				HitPayload hp{ 0u, victimId };
 				char buf[HDR_SIZE + sizeof hp];
 				NetworkServices::buildPacket(PacketType::HIT, hp, buf);
 				network->sendToClient(victimId, buf, sizeof buf);
 
+				printf("[HIT] hunter hits runner %u  (tick %llu)\n", victimId, state->tick);
+				break;                                           // one hit per swing
 			}
 		}
+		pendingSwing.reset();   // swing consumed
 	}
-	if (latestAttacks.empty()) return; // no attacks this tick
-	// check if everyone is dead
+
+	/* ---------- win-condition check ------------------------- */
 	bool allDead = true;
-	for (unsigned int id = 0; id < num_players; ++id) {
-		if (!state->players[id].isDead && !state->players[id].isHunter) {
-			allDead = false;
-			break;
+	for (unsigned id = 0; id < num_players; ++id)
+		if (!state->players[id].isDead && !state->players[id].isHunter) { 
+			allDead = false; 
+			break; 
 		}
+
+	if (allDead) { 
+		printf("[GAME] all survivors dead\n"); 
+		timer->cancelTimer(); 
 	}
-	if (allDead) {
-		printf("[GAME PHASE] All players are dead, cancelling the timer\n");
-		timer->cancelTimer(); // cancel the timer
-	}
-	latestAttacks.clear();
 }
 
 void ServerGame::applyDodge()

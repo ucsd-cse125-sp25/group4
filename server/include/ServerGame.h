@@ -131,6 +131,19 @@ private:
 		return dot >= cosMax;                                 // within cone
 	}
 
+	static constexpr uint32_t windupTicks = 32;                    // 0.5 s
+	static constexpr uint32_t cdTicks = TICKS_PER_SEC * 2;     // 2 s
+	static constexpr uint32_t slowTicks = 32;                    // 0.5 s
+
+	uint64_t hunterBusyUntil = 0;   // wind-up + cool-down window ends at tick
+	uint64_t hunterStartSlowdown = 0;
+
+	struct DelayedAttack { AttackPayload attack; uint64_t hitTick; };
+	std::optional<DelayedAttack> pendingSwing;
+
+	float tempHunterSpeed = 0;
+
+
 	// Dodge
 	static constexpr uint8_t DODGE_COOLDOWN_DEFAULT_TICKS = TICKS_PER_SEC * 2;   // 2 s  (change to 60 if desired)
 	static constexpr uint8_t  INVUL_TICKS = TICKS_PER_SEC / 4;    // 0.25 s
