@@ -184,6 +184,8 @@ void ClientGame::update() {
 
 			id = idPayload->id;
 			renderer.currPlayer.playerId = id;
+			renderer.players[id].lookDir.pitch = 0.0f;
+			renderer.players[id].lookDir.yaw = 0.0f;
 			char message[128];
 
 			strcpy_s(message, std::to_string(id).c_str());

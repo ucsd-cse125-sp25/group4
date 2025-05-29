@@ -22,10 +22,10 @@ ServerGame::ServerGame(void) :
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, true, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
-			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, true, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
 		},
 		.timerFrac = 0.0f,
 	};
@@ -92,6 +92,10 @@ void ServerGame::update() {
 			handleShopPhase();
 			break;
 		}
+		case GamePhase::GAME_END:
+		{
+			//handleEndPhase();
+		}
 		default:
 		{
 			break;
@@ -130,6 +134,15 @@ void ServerGame::receiveFromClients()
 				state_mu.lock();
 				phaseStatus[id] = false;
 				state_mu.unlock();
+
+				state->players[id].x = playerSpawns[id].x;
+				state->players[id].y = playerSpawns[id].y;
+				state->players[id].z = playerSpawns[id].z;
+				state->players[id].yaw = startYaw;
+				state->players[id].pitch = startPitch;
+
+				sendGameStateUpdates();
+
 				break;
 			}
 			case PacketType::DEBUG:
@@ -360,6 +373,20 @@ void ServerGame::handleStartMenu() {
 	}
 }
 
+void ServerGame::resetGamePos()
+{
+	for (int i = 0; i < num_players; i++)
+	{
+		state->players[i].x = playerSpawns[i].x;
+		state->players[i].y = playerSpawns[i].y;
+		state->players[i].z = playerSpawns[i].z;
+		state->players[i].yaw = startYaw;
+		state->players[i].pitch = startPitch;
+	}
+
+	sendGameStateUpdates();
+}
+
 // -----------------------------------------------------------------------------
 // GAME DEV HELPING FUNCTION
 // -----------------------------------------------------------------------------
@@ -393,6 +420,7 @@ void ServerGame::handleGamePhase() {
 				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= WIN_THRESHOLD) ? "survivors" : "hunter");
 				appState->gamePhase = GamePhase::GAME_END;
 				sendAppPhaseUpdates();
+				resetGamePos();
 			}
 		}
 		else

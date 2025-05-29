@@ -33,6 +33,8 @@ public:
 	void readBoundingBoxes();
 	void handleGamePhase();
 	void handleStartMenu();
+	void resetGamePos();
+
 	void startARound(int);
 	void handleShopPhase();
 	void startShopPhase();
@@ -64,6 +66,18 @@ private:
 		{ -0.274f, -1.386f, 0.03f },	// floor next to the chimney thing
 		{ -0.976f, 2.263f, 0.03f }		// under desk
 	};
+
+	// Player spawns for start and end phases
+	Point playerSpawns[4] =
+	{
+		{ -2.30, 2.536, 0.913247 },
+		{ -2.225, 2.536, 0.913247 },
+		{ -2.15, 2.536, 0.913247 },
+		{ -2.075, 2.536, 0.913247 },
+	};
+
+	float startYaw = 0.0f;
+	float startPitch = 0.0f;
 
 	/* Collision */
 	// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
