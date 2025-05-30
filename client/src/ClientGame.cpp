@@ -67,6 +67,15 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	appState = new AppState();
 	appState->gamePhase = GamePhase::START_MENU;
 	appState->gameState = gameState;
+
+	uint8_t initPowerups[4][20];
+	// debugging, ignore
+	//memset(initPowerups, 1, 20);
+	//memset((&initPowerups[0][0] + 20), 2, 20);
+	//memset((&initPowerups[0][0] + 40), 3, 20);
+	//memset((&initPowerups[0][0] + 60), 103, 20);
+	memset(initPowerups, 255, sizeof(initPowerups));
+	renderer.updatePlayerPowerups(&initPowerups[0][0]);
 }
 
 void ClientGame::sendDebugPacket(const char* message) {
@@ -245,6 +254,13 @@ void ClientGame::update() {
 				renderer.updateCurrency(gameState->players[id].coins, optionsPayload->runner_score);
 			}
 
+			break;
+		}
+		case PacketType::PLAYER_POWERUPS:
+		{
+			PlayerPowerupPayload* pwPayload = (PlayerPowerupPayload*)(network_data + HDR_SIZE);
+
+			renderer.updatePlayerPowerups(&pwPayload->powerupInfo[0][0]);
 			break;
 		}
 		default:
@@ -492,6 +508,14 @@ void ClientGame::storePowerups(int selection) {
 void ClientGame::handleInput()
 {
 	if (!isWindowFocused()) return;
+	
+	bool tabDown = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
+	if (tabDown && !renderer.activeScoreboard) {
+		renderer.activeScoreboard = true;
+	}
+	else if (!tabDown && renderer.activeScoreboard) {
+		renderer.activeScoreboard = false;
+	}
 
 	switch (appState->gamePhase)
 	{
@@ -542,6 +566,14 @@ void ClientGame::handleInput()
 void ClientGame::handleSpectatorInput()
 {
 	if (!isWindowFocused()) return;
+
+	bool tabDown = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
+	if (tabDown && !renderer.activeScoreboard) {
+		renderer.activeScoreboard = true;
+	}
+	else if (!tabDown && renderer.activeScoreboard) {
+		renderer.activeScoreboard = false;
+	}
 
 	switch (appState->gamePhase)
 	{

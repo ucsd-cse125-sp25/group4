@@ -573,6 +573,12 @@ struct ShopUI {
 	XMMATRIX cardSelectedModelMatrix[3];
 	XMMATRIX coinsModelMatrix;
 	XMMATRIX soulsModelMatrix;
+	float selectedCardMult = 1.2f;
+
+	XMMATRIX scoreboardCardModelMatrix[4][10];
+	float scoreboardCardMult = 0.3f;
+	float spacingX = 10.0f, spacingY = 10.0f;
+	float marginX = 20.0f, marginY = 540.0f; // f magic numbers...
 
 	float screenW = 1920.0f, screenH = 1080.0f;
 	float centerX = screenW * 0.5f, centerY = screenH * 0.5f, spacing = 50.0f;
@@ -630,13 +636,25 @@ struct ShopUI {
 			XMMATRIX m = XMMatrixTranslation(tx, ty, 0);
 			cardModelMatrix[i] = XMMatrixTranspose(m);
 			m = XMMatrixTranslation(-cardCenterX, -cardCenterY, 0)
-				* XMMatrixScaling(1.2, 1.2, 1)
+				* XMMatrixScaling(selectedCardMult, selectedCardMult, 1)
 				* XMMatrixTranslation(cardCenterX, cardCenterY, 0)
 				* m;
 			cardSelectedModelMatrix[i] = XMMatrixTranspose(m);
 		}
 		coinsModelMatrix = XMMatrixTranspose(XMMatrixTranslation(screenW - counterW - 20.0f, 20.0f + counterH, 0));
 		soulsModelMatrix = XMMatrixTranspose(XMMatrixTranslation(screenW - counterW - 20.0f, 20.0f, 0));
+
+		for (int row = 0; row < 4; row++) {
+			for (int col = 0; col < 10; col++) {
+				float x = marginX + col * (cardW * scoreboardCardMult + spacingX);
+				float y = screenH - marginY - row * (cardH * scoreboardCardMult + spacingY);
+				XMMATRIX m = XMMatrixTranslation(-cardCenterX, -cardCenterY, 0)
+						   * XMMatrixScaling(scoreboardCardMult, scoreboardCardMult, 1)
+						   * XMMatrixTranslation(cardCenterX, cardCenterY, 0)
+						   * XMMatrixTranslation(x, y, 0);
+				scoreboardCardModelMatrix[row][col] = XMMatrixTranspose(m);
+			}
+		}
 		return true;
 	}
 
@@ -768,7 +786,12 @@ public:
 		m_ShopUI.souls = souls;
 	}
 
+	void updatePlayerPowerups(uint8_t* playerPowerups) {
+		memcpy(this->powerupInfo, playerPowerups, sizeof(PlayerPowerupPayload));
+	}
+
 	GamePhase gamePhase;
+	bool activeScoreboard = true;
 private:
 	DebugCubes debugCubes;
 
@@ -801,6 +824,9 @@ private:
 
 	// for shop UI
 	ShopUI						m_ShopUI;
+
+	// for scoreboard
+	uint8_t powerupInfo[4][20];
 
 	// syncrhonization objects
 	UINT m_frameIndex;

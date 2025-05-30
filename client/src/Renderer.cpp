@@ -803,7 +803,6 @@ bool Renderer::Render() {
 		};
 
 		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
-		float ty = m_ShopUI.centerY - m_ShopUI.cardCenterY;
 		for (int i = 0; i < 3; i++) {
 			if (i == m_ShopUI.currSelected) {
 				dc.modelMatrix = m_ShopUI.cardSelectedModelMatrix[i];
@@ -827,6 +826,28 @@ bool Renderer::Render() {
 		dc.first_texture_idx = m_ShopUI.soulsTextures.ptr[m_ShopUI.souls].descriptor.index;
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
 		m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+	}
+	
+	if (activeScoreboard) {
+		PerDrawConstants dc = {
+				.viewProject = m_ShopUI.ortho,
+				.modelMatrix = XMMatrixIdentity(),
+				.modelInverseTranspose = XMMatrixIdentity(),
+				.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index,
+				.vshade_idx = m_scene.vertexShading.descriptor.index,
+		};
+		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+
+		for (int row = 0; row < 4; row++) {
+			for (int col = 0; col < 10; col++) {
+				uint8_t p = powerupInfo[row][col];
+				if (p == 255) break;
+				dc.modelMatrix = m_ShopUI.scoreboardCardModelMatrix[row][col];
+				dc.first_texture_idx = m_ShopUI.cardTextures.ptr[PowerupInfo[(Powerup) p].textureIdx].descriptor.index;
+				m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+				m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+			}
+		}
 	}
 	
 	// barrier BEFORE presenting the back buffer 

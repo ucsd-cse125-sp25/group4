@@ -248,6 +248,7 @@ void ServerGame::receiveFromClients()
 // int seconds: length of round
 void ServerGame::startARound(int seconds) {
 	round_id++;
+	/*
 	for (auto [id,powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
 		for (auto p : powerups) {
@@ -255,6 +256,8 @@ void ServerGame::startARound(int seconds) {
 		}
 		printf("\n");
 	}
+	*/
+	sendPlayerPowerups();
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
 
@@ -692,6 +695,27 @@ void ServerGame::sendGameStateUpdates() {
 	NetworkServices::buildPacket<GameState>(PacketType::GAME_STATE, *state, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+}
+
+void ServerGame::sendPlayerPowerups() {
+
+	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
+	PlayerPowerupPayload data;
+	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
+	for (auto [id, powerups] : playerPowerups) {
+		printf("Player %d Powerups: ", id);
+		int idx = 0;
+		for (auto p : powerups) {
+			if (idx >= 20) break;
+			printf("%s, ", PowerupInfo[p].name.c_str());
+			data.powerupInfo[id][idx] = (uint8_t) p;
+			idx++;
+		}
+		printf("\n");
+	}
+	NetworkServices::buildPacket<PlayerPowerupPayload>(PacketType::PLAYER_POWERUPS, data, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(PlayerPowerupPayload));
 }
 
 void ServerGame::sendAppPhaseUpdates() {

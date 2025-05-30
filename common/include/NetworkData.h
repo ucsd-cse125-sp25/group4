@@ -40,7 +40,8 @@ enum class PacketType : uint32_t {
 	DODGE = 10,
 	DODGE_OK = 11,
 	SHOP_INIT,			// server sends to each client the options
-	SHOP_UPDATE			// client sends what was purchased
+	SHOP_UPDATE,			// client sends what was purchased
+	PLAYER_POWERUPS,		// powerup information of all players
 };
 
 // when adding powerups
@@ -190,6 +191,10 @@ struct PlayerReadyPayload {
 
 struct AppPhasePayload {
 	GamePhase phase;
+};
+
+struct PlayerPowerupPayload {
+	uint8_t powerupInfo[4][20];
 };
 
 struct DodgePayload { float yaw, pitch; };
