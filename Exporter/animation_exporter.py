@@ -60,7 +60,7 @@ scene.frame_set(initial_frame, subframe=initial_subframe)
 with open(f"{active_action.name}.janim", "wb") as f:
     f.write(pack("I", num_frames))
     f.write(pack("I", len(bones)))
-    f.write(pack(f"{inverse_bind.size()}f", *inverse_bind.flatten()))
-    f.write(pack(f"{bone_to_armature.size()}f", *bone_to_armature.flatten()))
-print(bone_to_armature)
-print(inverse_bind)
+    f.write(pack(f"{inverse_bind.size}f", *inverse_bind.flatten()))
+    f.write(pack(f"{bone_to_armature.size}f", *bone_to_armature.flatten()))
+
+print(f"{active_action.name}.janim written successfully")

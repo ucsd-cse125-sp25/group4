@@ -76,8 +76,11 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="..\Assets\scene.jj">
-      <DeploymentContent>true</DeploymentContent>
+    <CopyFileToFolders Include="..\Assets\bedroomv4.jj">
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\monsterv2.jj">
       <FileType>Document</FileType>
     </CopyFileToFolders>
     <None Include="..\client\include\shaderShared.hlsli">

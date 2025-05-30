@@ -135,7 +135,8 @@ bool Renderer::Init(HWND window_handle) {
 
 	// read Scenefile
 	{
-		m_scene.ReadToCPU(L"scene.jj");
+		m_scene.ReadToCPU(L"bedroomv4.jj");
+		m_hunterRenderBuffers.ReadToCPU(L"monsterv2.jj");
 	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// descriptor heaps 
@@ -152,13 +153,19 @@ bool Renderer::Init(HWND window_handle) {
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		
 		uint32_t numSceneTextures = m_scene.header->numTextures;
+		uint32_t numSceneBuffers = m_scene.getNumBuffers();
+		uint32_t numSceneDescriptors = numSceneTextures + numSceneBuffers;
+
+		uint32_t numHunterTextures = m_hunterRenderBuffers.header->numTextures;
+		uint32_t numHunterBuffers = m_hunterRenderBuffers.getNumBuffers();
+		uint32_t numHunterDescriptors = numHunterTextures + numHunterBuffers;
+
 		uint32_t numTimerUITextures = 3; // clock base, hand, top
 		uint32_t numTimerUIVertexBuffers = 1;
 		uint32_t numShopUIVertexBuffers = 1;
 		uint32_t numShopUITextures = 1;
-		uint32_t capacity = SCENE_BUFFER_TYPE_COUNT
-			+ 3
-			+ numSceneTextures
+		uint32_t capacity = numSceneDescriptors + numHunterDescriptors
+			+ 3 // MAGIC NUMBER for temp player vertex buffers
 			+ numTimerUITextures + numTimerUIVertexBuffers
 			+ numShopUITextures + numShopUIVertexBuffers;
 		// all resource descriptors go here.
@@ -654,11 +661,12 @@ bool Renderer::Render() {
 	if (!m_scene.initialized) {
 		m_scene.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
 	}
-
+	if (!m_hunterRenderBuffers.initialized) {
+		m_hunterRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
 	if (!m_TimerUI.initialized) {
 		m_TimerUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
 	}
-
 	if (!m_ShopUI.initialized) {
 		m_ShopUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
 	}
@@ -744,11 +752,14 @@ bool Renderer::Render() {
 			.viewProject           = viewProject,
 			.modelMatrix           = modelMatrix,
 			.modelInverseTranspose = modelInverseTranspose,
-			.vpos_idx              = m_vertexBufferBindless.descriptor.index,
-			.vshade_idx            = m_scene.vertexShading.descriptor.index // CHANGE LATER
+			.vpos_idx              = m_hunterRenderBuffers.vertexPosition.descriptor.index,
+			.vshade_idx            = m_hunterRenderBuffers.vertexShading.descriptor.index ,
+			.material_ids_idx      = m_hunterRenderBuffers.materialID.descriptor.index,
+			.materials_idx         = m_hunterRenderBuffers.materials.descriptor.index,
+			.first_texture_idx     = m_hunterRenderBuffers.textures.ptr[0].descriptor.index,
 		};
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
-		m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
+		m_commandList->DrawInstanced(3 * m_hunterRenderBuffers.vertexPosition.data.len, 1, 0, 0);
 	}
 
 	// draw debug cubes

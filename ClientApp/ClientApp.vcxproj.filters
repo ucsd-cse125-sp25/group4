@@ -80,7 +80,10 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="..\Assets\scene.jj">
+    <CopyFileToFolders Include="..\Assets\bedroomv4.jj">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\monsterv2.jj">
       <Filter>Resource Files</Filter>
     </CopyFileToFolders>
   </ItemGroup>

@@ -47,7 +47,10 @@ struct PerDrawConstants
     uint     material_ids_idx;
     uint     materials_idx;
     uint     first_texture_idx;
-	// 51 DWORDS
+    uint     vbone_idx;
+    uint     vweight_idx;
+    uint     bone_transforms_idx;
+	// 54 DWORDS
 };
 struct VertexPosition
 {

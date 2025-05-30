@@ -32,8 +32,8 @@ class Mesh:
                 assert(other.vert_bone_indices) is not None
                 assert(other.vert_bone_weights) is not None
 
-                self.vert_bone_indices = np.concatentate((self.vert_bone_indices, other.vert_bone_indices))
-                self.vert_bone_weights = np.concatentate((self.vert_bone_weights, other.vert_bone_weights))
+                self.vert_bone_indices = np.concatenate((self.vert_bone_indices, other.vert_bone_indices))
+                self.vert_bone_weights = np.concatenate((self.vert_bone_weights, other.vert_bone_weights))
         return self
 
 @dataclass
@@ -106,6 +106,7 @@ i = 1
 for material in used_materials:
     if material.name in material_names_to_indices:
         continue
+    print("processing material:", material.name)
     material_names_to_indices |= {material.name : i}
     i += 1
     output = material.node_tree.get_output_node("ALL")
@@ -190,22 +191,20 @@ for obj in bpy.data.objects:
 
 
     # vertex positions
-    verts = np.zeros(POS_FLOATS_PER_VERT * len(bmesh.vertices), dtype=np.float32) # (num_bmesh_verts * 3)
-    bmesh.vertices.foreach_get("co", verts)
+    verts = np.zeros((len(bmesh.vertices), POS_FLOATS_PER_VERT), dtype=np.float32) # (num_bmesh_verts, 3)
+    bmesh.vertices.foreach_get("co", verts.ravel())
 
-    indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.int32)
-    bmesh.loop_triangles.foreach_get("vertices", indices)
+    triangle_vert_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.int32)
+    bmesh.loop_triangles.foreach_get("vertices", triangle_vert_indices)
 
-    verts = verts.reshape(-1, POS_FLOATS_PER_VERT) # (num_bmesh_verts, 3)
-    verts = verts[indices]
     verts = np.dot(verts, model_to_world_linear.T)
     verts = verts + model_to_world_translation
+    verts = verts[triangle_vert_indices]
     verts = verts.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, POS_FLOATS_PER_VERT)
 
     # normals
-    loop_normals = np.zeros(NORMAL_FLOATS_PER_VERT * len(bmesh.loops), dtype = np.float32)
-    bmesh.loops.foreach_get("normal", loop_normals)
-    loop_normals = loop_normals.reshape(len(bmesh.loops), NORMAL_FLOATS_PER_VERT)
+    loop_normals = np.zeros((len(bmesh.loops), NORMAL_FLOATS_PER_VERT), dtype = np.float32)
+    bmesh.loops.foreach_get("normal", loop_normals.ravel())
     loop_normals = np.dot(loop_normals, model_to_world_adj_transpose.T)
     loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.int32)
     bmesh.loop_triangles.foreach_get("loops", loop_indices)
@@ -221,9 +220,8 @@ for obj in bpy.data.objects:
         uv = np.full((len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT), 0.5) # sample from the center of the texture
     else:
         uv_layer = bmesh.uv_layers[0].uv # WARNING: must be changed later for lighmaps
-        loop_uvs = np.zeros(UV_FLOATS_PER_VERT * len(uv_layer), dtype = np.float32) # (num_bmesh_loops * 2)
-        uv_layer.foreach_get("vector", loop_uvs)
-        loop_uvs = loop_uvs.reshape(-1, UV_FLOATS_PER_VERT) # (num_bmesh_loops, 2)
+        loop_uvs = np.zeros((len(uv_layer), UV_FLOATS_PER_VERT), dtype = np.float32) # (num_bmesh_loops * 2)
+        uv_layer.foreach_get("vector", loop_uvs.ravel())
         uv = loop_uvs[loop_indices]
         uv = uv.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT)
         # DirectX texture coordinates have a inverted u/y axis compared to Blender
@@ -254,7 +252,7 @@ for obj in bpy.data.objects:
         elif obj.find_armature() is not None:
             # map object vertex groups to bone indices
             vertex_group_names = [group.name for group in obj.vertex_groups]
-            vertex_group_to_bone = np.array([bone_name_to_index[vertex_group_name] for vertex_group_name in vertex_group_names], dtype=np.int32)
+            vertex_group_to_bone = np.array([bone_name_to_index.get(vertex_group_name, 0) for vertex_group_name in vertex_group_names], dtype=np.int32)
         
             for i, vertex in enumerate(bmesh.vertices):
 
@@ -280,6 +278,8 @@ for obj in bpy.data.objects:
                 bone_indices[i, :num_written] = vertex_bone_indices
                 assert(all(vertex_bone_indices < len(bone_name_to_index)))
                 bone_weights[i, :num_written] = vertex_weights
+        bone_indices = bone_indices[triangle_vert_indices]
+        bone_weights = bone_weights[triangle_vert_indices]
             
             
     
@@ -299,8 +299,10 @@ for obj in bpy.data.objects:
 def pack_bytes(layout : str, array : np.array) -> bytes:
     return pack(f"{array.size}{layout}", *array.flatten())
 
-
-with open('scene.jj', 'wb') as f:
+print(texture_paths)
+filename = bpy.path.basename(bpy.data.filepath).split(".")[0]
+dynamic : bool = armature is not None
+with open(f"{filename}.jj", 'wb') as f:
     # write header 
     # version
     f.write(pack("I", 3))
@@ -311,13 +313,13 @@ with open('scene.jj', 'wb') as f:
     # number of textures
     f.write(pack("I", len(texture_paths)))
     # whether there are vertex weights
-    f.write(pack("?", armature is not None))
+    f.write(pack("?", dynamic))
+    f.write(pack("3x")) # floats align to 4 bytes
 
     # write vertex positions
     f.write(pack_bytes("f", consolidated_mesh.vert_positions))
     # write shading data
     f.write(pack_bytes("f", consolidated_mesh.vert_shade))
-
     # write material ids
     f.write(pack_bytes("H", consolidated_mesh.material_ids))
 
@@ -334,11 +336,12 @@ with open('scene.jj', 'wb') as f:
         # missing bytes are padded with null terminators
         f.write(pack("512s", path_bytes))
     
-    if armature is not None:    
+    if dynamic:    
         # write vertex groups
-        f.write(pack_bytes("f", consolidated_mesh.vert_bone_indices))
+        f.write(pack_bytes("I", consolidated_mesh.vert_bone_indices))
         f.write(pack_bytes("f", consolidated_mesh.vert_bone_weights))
         
-print("File written successfully")
+print(f"{filename}.jj written successfully")
 # use this to write "scene.jj" into your working directory
-#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv4.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv4.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\monsterv2.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
