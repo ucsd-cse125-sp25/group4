@@ -126,7 +126,7 @@ void ServerNetwork::sendToAll(char* packets, int totalSize) {
 		curSocket = iter->second;
 		iResult = NetworkServices::sendMessage(curSocket, packets, totalSize);
 		if (iResult == SOCKET_ERROR) {
-			printf("send failed with error: %d\n", WSAGetLastError());
+			printf("sendToAll failed with error: %d\n", WSAGetLastError());
 			closesocket(curSocket);
 		}
 	}
@@ -138,7 +138,7 @@ void ServerNetwork::sendToClient(unsigned int client_id, char* packets, int tota
 		SOCKET curSocket = sessions[client_id];
 		iResult = NetworkServices::sendMessage(curSocket, packets, totalSize);
 		if (iResult == SOCKET_ERROR) {
-			printf("send failed with error: %d\n", WSAGetLastError());
+			printf("sendToClient failed with error: %d\n", WSAGetLastError());
 			closesocket(curSocket);
 		}
 	}

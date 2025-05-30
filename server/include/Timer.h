@@ -8,6 +8,7 @@ class Timer {
 		~Timer(void);
 
 		void startTimer(int, std::function<void()>);
+		void cancelTimer(void);
 		float getFracElapsed();
 
 private:

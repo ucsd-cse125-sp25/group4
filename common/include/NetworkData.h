@@ -1,13 +1,29 @@
 ﻿#pragma once
 #include <cstdint>
 #include <cstring>
-#include <unordered_map>
+#include <string>
+#include <map>
 
 #define MAX_PACKET_SIZE 1000
 #define NUM_POWERUP_OPTIONS 3 // Number of options that display in the shop each round
-#define ROUND_DURATION 25
+#define ROUND_DURATION 30
+#define WIN_THRESHOLD 10
+
+#define GRAVITY 0.075f * PLAYER_SCALING_FACTOR
+#define JUMP_VELOCITY 1.25f * PLAYER_SCALING_FACTOR
+#define PLAYER_INIT_SPEED 0.85f * PLAYER_SCALING_FACTOR
+#define TERMINAL_VELOCITY -9999.0f * PLAYER_SCALING_FACTOR
+#define ATTACK_ANGLE_DEG 45.0f
+#define RUNNER_SPAWN_PERIOD 1
+#define HUNTER_SPAWN_PERIOD 3
+#define JUMP_POWERUP 0.25f * PLAYER_SCALING_FACTOR
+
+#define PLAYER_INIT_COINS 5
 
 constexpr float PLAYER_SCALING_FACTOR = 0.025;
+
+constexpr float startYaw = 0.0f;
+constexpr float startPitch = 0.0f;
 
 enum class PacketType : uint32_t {
 	INIT_CONNECTION = 0,
@@ -27,6 +43,9 @@ enum class PacketType : uint32_t {
 	SHOP_UPDATE			// client sends what was purchased
 };
 
+// when adding powerups
+// make sure to update the metadata below
+// ensure the ordering too!!
 enum class Powerup : uint8_t {
 	// HUNTER POWERUPS
 	HUNTER_POWERUPS = 0,
@@ -39,16 +58,27 @@ enum class Powerup : uint8_t {
 	RUNNER_POWERUPS = 100,
 	R_INCREASE_SPEED,
 	R_INCREASE_JUMP,
+	R_DECREASE_DODGE_CD,
 	// ...
-	NUM_RUNNER_POWERUPS
+	NUM_RUNNER_POWERUPS,
 };
 
-static std::unordered_map<Powerup, int> PowerupCosts{
-	{ Powerup::H_INCREASE_JUMP, 1 },
-	{ Powerup::H_INCREASE_SPEED, 2 },
-	{ Powerup::H_INCREASE_VISION, 3 },
-	{ Powerup::R_INCREASE_SPEED, 1 },
-	{ Powerup::R_INCREASE_JUMP, 2 },
+struct PowerupMetadata {
+	uint8_t textureIdx = 0;
+	uint8_t cost = 0;
+	std::string name;
+	std::wstring fileLocation;
+};
+
+// KEEP THIS IN SAME ORDER AS ENUM
+// map is sorted based on key, which is crucial for loading in correct textures
+static std::map<Powerup, PowerupMetadata> PowerupInfo{
+	{ Powerup::H_INCREASE_SPEED,	{0, 2, "H_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
+	{ Powerup::H_INCREASE_JUMP,		{1, 1, "H_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
+	{ Powerup::H_INCREASE_VISION,	{2, 3, "H_INSTINCT",	L"textures\\cards\\h_instinct.dds"} },
+	{ Powerup::R_INCREASE_SPEED,	{3, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
+	{ Powerup::R_INCREASE_JUMP,		{4, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
+	{ Powerup::R_DECREASE_DODGE_CD,	{5, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
 };
 
 // The packet header preceeds every packet
@@ -76,6 +106,7 @@ enum class GamePhase {
 	START_MENU,
 	GAME_PHASE,
 	SHOP_PHASE,
+	GAME_END,
 
 
 	NUM_SCREENS,
@@ -167,6 +198,8 @@ struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a plac
 
 struct ShopOptionsPayload {
 	uint8_t options[NUM_POWERUP_OPTIONS];
+	uint8_t runner_score;
+	uint8_t hunter_score;
 };
 
 struct Packet {

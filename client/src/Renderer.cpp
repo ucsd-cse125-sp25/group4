@@ -707,17 +707,7 @@ bool Renderer::Render() {
 
 
 	// clear buffers
-	float clearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
-	// temp game phase debugging
-	if (gamePhase == GamePhase::START_MENU) {
-		clearColor[0] = 0.4f;
-	}
-	else if (gamePhase == GamePhase::GAME_PHASE) {
-		clearColor[1] = 0.4f;
-	}
-	else {
-		clearColor[2] = 0.4f;
-	}
+	float clearColor[] = {0.1f, 0.1f, 0.2f, 1.0f};
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	m_commandList->ClearDepthStencilView(m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
@@ -784,7 +774,7 @@ bool Renderer::Render() {
 	}
 
 	// draw Timer UI
-	{
+	if (gamePhase != GamePhase::START_MENU) {
 		PerDrawConstants dc = {
 			.viewProject = m_TimerUI.ortho,
 			.modelMatrix = XMMatrixIdentity(),
@@ -824,16 +814,36 @@ bool Renderer::Render() {
 			.viewProject = m_ShopUI.ortho,
 			.modelMatrix = XMMatrixIdentity(),
 			.modelInverseTranspose = XMMatrixIdentity(),
-			.vpos_idx = m_ShopUI.vertexBuffer.descriptor.index,
+			.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index,
 			.vshade_idx = m_scene.vertexShading.descriptor.index,
-			.first_texture_idx = m_ShopUI.cardTextures.ptr[0].descriptor.index, 
 		};
-		// Base layer
+
 		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+		float ty = m_ShopUI.centerY - m_ShopUI.cardCenterY;
+		for (int i = 0; i < 3; i++) {
+			if (i == m_ShopUI.currSelected) {
+				dc.modelMatrix = m_ShopUI.cardSelectedModelMatrix[i];
+			}
+			else {
+				dc.modelMatrix = m_ShopUI.cardModelMatrix[i];
+			}
+			dc.first_texture_idx = m_ShopUI.cardTextures.ptr[m_ShopUI.powerupIdxs[i]].descriptor.index;
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+			m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+		}
+
+		// draw counter for coins and souls
+		dc.vpos_idx = m_ShopUI.counterVertexBuffer.descriptor.index;
+		dc.modelMatrix = m_ShopUI.coinsModelMatrix;
+		dc.first_texture_idx = m_ShopUI.coinsTextures.ptr[m_ShopUI.coins].descriptor.index;
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
-		m_commandList->DrawInstanced(m_ShopUI.vertexBuffer.data.len, 1, 0, 0);
+		m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+
+		dc.modelMatrix = m_ShopUI.soulsModelMatrix;
+		dc.first_texture_idx = m_ShopUI.soulsTextures.ptr[m_ShopUI.souls].descriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
 	}
-	
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {

@@ -78,21 +78,6 @@ void ClientGame::sendDebugPacket(const char* message) {
 	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(DebugPayload));
 }
 
-/*
-void ClientGame::sendGameStatePacket(float posDelta[4]) {
-	GameState* state = new GameState{ {0} };
-	//sprintf_s(state.position, sizeof(state.position), "debug: tick %llu", tick);
-	for (int i = 0; i < 4; i++) {
-		state->position[id][i] = posDelta[i];
-	}
-
-	char packet_data[HDR_SIZE + sizeof(GameState)];
-	NetworkServices::buildPacket<GameState>(PacketType::MOVE, *state, packet_data);
-	NetworkServices::sendMessage(network->ConnectSocket, packet_data, HDR_SIZE + sizeof(GameState));
-	delete state;
-}
-*/
-
 void ClientGame::sendMovePacket(float direction[3], float yaw, float pitch, bool jump) {
 	MovePayload mv{};
 	for (int i = 0; i < 3; i++)
@@ -175,8 +160,8 @@ void ClientGame::update() {
 				//renderer.players[i].isDead = state->players[i].isDead;      // NEW
 				//renderer.players[i].isHunter = state->players[i].isHunter;  // NEW
 
-				// update the rotation from other players only.
-				if (i == renderer.currPlayer.playerId) continue;
+				// update the rotation from other players only (only for game phase)
+				if (i == renderer.currPlayer.playerId && appState->gamePhase == GamePhase::GAME_PHASE) continue;
 				renderer.players[i].lookDir.pitch = gameState->players[i].pitch;
 				renderer.players[i].lookDir.yaw = gameState->players[i].yaw;
 			}
@@ -242,7 +227,16 @@ void ClientGame::update() {
 				Powerup powerup = (Powerup)optionsPayload->options[i];
 				shopOptions[i].item = powerup;
 				shopOptions[i].isSelected = false;
-				shopOptions[i].isBuyable = (PowerupCosts[powerup] <= gameState->players[id].coins);
+				shopOptions[i].isBuyable = (PowerupInfo[powerup].cost <= gameState->players[id].coins);
+			}
+			renderer.updatePowerups(shopOptions[0].item, shopOptions[1].item, shopOptions[2].item);
+
+			if (id == 0) {
+				// really sketch isHunter check...
+				renderer.updateCurrency(gameState->players[id].coins, optionsPayload->hunter_score);
+			}
+			else {
+				renderer.updateCurrency(gameState->players[id].coins, optionsPayload->runner_score);
 			}
 
 			break;
@@ -368,7 +362,7 @@ void ClientGame::processShopInputs() {
 	bool down3 = (GetAsyncKeyState('3') & 0x8000) != 0;
 
 	// only allow one selection per tick
-	if (GetAsyncKeyState('M') & 0x8000) {
+	if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
 		ready = true;
 		gameState->players[id].coins = tempCoins;
 		uint8_t selection = 0;
@@ -405,10 +399,11 @@ void ClientGame::processShopInputs() {
  
 void ClientGame::handleShopItemSelection(int choice) {
 		ShopItem* item = &(shopOptions[choice]);
-		int cost = PowerupCosts[item->item];
+		int cost = PowerupInfo[item->item].cost;
 		if (item->isSelected) 
 		{
 			item->isSelected = false;
+			renderer.selectPowerup(3); // exceeds option
 			tempCoins += cost;
 		}
 		else
@@ -420,6 +415,7 @@ void ClientGame::handleShopItemSelection(int choice) {
 				{
 					shopOptions[i].isSelected = (i == choice);
 				}
+				renderer.selectPowerup((uint8_t) choice);
 				tempCoins -= cost;
 			}
 		}
@@ -460,12 +456,16 @@ void ClientGame::handleInput()
 	switch (appState->gamePhase)
 	{
 	case GamePhase::START_MENU:
+	case GamePhase::GAME_END:
 	{
+		yaw = startYaw;
+		pitch = startPitch;
+		
 		// Avoid sending multiple ready packets
 		if (ready)
 			break;
 
-		if (GetAsyncKeyState('M') & 0x8000) {
+		if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
 			ready = true;
 			sendReadyStatusPacket();
 		}

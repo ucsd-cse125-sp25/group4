@@ -22,10 +22,10 @@ ServerGame::ServerGame(void) :
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, true, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
-			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, 20.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, 5, false, false, false },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
 		},
 		.timerFrac = 0.0f,
 	};
@@ -36,6 +36,7 @@ ServerGame::ServerGame(void) :
 	};
 
 	timer = new Timer();
+	tiebreaker = false;
 
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
@@ -91,6 +92,11 @@ void ServerGame::update() {
 			handleShopPhase();
 			break;
 		}
+		case GamePhase::GAME_END:
+		{
+			handleEndPhase();
+			break;
+		}
 		default:
 		{
 			break;
@@ -129,6 +135,15 @@ void ServerGame::receiveFromClients()
 				state_mu.lock();
 				phaseStatus[id] = false;
 				state_mu.unlock();
+
+				state->players[id].x = playerSpawns[id].x;
+				state->players[id].y = playerSpawns[id].y;
+				state->players[id].z = playerSpawns[id].z;
+				state->players[id].yaw = startYaw;
+				state->players[id].pitch = startPitch;
+
+				sendGameStateUpdates();
+
 				break;
 			}
 			case PacketType::DEBUG:
@@ -203,7 +218,7 @@ void ServerGame::receiveFromClients()
 					if (status->selection != 0) 
 					{
 						applyPowerups(id, status->selection);
-						state->players[id].coins -= PowerupCosts[(Powerup)status->selection];
+						state->players[id].coins -= PowerupInfo[(Powerup)status->selection].cost;
 					}
 				}
 				
@@ -230,9 +245,11 @@ void ServerGame::receiveFromClients()
 void ServerGame::startARound(int seconds) {
 	round_id++;
 	for (auto [id,powerups] : playerPowerups) {
+		printf("Player %d Powerups: ", id);
 		for (auto p : powerups) {
-			printf("Player %d Powerup: %d,\n", id, p);
+			printf("%s, ", PowerupInfo[p].name.c_str());
 		}
+		printf("\n");
 	}
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
@@ -269,16 +286,68 @@ void ServerGame::startARound(int seconds) {
 
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
+		// check if it is a tiebreaker round
+		if (tiebreaker) {
+			// the points will never be the same for both teams.
+			if (runner_points > hunter_points) {
+				printf("[round %d] Tiebreaker round ended, survivors win!\n", round_id);
+			}
+			else {
+				printf("[round %d] Tiebreaker round ended, hunter wins!\n", round_id);
+			}
+			tiebreaker = false; // reset tiebreaker
+			return;
+		}
+		
 		state_mu.lock();
+
 		// set all status to true here, handle in the main game loop
 		for (auto& [id, status] : phaseStatus) {
 			status = true;
 		}
+
+		// Count how many survivors survived the round
+		unsigned int num_survivors = 0;
+		unsigned int hunter_id = 0;
+		for (unsigned int id = 0; id < num_players; ++id) {
+			if (!state->players[id].isDead && !state->players[id].isHunter) {
+				num_survivors++;
+			}
+			if (state->players[id].isHunter) {
+				hunter_id = id; // save hunter id
+			}
+		}
+		// Determine who wins this round
+		if (num_survivors == 0) {
+			printf("[round %d] No survivors survived the round, hunter wins!\n", round_id);
+		}
+		else {
+			printf("[round %d] %d survivors survived the round!\n", round_id, num_survivors);
+		}
+
+		// Add points to survivors and hunter
+		runner_points += num_survivors;
+		hunter_points += 3 - num_survivors; // hunter gets 1 points for each survivor dead
+		printf("[round %d] Runner points: %d, Hunter points: %d\n", round_id, runner_points, hunter_points);
+
+		// Survivors each get ${3-sum_survivors} coins, Hunter gets ${sum_survivors}.
+		for (unsigned int id = 0; id < num_players; ++id) {
+			if (!state->players[id].isHunter) {
+				state->players[id].coins += 3 - num_survivors;
+				printf("[round %d] Player %d coins: %d\n", round_id, id, state->players[id].coins);
+			}
+			else {
+				state->players[id].coins += num_survivors; // hunter gets more coins if more survivors are alive
+				//printf("adding %d coins to hunter %d\n", 3 - num_survivors, id);
+				printf("[round %d] Hunter %d coins: %d\n", round_id, id, state->players[id].coins);
+			}
+		}
+
 		// Don't send packets in timer!
 		// Socket wrapper isn't thread safe...
 		// sendAppPhaseUpdates();
 		state_mu.unlock();
-		});
+	});
 }
 
 void ServerGame::handleStartMenu() {
@@ -290,6 +359,7 @@ void ServerGame::handleStartMenu() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
+		// START A ROUND
 		num_players = phaseStatus.size();
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
@@ -299,6 +369,64 @@ void ServerGame::handleStartMenu() {
 			status = false;
 		}
 	}
+}
+
+void ServerGame::newGame()
+{
+	round_id = 0;
+	tiebreaker = false;
+	playerPowerups.clear();
+	runner_points = 0;
+	hunter_points = 0;
+	for (int i = 0; i < num_players; i++) {
+		state->players[i].coins = PLAYER_INIT_COINS;
+		state->players[i].speed = PLAYER_INIT_SPEED;
+		state->players[i].isDead = false;
+	}
+}
+
+void ServerGame::resetGamePos()
+{
+	for (int i = 0; i < num_players; i++)
+	{
+		state->players[i].x = playerSpawns[i].x;
+		state->players[i].y = playerSpawns[i].y;
+		state->players[i].z = playerSpawns[i].z;
+		state->players[i].yaw = startYaw;
+		state->players[i].pitch = startPitch;
+	}
+
+	sendGameStateUpdates();
+}
+
+void ServerGame::handleEndPhase() {
+	bool ready = true;
+	for (auto& [id, status] : phaseStatus) {
+		if (!status) {
+			ready = false;
+		}
+	}
+
+
+	if (ready && !phaseStatus.empty()) {
+		newGame();
+		appState->gamePhase = GamePhase::START_MENU;
+		sendAppPhaseUpdates();
+		// reset status
+		for (auto& [id, status] : phaseStatus) {
+			status = false;
+		}
+	}
+	else {
+		resetGamePos();
+	}
+}
+
+// -----------------------------------------------------------------------------
+// GAME DEV HELPING FUNCTION
+// -----------------------------------------------------------------------------
+bool ServerGame::anyWinners() {
+	return (runner_points >= WIN_THRESHOLD || hunter_points >= WIN_THRESHOLD);
 }
 
 // -----------------------------------------------------------------------------
@@ -315,9 +443,26 @@ void ServerGame::handleGamePhase() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
-		appState->gamePhase = GamePhase::SHOP_PHASE;
-		//sendAppPhaseUpdates();
-		startShopPhase();
+		// Check if anyone won the game	
+		if (anyWinners()) {
+			if (runner_points == hunter_points) {
+				printf("[round %d] Game over! It's a tie! Starting a tiebreaker round. \n", round_id);
+				tiebreaker = true;
+				appState->gamePhase = GamePhase::SHOP_PHASE;
+				startShopPhase();
+			}
+			else {
+				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= WIN_THRESHOLD) ? "survivors" : "hunter");
+				appState->gamePhase = GamePhase::GAME_END;
+				sendAppPhaseUpdates();
+			}
+		}
+		else
+		{
+			appState->gamePhase = GamePhase::SHOP_PHASE;
+			startShopPhase();
+		}
+
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
 		}
@@ -354,25 +499,29 @@ void ServerGame::startShopPhase() {
 		if (state->players[id].isHunter)
 		{
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = randomHunterPowerupGen(rng);
-				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
+				Powerup hunterPowerup = static_cast<Powerup>(randomHunterPowerupGen(rng));
+				options->options[p] = (uint8_t) hunterPowerup;
+				printf("Hunter option %d: %s\n", p+1, PowerupInfo[hunterPowerup].name.c_str());
 			}
 		}
 		else
 		{
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = randomRunnerPowerupGen(rng);
-				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
+				Powerup runnerPowerup = static_cast<Powerup>(randomRunnerPowerupGen(rng));
+				options->options[p] = (uint8_t) runnerPowerup;
+				printf("Runner %d option %d: %s\n", id, p+1, PowerupInfo[runnerPowerup].name.c_str());
 
 			}
 		}
+		options->runner_score = runner_points;
+		options->hunter_score = hunter_points;
 		sendShopOptions(options, id);
 	}
 }
 
 void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 {
-	playerPowerups[id].push_back(selection);
+	playerPowerups[id].push_back(static_cast<Powerup>(selection));
 	// TODO: add more powerups here
 	switch ((Powerup)selection) {
 	case Powerup::H_INCREASE_SPEED:
@@ -490,9 +639,6 @@ void ServerGame::applyAttacks()
 				printf("[HIT] attacker %u hits victim %u (tick %llu)\n",
 					attackerId, victimId, state->tick);
 
-				// simple reward: +1 coin
-				state->players[attackerId].coins++;
-
 				// mark victim as dead
 				state->players[victimId].isDead = true;
 				printf("[HIT] victim %u is dead\n", victimId);
@@ -504,6 +650,19 @@ void ServerGame::applyAttacks()
 
 			}
 		}
+	}
+	if (latestAttacks.empty()) return; // no attacks this tick
+	// check if everyone is dead
+	bool allDead = true;
+	for (unsigned int id = 0; id < num_players; ++id) {
+		if (!state->players[id].isDead && !state->players[id].isHunter) {
+			allDead = false;
+			break;
+		}
+	}
+	if (allDead) {
+		printf("[GAME PHASE] All players are dead, cancelling the timer\n");
+		timer->cancelTimer(); // cancel the timer
 	}
 	latestAttacks.clear();
 }
@@ -543,7 +702,7 @@ void ServerGame::sendAppPhaseUpdates() {
 
 	NetworkServices::buildPacket<AppPhasePayload>(PacketType::APP_PHASE, *data, packet_data);
 
-	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(AppPhasePayload));
 }
 
 void ServerGame::sendShopOptions(ShopOptionsPayload* data, int dest) {
@@ -639,19 +798,26 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 			// simple AABB overlap test in 2D (X vs X, Y vs Y)
 			if (checkCollision(playerBox, boxes2d[b]))
 			{
-				float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
-				if (abs(distance) < abs(delta[i])) delta[i] = distance;
+				// If the z is being changed DOWNWARDS and collides, reset z velocity and "ground" player
+				if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
+					// printf("[CLIENT %d] Collision DOWNWARD with box detected. zVelocity=%f, deltaZ=%f\n", clientId,  state->players[clientId].zVelocity, delta[2]);
 
-				// If the z is being changed, reset z velocity and "ground" player
-				if (i == 2) {
-					// printf("[CLIENT %d] Collision with box detected. zVelocity=%f, deltaZ=%f\n", clientId,  state->players[clientId].zVelocity, delta[2]);
-					if (state->players[clientId].zVelocity < 0) state->players[clientId].isGrounded = true;
+					// newZ - playerRadius	= surfaceZ
+					// newZ					= surfaceZ + playerRadius
+					// currentZ + deltaZ	= surfaceZ + playerRadius
+					// deltaZ				= surfaceZ + playerRadius - currentZ
+					delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
+					state->players[clientId].isGrounded = true;
 					state->players[clientId].zVelocity = 0;
 					/*
 					printf("BOXID=%llu, box.minZ=%f, box.maxZ=%f\n", b, boxes2d[b].minZ, boxes2d[b].maxZ);
 					printf("Dynamic playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", playerBox.minZ, playerBox.maxZ);
 					printf("Static  playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", staticPlayerBox.minZ, staticPlayerBox.maxZ);
 					*/
+				}
+				else {
+					float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
+					if (abs(distance) < abs(delta[i])) delta[i] = distance;
 				}
 			}
 		}

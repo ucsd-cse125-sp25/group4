@@ -13,15 +13,6 @@
 #include <random>
 #include <mutex>
 
-#define GRAVITY 0.075f * PLAYER_SCALING_FACTOR
-#define JUMP_VELOCITY 1.5f * PLAYER_SCALING_FACTOR
-#define PLAYER_INIT_SPEED 1.0f * PLAYER_SCALING_FACTOR
-#define TERMINAL_VELOCITY -9999.0f * PLAYER_SCALING_FACTOR
-#define ATTACK_ANGLE_DEG 45.0f
-#define RUNNER_SPAWN_PERIOD 1
-#define HUNTER_SPAWN_PERIOD 3
-#define JUMP_POWERUP 1.5f * PLAYER_SCALING_FACTOR
-
 class ServerGame {
 public:
 	ServerGame(void);
@@ -42,10 +33,15 @@ public:
 	void readBoundingBoxes();
 	void handleGamePhase();
 	void handleStartMenu();
+	void handleEndPhase();
+	void newGame();
+	void resetGamePos();
+
 	void startARound(int);
 	void handleShopPhase();
 	void startShopPhase();
 	void applyPowerups(uint8_t, uint8_t);
+	bool anyWinners();
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;
@@ -57,6 +53,7 @@ private:
 	char network_data[MAX_PACKET_SIZE];
 
 	int runner_time, hunter_time; // times for each of the players to start moving
+	int runner_points, hunter_points; // points for each of the players
 	
 	Point hunterSpawn = { -1.17, 0.042, 0.068 }; // center of the carpet cross
 	
@@ -72,6 +69,15 @@ private:
 		{ -0.976f, 2.263f, 0.03f }		// under desk
 	};
 
+	// Player spawns for start and end phases
+	Point playerSpawns[4] =
+	{
+		{ -2.30, 2.536, 0.913247 },
+		{ -2.225, 2.536, 0.913247 },
+		{ -2.15, 2.536, 0.913247 },
+		{ -2.075, 2.536, 0.913247 },
+	};
+
 	/* Collision */
 	// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	vector<BoundingBox> boxes2d;
@@ -80,6 +86,7 @@ private:
 
 	int num_players = 4;
 	int round_id;
+	bool tiebreaker;
 
 	std::random_device dev;
 	std::mt19937 rng;
@@ -137,7 +144,7 @@ private:
 
 
 	// Shop
-	std::unordered_map<uint8_t, vector<uint8_t>> playerPowerups;
+	std::unordered_map<uint8_t, vector<Powerup>> playerPowerups;
 
 	// Powerups
 	std::unordered_map<uint8_t, float> extraJumpPowerup;
