@@ -12,8 +12,10 @@ GAME_FPS = 60
 armature_obj = bpy.data.objects["Armature"]
 active_action = armature_obj.animation_data.action
 
-num_authored_frames = active_action.frame_end - active_action.frame_start
+num_authored_frames = scene.frame_end - scene.frame_start
 num_frames = int(num_authored_frames)
+
+print(num_frames)
 # num_frames = (num_authored_frames / AUTHOR_FPS) * GAME_FPS
 
 if len(bpy.data.armatures) != 1:
@@ -39,19 +41,21 @@ for bone_idx, bone in enumerate(bones):
 # ---------------------------------------------------------------------------------------
 # animation transform matrices
 bone_to_armature = np.zeros((num_frames, len(bone_names), MATRIX_ROWS, MATRIX_COLS), dtype = np.float32)
+bone_to_armature_adj = np.zeros((num_frames, len(bone_names), MATRIX_ROWS, MATRIX_COLS), dtype = np.float32)
 
-frame_times = np.linspace(active_action.frame_start, active_action.frame_end, num=num_frames, endpoint=True)
+frame_times = np.linspace(scene.frame_start, scene.frame_end, num=num_frames, endpoint=True)
 
 initial_frame = scene.frame_current
 initial_subframe = scene.frame_subframe
 
 for frame_idx, frame_time in enumerate(frame_times):
-    frame = np.floor(frame_time)
+    frame = int(np.floor(frame_time))
     scene.frame_set(frame, subframe=frame_time-frame)
                
-    for bone_idx, pose_bone in pose_bones:
-        bone_to_armature[frame_idx, bone_idx, :, :] = np.asarray(pose_bone.matrix)[:MATRIX_ROWS, :MATRIX_COLS]
-
+    for bone_idx, pose_bone in enumerate(pose_bones):
+        bone_to_armature    [frame_idx, bone_idx, :, :] = np.dot(np.asarray(pose_bone.matrix            ), inverse_bind[bone_idx])
+        bone_to_armature_adj[frame_idx, bone_idx, :, :] = np.dot(np.asarray(pose_bone.matrix.adjugated()), inverse_bind[bone_idx])
+        
 # reset the scene to its original state    
 scene.frame_set(initial_frame, subframe=initial_subframe)
 
@@ -60,7 +64,8 @@ scene.frame_set(initial_frame, subframe=initial_subframe)
 with open(f"{active_action.name}.janim", "wb") as f:
     f.write(pack("I", num_frames))
     f.write(pack("I", len(bones)))
-    f.write(pack(f"{inverse_bind.size}f", *inverse_bind.flatten()))
     f.write(pack(f"{bone_to_armature.size}f", *bone_to_armature.flatten()))
+    f.write(pack(f"{bone_to_armature_adj.size}f", *bone_to_armature_adj.flatten()))
 
 print(f"{active_action.name}.janim written successfully")
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\monsterv2.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\animation_exporter.py"

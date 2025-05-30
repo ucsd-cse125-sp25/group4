@@ -139,9 +139,6 @@ bool Renderer::Init(HWND window_handle) {
 		m_scene.ReadToCPU(L"bedroomv4.jj");
 		m_hunterRenderBuffers.ReadToCPU(L"monsterv2.jj");
 
-		// animation data
-	    DX::ReadDataStatus status = DX::ReadDataToSlice(L"Idle.janim", m_hunterAnimations[IDLE].data);
-		if (status != DX::ReadDataStatus::SUCCESS) return false;
 	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// descriptor heaps 
@@ -162,15 +159,14 @@ bool Renderer::Init(HWND window_handle) {
 		uint32_t numSceneDescriptors = numSceneTextures + numSceneBuffers;
 
 		uint32_t numHunterTextures = m_hunterRenderBuffers.header->numTextures;
-		uint32_t numHunterBuffers = m_hunterRenderBuffers.getNumBuffers();
+		uint32_t numHunterBuffers = m_hunterRenderBuffers.getNumBuffers() + 2;
 		uint32_t numHunterDescriptors = numHunterTextures + numHunterBuffers;
 
 		uint32_t numTimerUITextures = 3; // clock base, hand, top
-		uint32_t numTimerUIVertexBuffers = 1;
-		uint32_t numShopUIVertexBuffers = 1;
-		uint32_t numShopUITextures = 1;
+		uint32_t numTimerUIVertexBuffers = 3;
+		uint32_t numShopUIVertexBuffers = 2;
+		uint32_t numShopUITextures = PowerupInfo.size() + 20; // 10 for each counter of souls and coins
 		uint32_t capacity = numSceneDescriptors + numHunterDescriptors
-			+ 3 // MAGIC NUMBER for temp player vertex buffers
 			+ numTimerUITextures + numTimerUIVertexBuffers
 			+ numShopUITextures + numShopUIVertexBuffers;
 		// all resource descriptors go here.
@@ -353,9 +349,52 @@ bool Renderer::Init(HWND window_handle) {
 		}
 		{
 			// --------------------------------------------------------------------
+			// describe Player Pipeline State Object (PSO) 
+			
+			Slice<BYTE> vertexShaderBytecode;
+			if (DX::ReadDataToSlice(L"skin_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			Slice<BYTE> pixelShaderBytecode;
+			if (DX::ReadDataToSlice(L"ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+
+
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
+				.pRootSignature = m_rootSignature.Get(),
+				.VS = {
+					.pShaderBytecode = vertexShaderBytecode.ptr,
+					.BytecodeLength = vertexShaderBytecode.len,
+				},
+				.PS = {
+					.pShaderBytecode = pixelShaderBytecode.ptr,
+					.BytecodeLength  = pixelShaderBytecode.len,
+				},
+				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+				.SampleMask = UINT_MAX,
+				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+				.DepthStencilState = {
+					.DepthEnable = TRUE,
+					.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+					.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+					.StencilEnable = FALSE,
+				},
+				.InputLayout = {},
+				.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+				.NumRenderTargets = 1,
+				.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+				.DSVFormat = DXGI_FORMAT_D32_FLOAT,
+				.SampleDesc = {
+					.Count = 1,
+				},
+			};
+			psoDesc.RasterizerState.FrontCounterClockwise = true;
+			// psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
+
+			// create the pipeline state object
+			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateSkin)));
+		}
+		{
+			// --------------------------------------------------------------------
 			// describe Debug Pipeline State Object (PSO) 
 			
-			// TODO: use slices instead
 			Slice<BYTE> vertexShaderBytecode;
 			if (DX::ReadDataToSlice(L"dbg_cube_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
 			Slice<BYTE> pixelShaderBytecode;
@@ -395,15 +434,10 @@ bool Renderer::Init(HWND window_handle) {
 			// create the pipeline state object
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateDebug)));
 		}
-
-		
 		{
 			// --------------------------------------------------------------------
 			// describe Timer UI Pipeline State Object (PSO) 
 
-			// TODO: use slices instead
-			// std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs_ui.cso");
-			// std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps_ui.cso");
 			Slice<BYTE> vertexShaderBytecode;
 			if (DX::ReadDataToSlice(L"timerui_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
 			Slice<BYTE> pixelShaderBytecode;
@@ -479,22 +513,6 @@ bool Renderer::Init(HWND window_handle) {
 	
 	
 	// ----------------------------------------------------------------------------------------------------------------
-	// create vertex buffer for player
-	{
-		// 6 faces
-		// 2 triangles per face
-		// 3 vertices per triangle
-		// 3 floats per vertex
-	    Vertex cubeverts[6 * 2 * 3] = {
-	    	{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } }
-	    };
-			const Slice<Vertex> cubeVertsSlice = {
-				.ptr = cubeverts,
-				.len = _countof(cubeverts),
-			};
-			m_vertexBufferBindless.Init(cubeVertsSlice, m_device.Get(), &m_resourceDescriptorAllocator, L"Player Vertex Buffer");
-	}
-	// ----------------------------------------------------------------------------------------------------------------
 	// create vertex buffer for debug cubes
 	
 	{
@@ -514,6 +532,11 @@ bool Renderer::Init(HWND window_handle) {
 
 	{
 		m_ShopUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
+	}
+	// create buffers for animation
+	{
+		// animation data
+		m_hunterAnimations[IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Idle.janim");
 	}
 	
 	// create depth stencil buffer 
@@ -565,6 +588,12 @@ bool Renderer::Init(HWND window_handle) {
 		}
 
 		UNWRAP(WaitForGpu());
+	}
+
+	// record start times
+	auto time = std::chrono::steady_clock::now();
+	for (PlayerRenderState& state : players) {
+		players->animationStartTime = time;
 	}
 	return true;
 }
@@ -721,6 +750,7 @@ bool Renderer::Render() {
 	// XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
 	XMMATRIX viewProject = computeViewProject(playerPos, {}); // lookat is not used
 
+	auto time = std::chrono::steady_clock::now();
 
 	// draw scene
 	{
@@ -740,23 +770,31 @@ bool Renderer::Render() {
 	}
 
 	// draw players
+	m_commandList->SetPipelineState(m_pipelineStateSkin.Get());
 	for (UINT8 i = 0; i < 4; ++i) {
 		XMMATRIX modelMatrix = computeModelMatrix(players[i]);
 		XMMATRIX modelInverseTranspose = XMMatrixInverse(nullptr, XMMatrixTranspose(modelMatrix));
 		PerDrawConstants drawConstants = {
-			.viewProject           = viewProject,
-			.modelMatrix           = modelMatrix,
-			.modelInverseTranspose = modelInverseTranspose,
-			.vpos_idx              = m_hunterRenderBuffers.vertexPosition.descriptor.index,
-			.vshade_idx            = m_hunterRenderBuffers.vertexShading.descriptor.index ,
-			.material_ids_idx      = m_hunterRenderBuffers.materialID.descriptor.index,
-			.materials_idx         = m_hunterRenderBuffers.materials.descriptor.index,
-			.first_texture_idx     = m_hunterRenderBuffers.textures.ptr[0].descriptor.index,
+			.viewProject              = viewProject,
+			.modelMatrix              = modelMatrix,
+			.modelInverseTranspose    = modelInverseTranspose,
+			.vpos_idx                 = m_hunterRenderBuffers.vertexPosition.descriptor.index,
+			.vshade_idx               = m_hunterRenderBuffers.vertexShading.descriptor.index ,
+			.material_ids_idx         = m_hunterRenderBuffers.materialID.descriptor.index,
+			.materials_idx            = m_hunterRenderBuffers.materials.descriptor.index,
+			.first_texture_idx        = m_hunterRenderBuffers.textures.ptr[0].descriptor.index,
+			.vbone_idx                = m_hunterRenderBuffers.vertexBoneIdx.descriptor.index,
+			.vweight_idx              = m_hunterRenderBuffers.vertexBoneWeight.descriptor.index,
+			.bone_transforms_idx      = m_hunterAnimations[IDLE].invBindTransform.descriptor.index,
+			.bone_adj_transforms_idx  = m_hunterAnimations[IDLE].invBindAdjTransform.descriptor.index,
+			.frame_number             = m_hunterAnimations[IDLE].getFrame(time, players[i].animationStartTime),
+			.num_bones                = m_hunterRenderBuffers.header->numBones,
 		};
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
 		m_commandList->DrawInstanced(3 * m_hunterRenderBuffers.vertexPosition.data.len, 1, 0, 0);
 	}
-
+	
+	/*
 	// draw debug cubes
 	{
 		PerDrawConstants drawConstants = {
@@ -772,6 +810,7 @@ bool Renderer::Render() {
 	  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
 		m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, (UINT)debugCubes.transforms.size(), 0, 0);
 	}
+	*/
 
 	// draw Timer UI
 	if (gamePhase != GamePhase::START_MENU) {

@@ -147,7 +147,7 @@ struct SceneHeader {
 	uint32_t numTriangles;
 	uint32_t numMaterials;
 	uint32_t numTextures;
-	bool     dynamic;
+	uint32_t numBones;
 };
 
 
@@ -302,8 +302,6 @@ struct Texture {
 
 constexpr uint32_t SCENE_VERSION = 000'000'003;
 struct Scene {
-	bool dynamic;
-
 	// the whole scene file
 	Slice<BYTE> data;
 	SceneHeader *header;
@@ -313,9 +311,9 @@ struct Scene {
 	Buffer<uint16_t>          materialID;
 	Buffer<Material>          materials;
 	union { // rraaaaaaaaagh C++ has no tagged unions
-		// dynamic == false:
+		// header->numBones == 0:
 		Buffer<XMFLOAT2>          vertexLightmapTexcoord;
-		// dynamic == true:
+		// header->numBones > 0:
 		struct {
 			Buffer<BoneIndices>       vertexBoneIdx;
 			Buffer<BoneWeights>       vertexBoneWeight;
@@ -332,7 +330,7 @@ struct Scene {
 	~Scene() { Release(); }
 	
 	uint32_t getNumBuffers() {
-		if (!dynamic) {
+		if (header->numBones == 0) {
 			return 4; // WARNING: this needs to be updated when there are lightmaps
 		}
 		else {
@@ -358,7 +356,6 @@ struct Scene {
 			printf("ERROR: scene has no triangles\n");
 			return false;
 		}
-		dynamic = header->dynamic;
 		return true;
 	}
 	bool SendToGPU(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList) {
@@ -421,7 +418,7 @@ struct Scene {
 
 		materialID.Init(materialIDSlice, device, descriptorAllocator, L"Scene Material ID Buffer");
 
-		if (!dynamic) {
+		if (header->numBones == 0) {
 			// static scenes need a lightmap
 			Slice<XMFLOAT2> vertexLightmapTexcoordSlice{
 				.ptr = reinterpret_cast<XMFLOAT2*>(texturePathSlice.after()),
@@ -462,6 +459,48 @@ struct Scene {
 	}
 };
 
+struct AnimationHeader {
+	uint32_t numFrames;
+	uint32_t numBones;
+};
+
+struct Animation {
+	Slice<BYTE> data;
+
+	AnimationHeader *header;
+	Buffer<XMFLOAT4X4> invBindTransform;
+	Buffer<XMFLOAT4X4> invBindAdjTransform;
+
+	bool Init(ID3D12Device* device, DescriptorAllocator* descriptorAllocator, const wchar_t* filename) {
+		DX::ReadDataStatus status = DX::ReadDataToSlice(filename, data);
+		if (status != DX::ReadDataStatus::SUCCESS) {
+			return false;
+		}
+		
+		header = reinterpret_cast<AnimationHeader*>(data.ptr);
+
+		uint32_t bufferLength = header->numFrames * header->numBones;
+
+		Slice<XMFLOAT4X4> invBindTransformSlice = {
+			.ptr = reinterpret_cast<XMFLOAT4X4*>(header + 1),
+			.len = bufferLength,
+		};
+		Slice<XMFLOAT4X4> invBindAdjTransformSlice = {
+			.ptr = reinterpret_cast<XMFLOAT4X4*>(invBindTransformSlice.after()),
+			.len = bufferLength,
+		};
+
+		invBindTransform.Init(invBindTransformSlice, device, descriptorAllocator, L"Position Transform Buffer");
+		invBindAdjTransform.Init(invBindAdjTransformSlice, device, descriptorAllocator, L"Normal Transform Buffer");
+		return true;
+	}
+
+	uint32_t getFrame(std::chrono::time_point<std::chrono::steady_clock> start, std::chrono::time_point<std::chrono::steady_clock> current) {
+		std::chrono::duration<double> dt = current - start;
+		uint32_t numFramesElapsed = (uint32_t)(dt.count() / 60.0);
+		return numFramesElapsed % header->numFrames;
+	}
+};
 
 constexpr int MAX_DEBUG_CUBES = 1024;
 struct DebugCubes {
@@ -842,6 +881,8 @@ private:
 	UINT m_rtvDescriptorSize;
 	ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
+	
+	ComPtr<ID3D12PipelineState> m_pipelineStateSkin;
 
 	// for debug drawing
 	ComPtr<ID3D12PipelineState> m_pipelineStateDebug;
@@ -868,13 +909,12 @@ private:
 	// ComPtr<ID3D12Resource> m_vertexBuffer;
 	// D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
-	Buffer<Vertex> m_vertexBufferBindless;
 	Scene m_scene;
 	Scene m_runnerRenderBuffers;
 	Scene m_hunterRenderBuffers;
 
-	Buffer<XMFLOAT4X4> m_hunterAnimations[HUNTER_ANIMATION_COUNT];
-	Buffer<XMFLOAT4X4> m_runnerAnimations[RUNNER_ANIMATION_COUNT];
+	Animation m_hunterAnimations[HUNTER_ANIMATION_COUNT];
+	Animation m_runnerAnimations[RUNNER_ANIMATION_COUNT];
 	
 
 	// ComPtr<ID3D12DescriptorHeap> m_resourceHeap;

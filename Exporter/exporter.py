@@ -167,12 +167,14 @@ for material in used_materials:
 SCENE = bpy.data.scenes[0]
 
 armature = None
+num_bones = 0
 if len(bpy.data.armatures) > 1:
     print("ERROR: scene has more than one armature")
     exit(1)
 elif len(bpy.data.armatures) == 1:
     armature = bpy.data.armatures[0]
     bone_name_to_index = {bone.name : i for i, bone in enumerate(armature.bones)}
+    num_bones = len(armature.bones)
             
 for obj in bpy.data.objects:
     if obj.type != "MESH" or obj.name[:3] == "bb#":
@@ -313,8 +315,7 @@ with open(f"{filename}.jj", 'wb') as f:
     # number of textures
     f.write(pack("I", len(texture_paths)))
     # whether there are vertex weights
-    f.write(pack("?", dynamic))
-    f.write(pack("3x")) # floats align to 4 bytes
+    f.write(pack("I", num_bones))
 
     # write vertex positions
     f.write(pack_bytes("f", consolidated_mesh.vert_positions))

@@ -50,7 +50,10 @@ struct PerDrawConstants
     uint     vbone_idx;
     uint     vweight_idx;
     uint     bone_transforms_idx;
-	// 54 DWORDS
+    uint     bone_adj_transforms_idx;
+    uint     frame_number;
+    uint     num_bones;
+	// 57 DWORDS
 };
 struct VertexPosition
 {

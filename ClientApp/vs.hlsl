@@ -7,10 +7,13 @@ cbuffer SceneConstantBuffer : register(b0) // b0 is the "virtual register" where
 ConstantBuffer<PerDrawConstants> drawConstants : register(b1);
 
 
+
 PSInput VSMain(uint vid : SV_VertexID)
 {
+     
     StructuredBuffer<VertexPosition> vbuffer = ResourceDescriptorHeap[drawConstants.vpos_idx];
     float4 position_homogeneous = float4(vbuffer[vid].position, 1);
+    
     
     StructuredBuffer<VertexShadingData> shadebuffer = ResourceDescriptorHeap[drawConstants.vshade_idx];
     float4 normal = float4(shadebuffer[vid].normal, 0);
