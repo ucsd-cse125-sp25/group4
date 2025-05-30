@@ -83,6 +83,9 @@
     <CopyFileToFolders Include="..\Assets\monsterv2.jj">
       <FileType>Document</FileType>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\Idle.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
     <None Include="..\client\include\shaderShared.hlsli">
       <FileType>Document</FileType>
     </None>

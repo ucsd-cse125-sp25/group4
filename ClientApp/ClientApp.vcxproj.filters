@@ -86,5 +86,8 @@
     <CopyFileToFolders Include="..\Assets\monsterv2.jj">
       <Filter>Resource Files</Filter>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\Idle.janim">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

@@ -133,10 +133,15 @@ bool Renderer::Init(HWND window_handle) {
 
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 
-	// read Scenefile
+	// read files
 	{
+		// frame-independent and textures
 		m_scene.ReadToCPU(L"bedroomv4.jj");
 		m_hunterRenderBuffers.ReadToCPU(L"monsterv2.jj");
+
+		// animation data
+	    DX::ReadDataStatus status = DX::ReadDataToSlice(L"Idle.janim", m_hunterAnimations[IDLE].data);
+		if (status != DX::ReadDataStatus::SUCCESS) return false;
 	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// descriptor heaps 
