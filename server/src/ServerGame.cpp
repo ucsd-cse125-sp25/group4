@@ -572,15 +572,6 @@ void ServerGame::applyMovements() {
 		auto& player = state->players[id];
 		// printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
 
-		// TODO: hunter slow debuff
-		if (player.isHunter && state->tick == hunterStartSlowdown) {
-			player.speed *= hunterSlowFactor;
-			printf("[HUNTER] hunter %d is now slowed down\n", id);
-		} else if (player.isHunter && state->tick == hunterEndSlowdown) {
-			player.speed /= hunterSlowFactor;
-			printf("[HUNTER] hunter %d is no longer slowed down\n", id);
-		}
-
 		float dx = 0, dy = 0;
 		if (latestMovement.count(id)) {
 			auto& mv = latestMovement[id];
@@ -617,6 +608,13 @@ void ServerGame::applyMovements() {
 		if (player.zVelocity < TERMINAL_VELOCITY)
 			player.zVelocity = TERMINAL_VELOCITY;
 
+		// apply speed modifiers here:
+		// hunter slow debuff
+		if (player.isHunter && state->tick >= hunterStartSlowdown && state->tick < hunterEndSlowdown) {
+			dx *= hunterSlowFactor;
+			dy *= hunterSlowFactor;
+			printf("[HUNTER] hunter %d is now slowed down\n", id);
+		}
 
 		updateClientPositionWithCollision(id, dx, dy, player.zVelocity);
 	}
@@ -653,6 +651,15 @@ void ServerGame::applyAttacks()
 	/* ---------- resolve hunter's queued swing ------------------------- */
 	if (pendingSwing && state->tick >= pendingSwing->hitTick)
 	{
+		printf("[HUNTER] resolving atk\n");
+		// update the pending swing to the latest received movements
+		pendingSwing->attack.originX = state->players[0].x;
+		pendingSwing->attack.originY = state->players[0].y;
+		pendingSwing->attack.originZ = state->players[0].z;
+		pendingSwing->attack.pitch = state->players[0].pitch;
+		pendingSwing->attack.yaw = state->players[0].yaw;
+		// leave range unchanged
+
 		for (unsigned victimId = 1; victimId < 4; ++victimId)      // only survivors
 		{
 			if (state->players[victimId].isDead)   continue;
