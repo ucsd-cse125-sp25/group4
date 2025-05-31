@@ -132,13 +132,16 @@ private:
 	}
 
 	// Dodge
-	static constexpr uint64_t DODGE_COOLDOWN_TICKS = TICKS_PER_SEC * 2;   // 2 s  (change to 60 if desired)
+	static constexpr uint8_t DODGE_COOLDOWN_DEFAULT_TICKS = TICKS_PER_SEC * 2;   // 2 s  (change to 60 if desired)
 	static constexpr uint8_t  INVUL_TICKS = TICKS_PER_SEC / 4;    // 0.25 s
 	static constexpr float    DASH_SPEED_MULTIPLIER = 2.5f; // run speed while dashing
+	static constexpr float    DASH_COOLDOWN_PENALTY = 0.25f; // run speed while on cooldown
+	static constexpr float    REDUCE_DODGE_CD_MULTIPLIER = 0.75f; // each time powerup is bought, reduce cooldown by 0.75x
 
 	std::array<uint64_t, 4> lastDodgeTick{ 0,0,0,0 };    // when each survivor last dodged
 	std::array<int8_t, 4> invulTicks{ 0,0,0,0 };    // frames of invulnerability left
-	std::array<int8_t, 4> dashTicks{ 0,0,0,0 };    // frames of dash‑speed left
+	std::array<int8_t, 4> dashTicks{ -1,-1,-1,-1 };    // frames of dash‑speed left
+	std::array<float, 4> dodgeCooldownTicks{ DODGE_COOLDOWN_DEFAULT_TICKS,DODGE_COOLDOWN_DEFAULT_TICKS,DODGE_COOLDOWN_DEFAULT_TICKS,DODGE_COOLDOWN_DEFAULT_TICKS };    // cooldown of each player
 
 
 	// Shop

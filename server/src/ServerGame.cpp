@@ -183,7 +183,7 @@ void ServerGame::receiveFromClients()
 				// hunters cannot dodge
 				if (state->players[id].isHunter || state->players[id].isDead) break;
 
-				bool offCooldown = (state->tick - lastDodgeTick[id]) >= DODGE_COOLDOWN_TICKS;
+				bool offCooldown = (state->tick - lastDodgeTick[id]) >= dodgeCooldownTicks[id];
 				if (!offCooldown) break;                           // silently ignore spam
 
 				// grant!
@@ -546,6 +546,10 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		extraJumpPowerup[id] += JUMP_POWERUP; // increase jump height
 		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
 		break;
+	case Powerup::R_DECREASE_DODGE_CD:
+		dodgeCooldownTicks[id] *= REDUCE_DODGE_CD_MULTIPLIER;
+		printf("[POWERUP] Player %d dodge cooldown reduced to %.2f\n", id, dodgeCooldownTicks[id]);
+		break;
 	default:
 		break;
 	}
@@ -676,7 +680,19 @@ void ServerGame::applyDodge()
 		int8_t prevDashTick = dashTicks[i];
 		if (invulTicks[i] > 0) invulTicks[i]--;
 		if (dashTicks[i] > 0) dashTicks[i]--;
-		if (dashTicks[i] == 0 && prevDashTick > 0) state->players[i].speed /= DASH_SPEED_MULTIPLIER;
+		if (dashTicks[i] == 0 && prevDashTick > 0)
+		{
+			// reset speed
+			state->players[i].speed /= DASH_SPEED_MULTIPLIER;
+
+			// players are slowed until end of cooldown
+			state->players[i].speed *= DASH_COOLDOWN_PENALTY;
+		}
+		else if (dashTicks[i] == 0 && (state->tick - lastDodgeTick[i]) >= dodgeCooldownTicks[i]) {
+			// end of cooldown
+			dashTicks[i] = -1; // prevents from happening multiple times
+			state->players[i].speed /= DASH_COOLDOWN_PENALTY;
+		}
 	}
 }
 
