@@ -1,6 +1,7 @@
 ﻿#include <random>
 #include <vector>
 #include <iostream>
+#include <numeric>
 #include "ServerGame.h"
 #include "Parson.h"
 
@@ -10,8 +11,6 @@ unsigned int ServerGame::client_id;
 
 ServerGame::ServerGame(void) :
 	rng(dev()),
-	randomRunnerPowerupGen((unsigned int)Powerup::RUNNER_POWERUPS + 1, (unsigned int)Powerup::NUM_RUNNER_POWERUPS - 1),
-	randomHunterPowerupGen((unsigned int)Powerup::HUNTER_POWERUPS + 1, (unsigned int)Powerup::NUM_HUNTER_POWERUPS - 1),
 	randomSpawnLocationGen(0, (unsigned int)NUM_SPAWNS - 1)
 {
 	client_id = 0;
@@ -498,18 +497,22 @@ void ServerGame::startShopPhase() {
 		ShopOptionsPayload* options = new ShopOptionsPayload();
 		if (state->players[id].isHunter)
 		{
+			std::vector<int> v((int)Powerup::NUM_HUNTER_POWERUPS - (int)Powerup::HUNTER_POWERUPS - 1);
+			std::iota(v.begin(), v.end(), (int)Powerup::HUNTER_POWERUPS + 1);
+			std::shuffle(v.begin(), v.end(), rng);
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				Powerup hunterPowerup = static_cast<Powerup>(randomHunterPowerupGen(rng));
-				options->options[p] = (uint8_t) hunterPowerup;
-				printf("Hunter option %d: %s\n", p+1, PowerupInfo[hunterPowerup].name.c_str());
+				options->options[p] = (uint8_t) v[p];
+				printf("Hunter option %d: %d %s\n", p+1, v[p], PowerupInfo[(Powerup)v[p]].name.c_str());
 			}
 		}
 		else
 		{
+			std::vector<int> v((int)Powerup::NUM_RUNNER_POWERUPS - (int)Powerup::RUNNER_POWERUPS - 1);
+			std::iota(v.begin(), v.end(), (int)Powerup::RUNNER_POWERUPS + 1);
+			std::shuffle(v.begin(), v.end(), rng);
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				Powerup runnerPowerup = static_cast<Powerup>(randomRunnerPowerupGen(rng));
-				options->options[p] = (uint8_t) runnerPowerup;
-				printf("Runner %d option %d: %s\n", id, p+1, PowerupInfo[runnerPowerup].name.c_str());
+				options->options[p] = (uint8_t) v[p];
+				printf("Runner %d option %d: %d %s\n", id, p+1, v[p], PowerupInfo[(Powerup)v[p]].name.c_str());
 
 			}
 		}
