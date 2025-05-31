@@ -593,7 +593,7 @@ bool Renderer::Init(HWND window_handle) {
 	// record start times
 	auto time = std::chrono::steady_clock::now();
 	for (PlayerRenderState& state : players) {
-		players->animationStartTime = time;
+		state.animationStartTime = time;
 	}
 	return true;
 }
@@ -750,7 +750,6 @@ bool Renderer::Render() {
 	// XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
 	XMMATRIX viewProject = computeViewProject(playerPos, {}); // lookat is not used
 
-	auto time = std::chrono::steady_clock::now();
 
 	// draw scene
 	{
@@ -769,9 +768,10 @@ bool Renderer::Render() {
 		m_commandList->DrawInstanced(3 * m_scene.vertexPosition.data.len, 1, 0, 0);
 	}
 
+	auto time = std::chrono::steady_clock::now();
 	// draw players
 	m_commandList->SetPipelineState(m_pipelineStateSkin.Get());
-	for (UINT8 i = 0; i < 4; ++i) {
+	for (UINT8 i = 0; i < 1; ++i) {
 		XMMATRIX modelMatrix = computeModelMatrix(players[i]);
 		XMMATRIX modelInverseTranspose = XMMatrixInverse(nullptr, XMMatrixTranspose(modelMatrix));
 		PerDrawConstants drawConstants = {
@@ -787,7 +787,7 @@ bool Renderer::Render() {
 			.vweight_idx              = m_hunterRenderBuffers.vertexBoneWeight.descriptor.index,
 			.bone_transforms_idx      = m_hunterAnimations[IDLE].invBindTransform.descriptor.index,
 			.bone_adj_transforms_idx  = m_hunterAnimations[IDLE].invBindAdjTransform.descriptor.index,
-			.frame_number             = m_hunterAnimations[IDLE].getFrame(time, players[i].animationStartTime),
+			.frame_number             = m_hunterAnimations[IDLE].getFrame(players[i].animationStartTime, time),
 			.num_bones                = m_hunterRenderBuffers.header->numBones,
 		};
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);

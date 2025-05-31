@@ -20,7 +20,7 @@ PSInput VSMain(uint vid : SV_VertexID)
 {
     StructuredBuffer<BoneIndices> boneIdxBuffer = ResourceDescriptorHeap[drawConstants.vbone_idx];
      uint4 boneIndices = boneIdxBuffer[vid].indices;
-     uint4 frameBoneIndices = drawConstants.frame_number * drawConstants.num_bones + boneIndices;
+     uint4 frameBoneIndices = (drawConstants.frame_number * drawConstants.num_bones) + boneIndices;
     
     
     StructuredBuffer<BoneWeights> boneWeightBuffer = ResourceDescriptorHeap[drawConstants.vweight_idx];
@@ -43,7 +43,7 @@ PSInput VSMain(uint vid : SV_VertexID)
     float2 texcoord = float2(shadebuffer[vid].texcoord);
     
     PSInput result;
-    result.positionGlobal = mul(position_homogeneous , drawConstants.modelMatrix);
+    result.positionGlobal = mul(skinned , drawConstants.modelMatrix);
     result.normal = normalize(mul(normal, drawConstants.modelInverseTranspose).xyz);
     // result.normal         = shadebuffer[vid].normal;
     result.positionNDC    = mul(result.positionGlobal, drawConstants.viewProject);

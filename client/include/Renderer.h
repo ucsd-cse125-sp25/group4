@@ -496,9 +496,12 @@ struct Animation {
 	}
 
 	uint32_t getFrame(std::chrono::time_point<std::chrono::steady_clock> start, std::chrono::time_point<std::chrono::steady_clock> current) {
-		std::chrono::duration<double> dt = current - start;
-		uint32_t numFramesElapsed = (uint32_t)(dt.count() / 60.0);
-		return numFramesElapsed % header->numFrames;
+		auto dt = current - start;
+		auto dt_seconds = std::chrono::duration_cast<std::chrono::duration<double>>(dt);
+		constexpr uint32_t FRAMES_PER_SECOND = 60;
+		uint32_t numFramesElapsed = (uint32_t)(dt_seconds.count() * FRAMES_PER_SECOND);
+		uint32_t frame = numFramesElapsed % header->numFrames;
+		return frame;
 	}
 };
 
