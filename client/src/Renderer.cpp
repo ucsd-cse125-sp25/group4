@@ -138,6 +138,7 @@ bool Renderer::Init(HWND window_handle) {
 		// frame-independent and textures
 		m_scene.ReadToCPU(L"bedroomv4.jj");
 		m_hunterRenderBuffers.ReadToCPU(L"monsterv2.jj");
+		m_runnerRenderBuffers.ReadToCPU(L"playerDOLLv3.jj");
 
 	}
 	// ----------------------------------------------------------------------------------------------------------------
@@ -159,14 +160,19 @@ bool Renderer::Init(HWND window_handle) {
 		uint32_t numSceneDescriptors = numSceneTextures + numSceneBuffers;
 
 		uint32_t numHunterTextures = m_hunterRenderBuffers.header->numTextures;
-		uint32_t numHunterBuffers = m_hunterRenderBuffers.getNumBuffers() + 2;
+		uint32_t numHunterBuffers = m_hunterRenderBuffers.getNumBuffers() + (2 * HUNTER_ANIMATION_COUNT);
 		uint32_t numHunterDescriptors = numHunterTextures + numHunterBuffers;
+
+		uint32_t numRunnerTextures = m_runnerRenderBuffers.header->numTextures;
+		uint32_t numRunnerBuffers = m_runnerRenderBuffers.getNumBuffers() + (2 * RUNNER_ANIMATION_COUNT);
+		uint32_t numRunnerDescriptors = numRunnerTextures + numRunnerBuffers;
 
 		uint32_t numTimerUITextures = 3; // clock base, hand, top
 		uint32_t numTimerUIVertexBuffers = 3;
 		uint32_t numShopUIVertexBuffers = 2;
 		uint32_t numShopUITextures = PowerupInfo.size() + 20; // 10 for each counter of souls and coins
-		uint32_t capacity = numSceneDescriptors + numHunterDescriptors
+		uint32_t capacity = 
+			  numSceneDescriptors + numHunterDescriptors + numRunnerDescriptors + 
 			+ numTimerUITextures + numTimerUIVertexBuffers
 			+ numShopUITextures + numShopUIVertexBuffers;
 		// all resource descriptors go here.
@@ -536,7 +542,12 @@ bool Renderer::Init(HWND window_handle) {
 	// create buffers for animation
 	{
 		// animation data
-		m_hunterAnimations[IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Idle.janim");
+		m_hunterAnimations[HUNTER_ANIMATION_IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Idle.janim");
+		m_hunterAnimations[HUNTER_ANIMATION_CHASE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Attack.janim");
+		m_hunterAnimations[HUNTER_ANIMATION_ATTACK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Chase.janim");
+
+		m_runnerAnimations[RUNNER_ANIMATION_WALK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Walk.janim");
+		m_runnerAnimations[RUNNER_ANIMATION_DODGE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Dodge.janim");
 	}
 	
 	// create depth stencil buffer 
@@ -595,6 +606,7 @@ bool Renderer::Init(HWND window_handle) {
 	for (PlayerRenderState& state : players) {
 		state.animationStartTime = time;
 	}
+	players[0].isHunter = true;
 	return true;
 }
 
@@ -675,7 +687,7 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
 	float uniformScale = PLAYER_SCALING_FACTOR;
 	XMMATRIX scale = XMMatrixScaling(uniformScale, uniformScale, uniformScale);
-	XMMATRIX rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw);
+	XMMATRIX rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw + XM_PI);
 	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z);
 	return XMMatrixTranspose(scale * rotate * translate);
 }
@@ -697,6 +709,9 @@ bool Renderer::Render() {
 	}
 	if (!m_hunterRenderBuffers.initialized) {
 		m_hunterRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
+	if (!m_runnerRenderBuffers.initialized) {
+		m_runnerRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
 	}
 	if (!m_TimerUI.initialized) {
 		m_TimerUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
@@ -771,27 +786,52 @@ bool Renderer::Render() {
 	auto time = std::chrono::steady_clock::now();
 	// draw players
 	m_commandList->SetPipelineState(m_pipelineStateSkin.Get());
-	for (UINT8 i = 0; i < 1; ++i) {
+	for (UINT8 i = 0; i < 4; ++i) {
 		XMMATRIX modelMatrix = computeModelMatrix(players[i]);
 		XMMATRIX modelInverseTranspose = XMMatrixInverse(nullptr, XMMatrixTranspose(modelMatrix));
-		PerDrawConstants drawConstants = {
-			.viewProject              = viewProject,
-			.modelMatrix              = modelMatrix,
-			.modelInverseTranspose    = modelInverseTranspose,
-			.vpos_idx                 = m_hunterRenderBuffers.vertexPosition.descriptor.index,
-			.vshade_idx               = m_hunterRenderBuffers.vertexShading.descriptor.index ,
-			.material_ids_idx         = m_hunterRenderBuffers.materialID.descriptor.index,
-			.materials_idx            = m_hunterRenderBuffers.materials.descriptor.index,
-			.first_texture_idx        = m_hunterRenderBuffers.textures.ptr[0].descriptor.index,
-			.vbone_idx                = m_hunterRenderBuffers.vertexBoneIdx.descriptor.index,
-			.vweight_idx              = m_hunterRenderBuffers.vertexBoneWeight.descriptor.index,
-			.bone_transforms_idx      = m_hunterAnimations[IDLE].invBindTransform.descriptor.index,
-			.bone_adj_transforms_idx  = m_hunterAnimations[IDLE].invBindAdjTransform.descriptor.index,
-			.frame_number             = m_hunterAnimations[IDLE].getFrame(players[i].animationStartTime, time),
-			.num_bones                = m_hunterRenderBuffers.header->numBones,
-		};
-		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
-		m_commandList->DrawInstanced(3 * m_hunterRenderBuffers.vertexPosition.data.len, 1, 0, 0);
+		bool loop = players[i].loop;
+		if (players[i].isHunter) {
+			UINT8 animationIdx = players[i].hunterAnimation;
+			PerDrawConstants drawConstants = {
+				.viewProject              = viewProject,
+				.modelMatrix              = modelMatrix,
+				.modelInverseTranspose    = modelInverseTranspose,
+				.vpos_idx                 = m_hunterRenderBuffers.vertexPosition.descriptor.index,
+				.vshade_idx               = m_hunterRenderBuffers.vertexShading.descriptor.index ,
+				.material_ids_idx         = m_hunterRenderBuffers.materialID.descriptor.index,
+				.materials_idx            = m_hunterRenderBuffers.materials.descriptor.index,
+				.first_texture_idx        = m_hunterRenderBuffers.textures.ptr[0].descriptor.index,
+				.vbone_idx                = m_hunterRenderBuffers.vertexBoneIdx.descriptor.index,
+				.vweight_idx              = m_hunterRenderBuffers.vertexBoneWeight.descriptor.index,
+				.bone_transforms_idx      = m_hunterAnimations[animationIdx].invBindTransform.descriptor.index,
+				.bone_adj_transforms_idx  = m_hunterAnimations[animationIdx].invBindAdjTransform.descriptor.index,
+				.frame_number             = m_hunterAnimations[animationIdx].getFrame(players[i].animationStartTime, time, loop),
+				.num_bones                = m_hunterRenderBuffers.header->numBones,
+			};
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+			m_commandList->DrawInstanced(3 * m_hunterRenderBuffers.vertexPosition.data.len, 1, 0, 0);
+		}
+		else {
+			UINT8 animationIdx = players[i].runnerAnimation;
+			PerDrawConstants drawConstants = {
+				.viewProject              = viewProject,
+				.modelMatrix              = modelMatrix,
+				.modelInverseTranspose    = modelInverseTranspose,
+				.vpos_idx                 = m_runnerRenderBuffers.vertexPosition.descriptor.index,
+				.vshade_idx               = m_runnerRenderBuffers.vertexShading.descriptor.index ,
+				.material_ids_idx         = m_runnerRenderBuffers.materialID.descriptor.index,
+				.materials_idx            = m_runnerRenderBuffers.materials.descriptor.index,
+				.first_texture_idx        = m_runnerRenderBuffers.textures.ptr[0].descriptor.index,
+				.vbone_idx                = m_runnerRenderBuffers.vertexBoneIdx.descriptor.index,
+				.vweight_idx              = m_runnerRenderBuffers.vertexBoneWeight.descriptor.index,
+				.bone_transforms_idx      = m_runnerAnimations[animationIdx].invBindTransform.descriptor.index,
+				.bone_adj_transforms_idx  = m_runnerAnimations[animationIdx].invBindAdjTransform.descriptor.index,
+				.frame_number             = m_runnerAnimations[animationIdx].getFrame(players[i].animationStartTime, time, loop),
+				.num_bones                = m_runnerRenderBuffers.header->numBones,
+			};
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+			m_commandList->DrawInstanced(3 * m_runnerRenderBuffers.vertexPosition.data.len, 1, 0, 0);
+		}
 	}
 	
 	/*

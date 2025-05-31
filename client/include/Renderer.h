@@ -46,11 +46,14 @@ struct LookDir {
 };
 
 enum RunnerAnimation : UINT8 {
-	RUN,
+	RUNNER_ANIMATION_WALK,
+	RUNNER_ANIMATION_DODGE,
 	RUNNER_ANIMATION_COUNT
 };
 enum HunterAnimation : UINT8 {
-	IDLE,
+	HUNTER_ANIMATION_IDLE,
+	HUNTER_ANIMATION_CHASE,
+	HUNTER_ANIMATION_ATTACK,
 	HUNTER_ANIMATION_COUNT
 };
 struct PlayerRenderState {
@@ -62,6 +65,26 @@ struct PlayerRenderState {
 		RunnerAnimation runnerAnimation;
 		HunterAnimation hunterAnimation;
 	};
+	bool loop = true;
+
+	void loopAnimation(UINT8 animation) {
+		loop = true;
+		if (isHunter) {
+			hunterAnimation = (HunterAnimation)animation;
+		}
+		else {
+			runnerAnimation = (RunnerAnimation)animation;
+		}
+	}
+	void playAnimationToEnd(UINT8 animation) {
+		loop = false;
+		if (isHunter) {
+			hunterAnimation = (HunterAnimation)animation;
+		}
+		else {
+			runnerAnimation = (RunnerAnimation)animation;
+		}
+	}
 
 };
 struct CurrPlayerRenderState {
@@ -495,13 +518,19 @@ struct Animation {
 		return true;
 	}
 
-	uint32_t getFrame(std::chrono::time_point<std::chrono::steady_clock> start, std::chrono::time_point<std::chrono::steady_clock> current) {
+	uint32_t getFrame(std::chrono::time_point<std::chrono::steady_clock> start, std::chrono::time_point<std::chrono::steady_clock> current, bool loop) {
 		auto dt = current - start;
 		auto dt_seconds = std::chrono::duration_cast<std::chrono::duration<double>>(dt);
 		constexpr uint32_t FRAMES_PER_SECOND = 60;
 		uint32_t numFramesElapsed = (uint32_t)(dt_seconds.count() * FRAMES_PER_SECOND);
-		uint32_t frame = numFramesElapsed % header->numFrames;
-		return frame;
+		if (loop) {
+			uint32_t frame = numFramesElapsed % header->numFrames;
+			return frame;
+		}
+		else {
+			uint32_t frame = min(numFramesElapsed, header->numFrames - 1);
+			return frame;
+		}
 	}
 };
 

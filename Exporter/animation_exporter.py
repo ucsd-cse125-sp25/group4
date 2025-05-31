@@ -49,10 +49,9 @@ initial_frame = scene.frame_current
 initial_subframe = scene.frame_subframe
 
 for frame_idx, frame_time in enumerate(frame_times):
-    print(frame_time)
     frame = int(np.floor(frame_time))
     scene.frame_set(frame, subframe=frame_time-frame)
-    print(scene.frame_current)               
+    
     for bone_idx, pose_bone in enumerate(pose_bones):
         bone_to_armature    [frame_idx, bone_idx, :, :] = np.dot(np.asarray(pose_bone.matrix            ), inverse_bind[bone_idx])
         bone_to_armature_adj[frame_idx, bone_idx, :, :] = np.dot(np.asarray(pose_bone.matrix.adjugated()), inverse_bind[bone_idx])

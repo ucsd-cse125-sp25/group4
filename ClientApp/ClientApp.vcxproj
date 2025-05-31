@@ -90,6 +90,24 @@
     <CopyFileToFolders Include="..\Assets\Idle.janim">
       <FileType>Document</FileType>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\RestPose.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\Attack.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\Chase.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\Dodge.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\Walk.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\playerDOLLv3.jj">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
     <None Include="..\client\include\shaderShared.hlsli">
       <FileType>Document</FileType>
     </None>

@@ -174,6 +174,7 @@ if len(bpy.data.armatures) > 1:
 elif len(bpy.data.armatures) == 1:
     armature = bpy.data.armatures[0]
     bone_name_to_index = {bone.name : i for i, bone in enumerate(armature.bones)}
+    print(bone_name_to_index)
     num_bones = len(armature.bones)
             
 for obj in bpy.data.objects:
@@ -183,6 +184,11 @@ for obj in bpy.data.objects:
     print(f"processing object {obj.name}")
     # apply modifiers
     # from https://blenderartists.org/t/alternative-to-bpy-ops-object-convert-target-mesh-command/1177790/3
+    
+    for modifier in obj.modifiers:
+        if modifier.type == "ARMATURE":
+            modifier.show_viewport = False
+        
     dependencies_graph = bpy.context.evaluated_depsgraph_get()
     bmesh = obj.evaluated_get(dependencies_graph).data.copy()
     
@@ -254,7 +260,7 @@ for obj in bpy.data.objects:
         elif obj.find_armature() is not None:
             # map object vertex groups to bone indices
             vertex_group_names = [group.name for group in obj.vertex_groups]
-            vertex_group_to_bone = np.array([bone_name_to_index.get(vertex_group_name, 0) for vertex_group_name in vertex_group_names], dtype=np.int32)
+            vertex_group_to_bone = np.array([bone_name_to_index.get(vertex_group_name, 1000) for vertex_group_name in vertex_group_names], dtype=np.int32)
         
             for i, vertex in enumerate(bmesh.vertices):
 
@@ -272,13 +278,13 @@ for obj in bpy.data.objects:
 
                 # normalize vertex weights to add up to 1
                 vertex_weights /= np.sum(vertex_weights)
+                assert(.99 < np.sum(vertex_weights) and np.sum(vertex_weights) < 1.01)
 
                 # convert indices of vertex groups in object to indices of bones in armature
                 vertex_bone_indices = vertex_group_to_bone[vertex_groups]
 
                 
                 bone_indices[i, :num_written] = vertex_bone_indices
-                assert(all(vertex_bone_indices < len(bone_name_to_index)))
                 bone_weights[i, :num_written] = vertex_weights
         bone_indices = bone_indices[triangle_vert_indices]
         bone_weights = bone_weights[triangle_vert_indices]
@@ -346,3 +352,4 @@ print(f"{filename}.jj written successfully")
 # use this to write "scene.jj" into your working directory
 # & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv4.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
 # & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\monsterv2.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\playerDOLLv3.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
