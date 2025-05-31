@@ -375,12 +375,14 @@ void ServerGame::newGame()
 	round_id = 0;
 	tiebreaker = false;
 	playerPowerups.clear();
+	extraJumpPowerup.clear();
 	runner_points = 0;
 	hunter_points = 0;
 	for (int i = 0; i < num_players; i++) {
 		state->players[i].coins = PLAYER_INIT_COINS;
 		state->players[i].speed = PLAYER_INIT_SPEED;
 		state->players[i].isDead = false;
+		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
 	}
 }
 
