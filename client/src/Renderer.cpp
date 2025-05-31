@@ -834,24 +834,6 @@ bool Renderer::Render() {
 		}
 	}
 	
-	/*
-	// draw debug cubes
-	{
-		PerDrawConstants drawConstants = {
-			.viewProject           = viewProject,
-			.modelMatrix           = XMMatrixIdentity(),
-			.modelInverseTranspose = XMMatrixIdentity(),
-			.vpos_idx              = debugCubes.vertexBuffer.descriptor.index,
-			.vshade_idx            = m_scene.vertexShading.descriptor.index, // CHANGE LATER
-		};
-		m_commandList->SetPipelineState(m_pipelineStateDebug.Get()); // bind the debug cube vertex and fragment shaders
-		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
-		// index of transforms 
-	  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
-		m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, (UINT)debugCubes.transforms.size(), 0, 0);
-	}
-	*/
-
 	// draw Timer UI
 	if (gamePhase != GamePhase::START_MENU) {
 		PerDrawConstants dc = {
