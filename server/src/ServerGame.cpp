@@ -21,10 +21,10 @@ ServerGame::ServerGame(void) :
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
-			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false },
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false },
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false },
 		},
 		.timerFrac = 0.0f,
 	};
@@ -180,8 +180,8 @@ void ServerGame::receiveFromClients()
 			}
 			case PacketType::DODGE:
 			{
-				// hunters cannot dodge
-				if (state->players[id].isHunter || state->players[id].isDead) break;
+				// hunters and bear cannot dodge
+				if (state->players[id].isHunter || state->players[id].isDead || state->players[id].isBear) break;
 
 				bool offCooldown = (state->tick - lastDodgeTick[id]) >= dodgeCooldownTicks[id];
 				if (!offCooldown) break;                           // silently ignore spam
@@ -227,6 +227,40 @@ void ServerGame::receiveFromClients()
 
 				break;
 			}
+			case PacketType::BEAR:
+			{
+				// payload is empty
+				//BearPayload* bear = (BearPayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] BEAR_PACKET\n", id);
+
+				// drop if player doesn't have the powerup
+				if (!hasBear[id])
+					break;
+				
+				// check within range
+				if (state->players[id].x >= BEAR_POS.x - 0.3 &&
+					state->players[id].x <= BEAR_POS.x + 0.3 &&
+					state->players[id].y >= BEAR_POS.y - 0.3 &&
+					state->players[id].y <= BEAR_POS.y + 0.3)
+				{
+					// drop if anyone is bear
+					bool bearActive = false;
+					for (int i = 0; i < num_players; i++) {
+						bearActive = bearActive || state->players[i].isBear;
+					}
+					if (bearActive) break;
+					
+					state->players[id].isBear = true;
+					hasBear[id] = false;
+
+					bearTicks = state->tick + BEAR_TICKS;
+					state->players[id].z += 5.0f * PLAYER_SCALING_FACTOR; // bear is taller
+					printf("IT'S BEAR TIME!!!\n");
+				}
+
+
+				break;
+			}
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
 				break;
@@ -247,6 +281,12 @@ void ServerGame::startARound(int seconds) {
 		printf("Player %d Powerups: ", id);
 		for (auto p : powerups) {
 			printf("%s, ", PowerupInfo[p].name.c_str());
+			if (p == Powerup::R_BEAR)
+			{
+				// reset bear status for the next round
+				hasBear[id] = true;
+			}
+
 		}
 		printf("\n");
 	}
@@ -276,6 +316,7 @@ void ServerGame::startARound(int seconds) {
 		}
 
 		player.isDead = false;
+		player.isBear = false;
 		// print player coin
 		printf("[round %d] Player %d coins: %d\n", round_id, id, player.coins);
 	}
@@ -382,6 +423,7 @@ void ServerGame::newGame()
 		state->players[i].coins = PLAYER_INIT_COINS;
 		state->players[i].speed = PLAYER_INIT_SPEED;
 		state->players[i].isDead = false;
+		state->players[i].isBear = false;
 		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
 	}
 }
@@ -566,6 +608,12 @@ void ServerGame::applyMovements() {
 		auto& player = state->players[id];
 		// printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
 
+		// check if bear power runs out
+		if (player.isBear && bearTicks <= state->tick)
+		{
+			player.isBear = false;
+		}
+
 		float dx = 0, dy = 0;
 		if (latestMovement.count(id)) {
 			auto& mv = latestMovement[id];
@@ -587,6 +635,12 @@ void ServerGame::applyMovements() {
 			dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * player.speed;
 
 			dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * player.speed;
+
+			if (player.isBear)
+			{
+				dx *= BEAR_SPEED_MULTIPLIER;
+				dy *= BEAR_SPEED_MULTIPLIER;
+			}
 		}
 
 		/* physics logic embedded */
@@ -595,6 +649,9 @@ void ServerGame::applyMovements() {
 
 		if (latestMovement.count(id) && latestMovement[id].jump && wasGrounded == true) {
 			player.zVelocity = JUMP_VELOCITY + extraJumpPowerup[id];
+			if (player.isBear) {
+				player.zVelocity += BEAR_JUMP_BOOST;
+			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}
 		// gravity
@@ -641,6 +698,7 @@ void ServerGame::applyAttacks()
 		{
 			if (victimId == attackerId) continue;	// skip self
 			if (state->players[victimId].isDead) continue;	// skip dead players
+			if (state->players[victimId].isBear) continue;	// skip bear players
 			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
 
 			if (isHit(atk, state->players[victimId]))
@@ -744,6 +802,9 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 
 	// Bounding box for the current client
 	float playerRadius = 1.0f * PLAYER_SCALING_FACTOR;
+	if (state->players[clientId].isBear) {
+		playerRadius = BEAR_HITBOX;
+	}
 
 	// Bounding box before player moves
 	BoundingBox staticPlayerBox = {

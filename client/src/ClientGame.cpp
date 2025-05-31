@@ -138,6 +138,14 @@ void ClientGame::sendDodgePacket()
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
 
+void ClientGame::sendBearPacket()
+{
+	BearPayload bp{ };
+	char buf[HDR_SIZE + sizeof bp];
+	NetworkServices::buildPacket(PacketType::BEAR, bp, buf);
+	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
+}
+
 void ClientGame::update() {
 
 	// check for server updates and process them accordingly
@@ -339,12 +347,27 @@ void ClientGame::processAttackInput()
 void ClientGame::processDodgeInput()
 {
 	if (renderer.currPlayer.playerId == 0) return;   // hunter cannot dash
+	if (gameState->players[id].isBear) return;		 // bear cannot dash
 
 	static bool rWasDown = false;
 	bool rNowDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
 
 	if (rNowDown && !rWasDown)      // rising edge
 		sendDodgePacket();
+
+	rWasDown = rNowDown;
+}
+
+void ClientGame::processBearInput()
+{
+	if (renderer.currPlayer.playerId == 0) return;   // hunter cannot bear
+	if (gameState->players[id].isBear) return;		 // bear cannot bear
+
+	static bool rWasDown = false;
+	bool rNowDown = (GetAsyncKeyState('E') & 0x8000) != 0;
+
+	if (rNowDown && !rWasDown)      // rising edge
+		sendBearPacket();
 
 	rWasDown = rNowDown;
 }
@@ -490,6 +513,7 @@ void ClientGame::handleInput()
 		processMovementInput();
 		processAttackInput();
 		processDodgeInput();
+		processBearInput();
 		break;
 	}
 	default:

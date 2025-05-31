@@ -28,6 +28,7 @@ public:
 	void handleInput();
 	void processAttackInput();
 	void processDodgeInput();
+	void processBearInput();
 	bool processCameraInput();
 	bool processMovementInput();
 	void processShopInputs();
@@ -41,6 +42,7 @@ public:
 	void sendCameraPacket(float, float);
 	void sendAttackPacket(float origin[3], float yaw, float pitch);
 	void sendDodgePacket();
+	void sendBearPacket();
 	void sendReadyStatusPacket(uint8_t selection);
 	void update();
 

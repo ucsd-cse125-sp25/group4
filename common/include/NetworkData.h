@@ -34,13 +34,13 @@ enum class PacketType : uint32_t {
 	CAMERA = 5,
 	APP_PHASE = 6,
 	PLAYER_READY = 7,
-	// add more here
 	ATTACK = 8,
 	HIT = 9,
 	DODGE = 10,
 	DODGE_OK = 11,
-	SHOP_INIT,			// server sends to each client the options
-	SHOP_UPDATE			// client sends what was purchased
+	SHOP_INIT,				// server sends to each client the options
+	SHOP_UPDATE,			// client sends what was purchased
+	BEAR
 };
 
 // when adding powerups
@@ -59,6 +59,7 @@ enum class Powerup : uint8_t {
 	R_INCREASE_SPEED,
 	R_INCREASE_JUMP,
 	R_DECREASE_DODGE_CD,
+	R_BEAR,
 	// ...
 	NUM_RUNNER_POWERUPS,
 };
@@ -79,6 +80,7 @@ static std::map<Powerup, PowerupMetadata> PowerupInfo{
 	{ Powerup::R_INCREASE_SPEED,	{3, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
 	{ Powerup::R_INCREASE_JUMP,		{4, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
 	{ Powerup::R_DECREASE_DODGE_CD,	{5, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
+	//{ Powerup::R_BEAR,				{6, 5, "R_NOCTURNAL",	L"textures\\cards\\r_nocturnal.dds"} },
 };
 
 // The packet header preceeds every packet
@@ -121,6 +123,7 @@ struct PlayerState {
 	bool isHunter;
 	bool isDead;
 	bool isGrounded; // is on the ground
+	bool isBear;
 };
 
 struct EntityState { // this is for traps or placed objects
@@ -201,6 +204,8 @@ struct ShopOptionsPayload {
 	uint8_t runner_score;
 	uint8_t hunter_score;
 };
+
+struct BearPayload {};
 
 struct Packet {
 	unsigned int packet_type;
