@@ -19,12 +19,12 @@ ServerGame::ServerGame(void) :
 
 	state = new GameState{
 		.tick = 0,
-		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
+		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded, jumpCounts, availableJumps
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
-			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false, 1, 1},
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, 1, 1},
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, 1, 1},
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, 1, 1},
 		},
 		.timerFrac = 0.0f,
 	};
@@ -546,6 +546,10 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 	case Powerup::H_INCREASE_VISION:
 		printf("[POWERUP] Player %d increase vision (place holder)", id);
 		break;
+	case Powerup::H_MULTI_JUMPS:
+		state->players[id].jumpCounts++;
+		printf("[POWERUP] Player %d multi jump enabled, jump counts: %d\n", id, state->players[id].jumpCounts);
+		break;
 	case Powerup::R_INCREASE_SPEED:
 		state->players[id].speed *= 1.5f;
 		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
@@ -554,11 +558,16 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		extraJumpPowerup[id] += JUMP_POWERUP; // increase jump height
 		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
 		break;
+	case Powerup::R_MULTI_JUMPS:
+		state->players[id].jumpCounts++;
+		printf("[POWERUP] Player %d multi jump enabled, jump counts: %d\n", id, state->players[id].jumpCounts);
+		break;
 	case Powerup::R_DECREASE_DODGE_CD:
 		dodgeCooldownTicks[id] *= REDUCE_DODGE_CD_MULTIPLIER;
 		printf("[POWERUP] Player %d dodge cooldown reduced to %.2f\n", id, dodgeCooldownTicks[id]);
 		break;
 	default:
+		printf("[POWERUP] Player %d unknown powerup selection %d\n", id, selection);
 		break;
 	}
 }
@@ -596,11 +605,18 @@ void ServerGame::applyMovements() {
 		}
 
 		/* physics logic embedded */
-		bool wasGrounded = player.isGrounded;
+		/*bool wasGrounded = player.isGrounded;
 		player.isGrounded = false;
 
 		if (latestMovement.count(id) && latestMovement[id].jump && wasGrounded == true) {
 			player.zVelocity = JUMP_VELOCITY + extraJumpPowerup[id];
+			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
+		}*/
+
+		if (latestMovement.count(id) && latestMovement[id].jump && player.availableJumps > 0 && player.zVelocity <= 0) {
+			printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
+			player.zVelocity += JUMP_VELOCITY + extraJumpPowerup[id];
+			player.availableJumps--;
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}
 		// gravity
@@ -851,6 +867,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 					// deltaZ				= surfaceZ + playerRadius - currentZ
 					delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
 					state->players[clientId].isGrounded = true;
+					state->players[clientId].availableJumps = state->players[clientId].jumpCounts; // reset jumps on ground contact
 					state->players[clientId].zVelocity = 0;
 					/*
 					printf("BOXID=%llu, box.minZ=%f, box.maxZ=%f\n", b, boxes2d[b].minZ, boxes2d[b].maxZ);

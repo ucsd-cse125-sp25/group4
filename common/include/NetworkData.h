@@ -52,6 +52,7 @@ enum class Powerup : uint8_t {
 	H_INCREASE_SPEED,
 	H_INCREASE_JUMP,
 	H_INCREASE_VISION,
+	H_MULTI_JUMPS,
 	// ...
 	NUM_HUNTER_POWERUPS,
 
@@ -59,6 +60,7 @@ enum class Powerup : uint8_t {
 	R_INCREASE_SPEED,
 	R_INCREASE_JUMP,
 	R_DECREASE_DODGE_CD,
+	R_MULTI_JUMPS,
 	// ...
 	NUM_RUNNER_POWERUPS,
 };
@@ -76,9 +78,11 @@ static std::map<Powerup, PowerupMetadata> PowerupInfo{
 	{ Powerup::H_INCREASE_SPEED,	{0, 2, "H_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
 	{ Powerup::H_INCREASE_JUMP,		{1, 1, "H_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
 	{ Powerup::H_INCREASE_VISION,	{2, 3, "H_INSTINCT",	L"textures\\cards\\h_instinct.dds"} },
-	{ Powerup::R_INCREASE_SPEED,	{3, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
-	{ Powerup::R_INCREASE_JUMP,		{4, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
-	{ Powerup::R_DECREASE_DODGE_CD,	{5, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
+	{ Powerup::H_MULTI_JUMPS,	    {3, 3, "H_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },
+	{ Powerup::R_INCREASE_SPEED,	{4, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
+	{ Powerup::R_INCREASE_JUMP,		{5, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
+	{ Powerup::R_DECREASE_DODGE_CD,	{6, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
+	{ Powerup::R_MULTI_JUMPS,	    {7, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },
 };
 
 // The packet header preceeds every packet
@@ -121,6 +125,9 @@ struct PlayerState {
 	bool isHunter;
 	bool isDead;
 	bool isGrounded; // is on the ground
+	int jumpCounts; // for determining how many jumps can the player do in total
+	int availableJumps; // how many jumps are left for the player
+
 };
 
 struct EntityState { // this is for traps or placed objects
