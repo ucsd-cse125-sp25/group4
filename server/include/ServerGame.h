@@ -23,6 +23,7 @@ public:
 	void sendGameStateUpdates();
 	void sendAppPhaseUpdates();
 	void sendShopOptions(ShopOptionsPayload *data, int dest);
+	void sendPlayerPowerups();
 
 	void applyMovements();
 	void applyCamera();
@@ -130,6 +131,19 @@ private:
         // Initialize the static member variable
 		return dot >= cosMax;                                 // within cone
 	}
+
+	static constexpr uint32_t windupTicks = 32;                    // 0.5 s
+	static constexpr uint32_t cdTicks = TICKS_PER_SEC * 2;     // 2 s
+	static constexpr uint32_t slowTicks = 32;                    // 0.5 s
+	static constexpr float hunterSlowFactor = 0.2f;
+
+	uint64_t hunterStartSlowdown = 0;
+	uint64_t hunterEndSlowdown = 0;   // wind-up + cool-down window ends at tick
+
+	struct DelayedAttack { AttackPayload attack; uint64_t hitTick; };
+	std::optional<DelayedAttack> pendingSwing;
+
+
 
 	// Dodge
 	static constexpr uint8_t DODGE_COOLDOWN_DEFAULT_TICKS = TICKS_PER_SEC * 2;   // 2 s  (change to 60 if desired)

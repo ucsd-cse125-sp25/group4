@@ -67,6 +67,15 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	appState = new AppState();
 	appState->gamePhase = GamePhase::START_MENU;
 	appState->gameState = gameState;
+
+	uint8_t initPowerups[4][20];
+	// debugging, ignore
+	//memset(initPowerups, 1, 20);
+	//memset((&initPowerups[0][0] + 20), 2, 20);
+	//memset((&initPowerups[0][0] + 40), 3, 20);
+	//memset((&initPowerups[0][0] + 60), 103, 20);
+	memset(initPowerups, 255, sizeof(initPowerups));
+	renderer.updatePlayerPowerups(&initPowerups[0][0]);
 }
 
 void ClientGame::sendDebugPacket(const char* message) {
@@ -168,8 +177,8 @@ void ClientGame::update() {
 				//renderer.players[i].isDead = state->players[i].isDead;      // NEW
 				//renderer.players[i].isHunter = state->players[i].isHunter;  // NEW
 
-				// update the rotation from other players only (only for game phase)
-				if (i == renderer.currPlayer.playerId && appState->gamePhase == GamePhase::GAME_PHASE) continue;
+				// update the rotation from other players only (only if not spectator, otherwise gotta update everything) (only for game phase)
+				if (id != 4 && i == renderer.currPlayer.playerId && appState->gamePhase == GamePhase::GAME_PHASE) continue;
 				renderer.players[i].lookDir.pitch = gameState->players[i].pitch;
 				renderer.players[i].lookDir.yaw = gameState->players[i].yaw;
 			}
@@ -191,7 +200,13 @@ void ClientGame::update() {
 			IDPayload* idPayload = (IDPayload*)(network_data + HDR_SIZE);
 
 			id = idPayload->id;
-			renderer.currPlayer.playerId = id;
+			if (id != 4) {
+				renderer.currPlayer.playerId = id;
+			}
+			else {
+				renderer.currPlayer.playerId = 0;
+			}
+
 			char message[128];
 
 			strcpy_s(message, std::to_string(id).c_str());
@@ -249,6 +264,13 @@ void ClientGame::update() {
 
 			break;
 		}
+		case PacketType::PLAYER_POWERUPS:
+		{
+			PlayerPowerupPayload* pwPayload = (PlayerPowerupPayload*)(network_data + HDR_SIZE);
+
+			renderer.updatePlayerPowerups(&pwPayload->powerupInfo[0][0]);
+			break;
+		}
 		default:
 			// printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
 			break;
@@ -259,7 +281,12 @@ void ClientGame::update() {
 	// ---------------------------------------------------------------	
 	// Client Input Handling 
 
-	handleInput();
+	if (id != -1 && id != 4) {
+		handleInput();
+	}
+	else if (id == 4) {
+		handleSpectatorInput();
+	}
 
 	// ---------------------------------------------------------------	
 	// Update GPU data and render 
@@ -310,6 +337,98 @@ bool ClientGame::processCameraInput()
 	return true;
 }
 
+bool ClientGame::processSpectatorCameraInput()
+{
+	POINT  p;  GetCursorPos(&p);
+	RECT   rc; GetClientRect(hwnd, &rc);
+	POINT centre{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
+	ClientToScreen(hwnd, &centre);
+
+	int dx = p.x - centre.x;
+	int dy = p.y - centre.y;
+	if (!dx && !dy) return false;
+
+	yaw += -dx * MOUSE_SENS;
+	pitch += -dy * MOUSE_SENS; // invert y makes more sense
+	pitch = std::clamp(pitch,
+		XMConvertToRadians(-89.0f),
+		XMConvertToRadians(+89.0f));
+
+	SetCursorPos(centre.x, centre.y);
+	// spectator does not update player model orientation, server updates does.
+	return true;
+}
+
+void ClientGame::processSpectatorKeyboardInput()
+{
+	bool detachKeyDown = (GetAsyncKeyState('5') & 0x8000) != 0;
+	if (detachKeyDown && !renderer.detached) {
+		using namespace DirectX;
+		XMVECTOR playerPos = XMLoadFloat3(&renderer.players[renderer.currPlayer.playerId].pos);
+		XMVECTOR model_fwd = XMVectorSet(0, 1, 0, 0);
+		XMVECTOR rotation = XMVector3TransformNormal(model_fwd, XMMatrixRotationX(pitch) * XMMatrixRotationZ(yaw));
+		rotation = XMVector3Normalize(rotation);
+		// compute camPos exaclty like computeViewProject
+		static constexpr float FREECAM_DIST = Renderer::CAMERA_DIST;
+		static constexpr float FREECAM_UP = Renderer::CAMERA_UP;
+		XMVECTOR camPos = XMVectorSubtract(playerPos, XMVectorScale(rotation, FREECAM_DIST));
+		camPos = XMVectorAdd(camPos, XMVectorSet(0, 0, FREECAM_UP, 0));
+
+		XMStoreFloat3(&renderer.freecamPos, camPos);
+		renderer.detached = true;
+	}
+
+	if (GetAsyncKeyState('1') & 0x8000) {
+		renderer.currPlayer.playerId = 0;
+		renderer.detached = false;
+	}
+	if (GetAsyncKeyState('2') & 0x8000) {
+		renderer.currPlayer.playerId = 1;
+		renderer.detached = false;
+	}
+	if (GetAsyncKeyState('3') & 0x8000) {
+		renderer.currPlayer.playerId = 2;
+		renderer.detached = false;
+	}
+	if (GetAsyncKeyState('4') & 0x8000) {
+		renderer.currPlayer.playerId = 3;
+		renderer.detached = false;
+	}
+
+	if (renderer.detached) {
+		using namespace DirectX;
+		XMVECTOR model_fwd = XMVectorSet(0, 1, 0, 0);
+		XMVECTOR forward = XMVector3TransformNormal(model_fwd, XMMatrixRotationX(pitch) * XMMatrixRotationZ(yaw));
+		forward = XMVector3Normalize(forward);
+
+		XMVECTOR model_up = XMVectorSet(0, 0, 1, 0);
+		XMVECTOR right = XMVector3Normalize(XMVector3Cross(forward, model_up));
+
+		float moveSpeed = 0.025;
+
+		if (GetAsyncKeyState(VK_LSHIFT) & 0x8000) {
+			moveSpeed /= 2;
+		}
+
+		XMVECTOR pos = XMLoadFloat3(&renderer.freecamPos);
+
+		if (GetAsyncKeyState('W') & 0x8000) {
+			pos = XMVectorAdd(pos, XMVectorScale(forward, moveSpeed));
+		}
+		if (GetAsyncKeyState('S') & 0x8000) {
+			pos = XMVectorSubtract(pos, XMVectorScale(forward, moveSpeed));
+		}
+		if (GetAsyncKeyState('A') & 0x8000) {
+			pos = XMVectorSubtract(pos, XMVectorScale(right, moveSpeed));
+		}
+		if (GetAsyncKeyState('D') & 0x8000) {
+			pos = XMVectorAdd(pos, XMVectorScale(right, moveSpeed));
+		}
+
+		XMStoreFloat3(&renderer.freecamPos, pos);
+	}
+}
+
 bool ClientGame::processMovementInput()
 {
 	float direction[3] = { 0, 0, 0 };
@@ -329,7 +448,6 @@ bool ClientGame::processMovementInput()
 void ClientGame::processAttackInput()
 {
 	if (renderer.currPlayer.playerId != 0) return;   // only hunter
-	static bool wasDown = false;
 	bool  isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
 
 	if (isDown && !wasDown)            // rising edge
@@ -475,6 +593,14 @@ void ClientGame::storePowerups(int selection) {
 void ClientGame::handleInput()
 {
 	if (!isWindowFocused()) return;
+	
+	bool tabDown = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
+	if (tabDown && !renderer.activeScoreboard) {
+		renderer.activeScoreboard = true;
+	}
+	else if (!tabDown && renderer.activeScoreboard) {
+		renderer.activeScoreboard = false;
+	}
 
 	switch (appState->gamePhase)
 	{
@@ -523,6 +649,48 @@ void ClientGame::handleInput()
 	}
 }
 
+void ClientGame::handleSpectatorInput()
+{
+	if (!isWindowFocused()) return;
+
+	bool tabDown = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
+	if (tabDown && !renderer.activeScoreboard) {
+		renderer.activeScoreboard = true;
+	}
+	else if (!tabDown && renderer.activeScoreboard) {
+		renderer.activeScoreboard = false;
+	}
+
+	switch (appState->gamePhase)
+	{
+	case GamePhase::START_MENU:
+	case GamePhase::GAME_END:
+	{
+		// TODO: spectator logic should be same (focus on player) for all game phase
+		// except shop, shop UI should be special for spectator
+		yaw = startYaw;
+		pitch = startPitch;
+		break;
+	}
+	case GamePhase::SHOP_PHASE:
+	{
+		//processShopInputs();
+		break;
+	}
+	case GamePhase::GAME_PHASE:
+	{
+
+		// camera is always allowed (even dead players can spectate)
+		processSpectatorKeyboardInput();
+		processSpectatorCameraInput();
+		break;
+	}
+	default:
+	{
+		break;
+	}
+	}
+}
 
 inline ClientGame *GetState(HWND window_handle) {
 	LONG_PTR ptr = GetWindowLongPtr(window_handle, GWLP_USERDATA);

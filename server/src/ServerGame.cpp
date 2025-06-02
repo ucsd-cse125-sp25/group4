@@ -19,12 +19,12 @@ ServerGame::ServerGame(void) :
 
 	state = new GameState{
 		.tick = 0,
-		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
+		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded, jumpCounts, availableJumps
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false },
-			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false },
-			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false, false, 1, 1 },
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
 		},
 		.timerFrac = 0.0f,
 	};
@@ -131,15 +131,19 @@ void ServerGame::receiveFromClients()
 
 				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
 
-				state_mu.lock();
-				phaseStatus[id] = false;
-				state_mu.unlock();
-
-				state->players[id].x = playerSpawns[id].x;
-				state->players[id].y = playerSpawns[id].y;
-				state->players[id].z = playerSpawns[id].z;
-				state->players[id].yaw = startYaw;
-				state->players[id].pitch = startPitch;
+				if (id != 4) {
+					state_mu.lock();
+					phaseStatus[id] = false;
+					state_mu.unlock();
+					state->players[id].x = playerSpawns[id].x;
+					state->players[id].y = playerSpawns[id].y;
+					state->players[id].z = playerSpawns[id].z;
+					state->players[id].yaw = startYaw;
+					state->players[id].pitch = startPitch;
+				}
+				else {
+					printf("[CLIENT %d] SPECTATOR INIT\n", id);
+				}
 
 				sendGameStateUpdates();
 
@@ -172,10 +176,16 @@ void ServerGame::receiveFromClients()
 			}
 			case PacketType::ATTACK:
 			{
-				AttackPayload* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
-				latestAttacks[id] = *atk;      // overwrite if multiple swings this tick
-				printf("[CLIENT %d] ATTACK at %.1f, %.1f, %.1f  yaw=%.2f  pitch=%.2f\n",
-					id, atk->originX, atk->originY, atk->originZ, atk->yaw, atk->pitch);
+				if (id != 0) break;                               // not the hunter
+				if (state->tick < hunterEndSlowdown) break;         // still in pipeline
+
+				auto* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
+				pendingSwing = DelayedAttack{ *atk, state->tick + windupTicks };
+				hunterStartSlowdown = state->tick + windupTicks; // start slowing down after windup
+				hunterEndSlowdown = hunterStartSlowdown + cdTicks;
+
+				printf("[HUNTER] swing queued (hit @ %llu, busy until %llu)\n",
+					pendingSwing->hitTick, hunterEndSlowdown);
 				break;
 			}
 			case PacketType::DODGE:
@@ -277,6 +287,7 @@ void ServerGame::receiveFromClients()
 // int seconds: length of round
 void ServerGame::startARound(int seconds) {
 	round_id++;
+	/*
 	for (auto [id,powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
 		for (auto p : powerups) {
@@ -290,6 +301,8 @@ void ServerGame::startARound(int seconds) {
 		}
 		printf("\n");
 	}
+	*/
+	sendPlayerPowerups();
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
 
@@ -582,6 +595,10 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 	case Powerup::H_INCREASE_VISION:
 		printf("[POWERUP] Player %d increase vision (place holder)", id);
 		break;
+	case Powerup::H_MULTI_JUMPS:
+		state->players[id].jumpCounts++;
+		printf("[POWERUP] Player %d multi jump enabled, jump counts: %d\n", id, state->players[id].jumpCounts);
+		break;
 	case Powerup::R_INCREASE_SPEED:
 		state->players[id].speed *= 1.5f;
 		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
@@ -590,11 +607,16 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		extraJumpPowerup[id] += JUMP_POWERUP; // increase jump height
 		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
 		break;
+	case Powerup::R_MULTI_JUMPS:
+		state->players[id].jumpCounts++;
+		printf("[POWERUP] Player %d multi jump enabled, jump counts: %d\n", id, state->players[id].jumpCounts);
+		break;
 	case Powerup::R_DECREASE_DODGE_CD:
 		dodgeCooldownTicks[id] *= REDUCE_DODGE_CD_MULTIPLIER;
 		printf("[POWERUP] Player %d dodge cooldown reduced to %.2f\n", id, dodgeCooldownTicks[id]);
 		break;
 	default:
+		printf("[POWERUP] Player %d unknown powerup selection %d\n", id, selection);
 		break;
 	}
 }
@@ -644,7 +666,7 @@ void ServerGame::applyMovements() {
 		}
 
 		/* physics logic embedded */
-		bool wasGrounded = player.isGrounded;
+		/*bool wasGrounded = player.isGrounded;
 		player.isGrounded = false;
 
 		if (latestMovement.count(id) && latestMovement[id].jump && wasGrounded == true) {
@@ -653,12 +675,26 @@ void ServerGame::applyMovements() {
 				player.zVelocity += BEAR_JUMP_BOOST;
 			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
+		}*/
+
+		if (latestMovement.count(id) && latestMovement[id].jump && player.availableJumps > 0 && player.zVelocity <= 0) {
+			printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
+			player.zVelocity += JUMP_VELOCITY + extraJumpPowerup[id];
+			player.availableJumps--;
+			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}
 		// gravity
 		player.zVelocity -= GRAVITY;
 		if (player.zVelocity < TERMINAL_VELOCITY)
 			player.zVelocity = TERMINAL_VELOCITY;
 
+		// apply speed modifiers here:
+		// hunter slow debuff
+		if (player.isHunter && state->tick >= hunterStartSlowdown && state->tick < hunterEndSlowdown) {
+			dx *= hunterSlowFactor;
+			dy *= hunterSlowFactor;
+			printf("[HUNTER] hunter %d is now slowed down\n", id);
+		}
 
 		updateClientPositionWithCollision(id, dx, dy, player.zVelocity);
 	}
@@ -692,46 +728,56 @@ void ServerGame::applyPhysics() {
 
 void ServerGame::applyAttacks()
 {
-	for (auto& [attackerId, atk] : latestAttacks)
+	/* ---------- resolve hunter's queued swing ------------------------- */
+	if (pendingSwing && state->tick >= pendingSwing->hitTick)
 	{
-		for (unsigned victimId = 0; victimId < 4; ++victimId)
+		printf("[HUNTER] resolving atk\n");
+		// update the pending swing to the latest received movements
+		pendingSwing->attack.originX = state->players[0].x;
+		pendingSwing->attack.originY = state->players[0].y;
+		pendingSwing->attack.originZ = state->players[0].z;
+		pendingSwing->attack.pitch = state->players[0].pitch;
+		pendingSwing->attack.yaw = state->players[0].yaw;
+		// leave range unchanged
+
+		for (unsigned victimId = 1; victimId < 4; ++victimId)      // only survivors
 		{
 			if (victimId == attackerId) continue;	// skip self
 			if (state->players[victimId].isDead) continue;	// skip dead players
 			if (state->players[victimId].isBear || hunterBearStunTicks > state->tick) continue;	// skip bear players or while stunned
 			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
 
-			if (isHit(atk, state->players[victimId]))
+			if (isHit(pendingSwing->attack, state->players[victimId]))
 			{
-				printf("[HIT] attacker %u hits victim %u (tick %llu)\n",
-					attackerId, victimId, state->tick);
-
-				// mark victim as dead
 				state->players[victimId].isDead = true;
-				printf("[HIT] victim %u is dead\n", victimId);
 
-				HitPayload hp{ attackerId, victimId };
+				/* notify victim */
+				HitPayload hp{ 0u, victimId };
 				char buf[HDR_SIZE + sizeof hp];
 				NetworkServices::buildPacket(PacketType::HIT, hp, buf);
 				network->sendToClient(victimId, buf, sizeof buf);
 
+				printf("[HIT] hunter hits runner %u  (tick %llu)\n", victimId, state->tick);
+				break;                                           // one hit per swing
 			}
 		}
+		pendingSwing.reset();   // swing consumed
+
+		//state->players[0].speed *= hunterSlowFactor; // slow down hunter after swing
 	}
-	if (latestAttacks.empty()) return; // no attacks this tick
-	// check if everyone is dead
+
+	/* ---------- win-condition check ------------------------- */
 	bool allDead = true;
-	for (unsigned int id = 0; id < num_players; ++id) {
-		if (!state->players[id].isDead && !state->players[id].isHunter) {
-			allDead = false;
-			break;
+	for (unsigned id = 0; id < num_players; ++id)
+		if (!state->players[id].isDead && !state->players[id].isHunter) { 
+			allDead = false; 
+			break; 
 		}
+
+	if (allDead) { 
+		printf("[GAME] all survivors dead\n"); 
+		timer->cancelTimer(); 
 	}
-	if (allDead) {
-		printf("[GAME PHASE] All players are dead, cancelling the timer\n");
-		timer->cancelTimer(); // cancel the timer
-	}
-	latestAttacks.clear();
 }
 
 void ServerGame::applyDodge()
@@ -767,6 +813,27 @@ void ServerGame::sendGameStateUpdates() {
 	NetworkServices::buildPacket<GameState>(PacketType::GAME_STATE, *state, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+}
+
+void ServerGame::sendPlayerPowerups() {
+
+	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
+	PlayerPowerupPayload data;
+	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
+	for (auto [id, powerups] : playerPowerups) {
+		printf("Player %d Powerups: ", id);
+		int idx = 0;
+		for (auto p : powerups) {
+			if (idx >= 20) break;
+			printf("%s, ", PowerupInfo[p].name.c_str());
+			data.powerupInfo[id][idx] = (uint8_t) p;
+			idx++;
+		}
+		printf("\n");
+	}
+	NetworkServices::buildPacket<PlayerPowerupPayload>(PacketType::PLAYER_POWERUPS, data, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(PlayerPowerupPayload));
 }
 
 void ServerGame::sendAppPhaseUpdates() {
@@ -897,6 +964,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 					// deltaZ				= surfaceZ + playerRadius - currentZ
 					delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
 					state->players[clientId].isGrounded = true;
+					state->players[clientId].availableJumps = state->players[clientId].jumpCounts; // reset jumps on ground contact
 					state->players[clientId].zVelocity = 0;
 					/*
 					printf("BOXID=%llu, box.minZ=%f, box.maxZ=%f\n", b, boxes2d[b].minZ, boxes2d[b].maxZ);
