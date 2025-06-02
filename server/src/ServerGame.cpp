@@ -287,21 +287,6 @@ void ServerGame::receiveFromClients()
 // int seconds: length of round
 void ServerGame::startARound(int seconds) {
 	round_id++;
-	/*
-	for (auto [id,powerups] : playerPowerups) {
-		printf("Player %d Powerups: ", id);
-		for (auto p : powerups) {
-			printf("%s, ", PowerupInfo[p].name.c_str());
-			if (p == Powerup::R_BEAR)
-			{
-				// reset bear status for the next round
-				hasBear[id] = true;
-			}
-
-		}
-		printf("\n");
-	}
-	*/
 	sendPlayerPowerups();
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
@@ -742,7 +727,7 @@ void ServerGame::applyAttacks()
 
 		for (unsigned victimId = 1; victimId < 4; ++victimId)      // only survivors
 		{
-			if (victimId == attackerId) continue;	// skip self
+			// if (victimId == attackerId) continue;	// skip self
 			if (state->players[victimId].isDead) continue;	// skip dead players
 			if (state->players[victimId].isBear || hunterBearStunTicks > state->tick) continue;	// skip bear players or while stunned
 			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
@@ -825,6 +810,11 @@ void ServerGame::sendPlayerPowerups() {
 		int idx = 0;
 		for (auto p : powerups) {
 			if (idx >= 20) break;
+			if (p == Powerup::R_BEAR)
+			{
+				// reset bear status for the next round
+				hasBear[id] = true;
+			}
 			printf("%s, ", PowerupInfo[p].name.c_str());
 			data.powerupInfo[id][idx] = (uint8_t) p;
 			idx++;
