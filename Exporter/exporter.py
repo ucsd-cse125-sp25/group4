@@ -296,18 +296,24 @@ for obj in bpy.data.objects:
         bone_indices = bone_indices[triangle_vert_indices]
         bone_weights = bone_weights[triangle_vert_indices]
     else:
-        vert_lightmap_texcoord = np.zeros((len(bmesh.vertices), UV_FLOATS_PER_VERT), dtype = np.float32)
-        
+        uv_layer = bmesh.uv_layers["lightmap"].uv 
+        loop_uvs = np.zeros((len(uv_layer), UV_FLOATS_PER_VERT), dtype = np.float32) # (num_bmesh_loops * 2)
+        uv_layer.foreach_get("vector", loop_uvs.ravel())
+        lightmap_uv = loop_uvs[loop_indices]
+        lightmap_uv = lightmap_uv.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT)
+        # DirectX texture coordinates have a inverted u/y axis compared to Blender
+        lightmap_uv[:, :, 1] = 1 - lightmap_uv[:, :, 1]
         
             
     
     new_mesh = Mesh(
-                       num_tris            = len(bmesh.loop_triangles),
-                       vert_positions      = verts,
-                       vert_shade          = normal_uv_interleaved,
-                       material_ids        = material_ids,
-                       vert_bone_indices   = bone_indices,
-                       vert_bone_weights   = bone_weights,
+                       num_tris               = len(bmesh.loop_triangles),
+                       vert_positions         = verts,
+                       vert_shade             = normal_uv_interleaved,
+                       material_ids           = material_ids,
+                       vert_bone_indices      = bone_indices,
+                       vert_bone_weights      = bone_weights,
+                       vert_lightmap_texcoord = lightmap_uv,
     )
     consolidated_mesh = new_mesh.merge(consolidated_mesh)
     assert(consolidated_mesh is not None)
@@ -357,9 +363,13 @@ with open(f"{filename}.jj", 'wb') as f:
         # write vertex groups
         f.write(pack_bytes("I", consolidated_mesh.vert_bone_indices))
         f.write(pack_bytes("f", consolidated_mesh.vert_bone_weights))
+    else:
+        # write lightmap uvs
+        print(consolidated_mesh.vert_lightmap_texcoord.shape)
+        f.write(pack_bytes("f", consolidated_mesh.vert_lightmap_texcoord))
         
 print(f"{filename}.jj written successfully")
 # use this to write "scene.jj" into your working directory
-# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv4.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv5.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
 # & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\monsterv2.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
 # & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\playerDOLLv4_modified.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"

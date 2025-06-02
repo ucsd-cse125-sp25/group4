@@ -1,8 +1,4 @@
 #include "shaderShared.hlsli"
-cbuffer SceneConstantBuffer : register(b0) // b0 is the "virtual register" where the constant buffer is stored
-{
-    float4x4 viewProject;
-};
 
 ConstantBuffer<PerDrawConstants> drawConstants : register(b1);
 
@@ -19,12 +15,15 @@ PSInput VSMain(uint vid : SV_VertexID)
     float4 normal = float4(shadebuffer[vid].normal, 0);
     float2 texcoord = float2(shadebuffer[vid].texcoord);
     
+    StructuredBuffer<VertexLightmapTexcoord> lightmapTexcoordBuffer = ResourceDescriptorHeap[drawConstants.lightmap_texcoord_idx];
+    float2 lightmap_texcoord = lightmapTexcoordBuffer[vid].texcoord;
+    
     PSInput result;
     result.positionGlobal = mul(position_homogeneous , drawConstants.modelMatrix);
     result.normal = normalize(mul(normal, drawConstants.modelInverseTranspose).xyz);
-    // result.normal         = shadebuffer[vid].normal;
     result.positionNDC    = mul(result.positionGlobal, drawConstants.viewProject);
     result.texcoord = texcoord;
+    result.lightmap_texcoord = lightmap_texcoord;
     result.triangle_id = vid / 3;
 
     return result;

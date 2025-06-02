@@ -35,9 +35,24 @@ struct PSInput
 	float4 positionGlobal SEMANTIC(POSITION);
     float3 normal         SEMANTIC(NORMAL0);
     float2 texcoord       SEMANTIC(TEXCOORD0);
-    uint triangle_id      SEMANTIC(TEXCOORD1);
+    float2 lightmap_texcoord SEMANTIC(TEXCOORD1);
+    uint   triangle_id      SEMANTIC(TEXCOORD2);
 };
 struct PerDrawConstants 
+{
+    matrix   viewProject;           
+	matrix   modelMatrix;           // positions model to global
+	matrix   modelInverseTranspose; // normals model to global
+    uint     vpos_idx;              // vertex positions in model space
+    uint     vshade_idx;            // normals and texcoords
+    uint     material_ids_idx;
+    uint     materials_idx;
+    uint     first_texture_idx;
+    uint     lightmap_texcoord_idx;
+    uint     lightmap_texture_idx;
+	// 55 DWORDS
+};
+struct PlayerDrawConstants
 {
     matrix   viewProject;           
 	matrix   modelMatrix;           // positions model to global
@@ -67,6 +82,9 @@ struct UIVertexPosition
 struct VertexShadingData {
 	float3 normal;
 	float2 texcoord;
+};
+struct VertexLightmapTexcoord {
+    float2 texcoord;
 };
 
 struct Material

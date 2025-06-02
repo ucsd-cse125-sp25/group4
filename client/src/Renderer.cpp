@@ -136,7 +136,7 @@ bool Renderer::Init(HWND window_handle) {
 	// read files
 	{
 		// frame-independent and textures
-		m_scene.ReadToCPU(L"bedroomv4.jj");
+		m_scene.ReadToCPU(L"bedroomv5.jj");
 		m_hunterRenderBuffers.ReadToCPU(L"monsterv2.jj");
 		m_runnerRenderBuffers.ReadToCPU(L"playerDOLLv4_modified.jj");
 
@@ -218,7 +218,6 @@ bool Renderer::Init(HWND window_handle) {
 		if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
 			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 		}
-		
 		D3D12_DESCRIPTOR_RANGE1 ranges[1] = {
 			{
 			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
@@ -246,14 +245,6 @@ bool Renderer::Init(HWND window_handle) {
 				.ShaderRegister = 1,
 				.RegisterSpace = 0,
 				.Num32BitValues = DRAW_CONSTANT_NUM_DWORDS,
-			}
-		};
-		parameters[ROOT_PARAMETERS_CONSTANT_DEBUG_CUBE_MATRICES] = {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
-			.Constants = {
-				.ShaderRegister = 2,
-				.RegisterSpace = 0,
-				.Num32BitValues = 1,
 			}
 		};
 		// may add more parameters in the future for indices of resources
@@ -360,7 +351,7 @@ bool Renderer::Init(HWND window_handle) {
 			Slice<BYTE> vertexShaderBytecode;
 			if (DX::ReadDataToSlice(L"skin_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
 			Slice<BYTE> pixelShaderBytecode;
-			if (DX::ReadDataToSlice(L"ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			if (DX::ReadDataToSlice(L"skin_ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
 
 
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
@@ -397,6 +388,7 @@ bool Renderer::Init(HWND window_handle) {
 			// create the pipeline state object
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateSkin)));
 		}
+		/*
 		{
 			// --------------------------------------------------------------------
 			// describe Debug Pipeline State Object (PSO) 
@@ -439,7 +431,7 @@ bool Renderer::Init(HWND window_handle) {
 
 			// create the pipeline state object
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateDebug)));
-		}
+		}*/
 		{
 			// --------------------------------------------------------------------
 			// describe Timer UI Pipeline State Object (PSO) 
@@ -723,7 +715,7 @@ bool Renderer::Render() {
 	// set heaps for constant buffer
 	ID3D12DescriptorHeap *ppHeaps[] = {m_resourceDescriptorAllocator.heap.Get()};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	m_commandList->SetGraphicsRootDescriptorTable(0, m_resourceDescriptorAllocator.gpu_base);
+	 m_commandList->SetGraphicsRootDescriptorTable(0, m_resourceDescriptorAllocator.gpu_base);
 	
 
 
@@ -777,6 +769,8 @@ bool Renderer::Render() {
 			.material_ids_idx      = m_scene.materialID.descriptor.index,
 			.materials_idx         = m_scene.materials.descriptor.index,
 			.first_texture_idx     = m_scene.textures.ptr[0].descriptor.index,
+			.lightmap_texcoord_idx = m_scene.vertexLightmapTexcoord.descriptor.index,
+			.lightmap_texture_idx  = m_scene.lightmapTexture.descriptor.index
 		};
 	
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
@@ -792,7 +786,7 @@ bool Renderer::Render() {
 		bool loop = players[i].loop;
 		if (players[i].isHunter) {
 			UINT8 animationIdx = players[i].hunterAnimation;
-			PerDrawConstants drawConstants = {
+			PlayerDrawConstants drawConstants = {
 				.viewProject              = viewProject,
 				.modelMatrix              = modelMatrix,
 				.modelInverseTranspose    = modelInverseTranspose,
@@ -808,12 +802,12 @@ bool Renderer::Render() {
 				.frame_number             = m_hunterAnimations[animationIdx].getFrame(players[i].animationStartTime, time, loop),
 				.num_bones                = m_hunterRenderBuffers.header->numBones,
 			};
-			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_PLAYER_NUM_DWORDS, &drawConstants, 0);
 			m_commandList->DrawInstanced(3 * m_hunterRenderBuffers.vertexPosition.data.len, 1, 0, 0);
 		}
 		else {
 			UINT8 animationIdx = players[i].runnerAnimation;
-			PerDrawConstants drawConstants = {
+			PlayerDrawConstants drawConstants = {
 				.viewProject              = viewProject,
 				.modelMatrix              = modelMatrix,
 				.modelInverseTranspose    = modelInverseTranspose,
@@ -829,7 +823,7 @@ bool Renderer::Render() {
 				.frame_number             = m_runnerAnimations[animationIdx].getFrame(players[i].animationStartTime, time, loop),
 				.num_bones                = m_runnerRenderBuffers.header->numBones,
 			};
-			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_PLAYER_NUM_DWORDS, &drawConstants, 0);
 			m_commandList->DrawInstanced(3 * m_runnerRenderBuffers.vertexPosition.data.len, 1, 0, 0);
 		}
 	}

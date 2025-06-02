@@ -36,7 +36,10 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
 
     float diffuseStrength = clamp(dot(lightDir, normalize(input.normal)), 0.3, 1);
     
-    float3 color = diffuseStrength * diffuseColor;
+    Texture2D lightmap = ResourceDescriptorHeap[drawConstants.lightmap_texture_idx];
+    float3 lightmapColor = lightmap.Sample(g_sampler, input.lightmap_texcoord).rgb;
+    
+    float3 color = lightmapColor * diffuseColor;
     return float4(color, 1);
     
     // return float4(input.normal, 1);

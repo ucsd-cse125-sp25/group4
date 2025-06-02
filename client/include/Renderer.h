@@ -21,6 +21,7 @@ using Microsoft::WRL::ComPtr;
 constexpr uint32_t VERTS_PER_TRI = 3;
 constexpr size_t BYTES_PER_DWORD = 4;
 constexpr size_t DRAW_CONSTANT_NUM_DWORDS = sizeof(PerDrawConstants)/BYTES_PER_DWORD;
+constexpr size_t DRAW_CONSTANT_PLAYER_NUM_DWORDS = sizeof(PlayerDrawConstants)/BYTES_PER_DWORD;
 constexpr size_t BONES_PER_VERT = 4;
 typedef wchar_t TexturePath_t[256];
 
@@ -95,7 +96,6 @@ struct CurrPlayerRenderState {
 constexpr enum RootParameters : UINT8 {
 	ROOT_PARAMETERS_DESCRIPTOR_TABLE,
 	ROOT_PARAMETERS_CONSTANT_PER_CALL,
-	ROOT_PARAMETERS_CONSTANT_DEBUG_CUBE_MATRICES,
 	ROOT_PARAMETERS_COUNT
 };
 
@@ -335,7 +335,10 @@ struct Scene {
 	Buffer<Material>          materials;
 	union { // rraaaaaaaaagh C++ has no tagged unions
 		// header->numBones == 0:
-		Buffer<XMFLOAT2>          vertexLightmapTexcoord;
+		struct {
+			Buffer<XMFLOAT2>          vertexLightmapTexcoord;
+			Texture                   lightmapTexture;
+		};
 		// header->numBones > 0:
 		struct {
 			Buffer<BoneIndices>       vertexBoneIdx;
@@ -354,7 +357,7 @@ struct Scene {
 	
 	uint32_t getNumBuffers() {
 		if (header->numBones == 0) {
-			return 4; // WARNING: this needs to be updated when there are lightmaps
+			return 6; // WARNING: this needs to be updated when there are lightmaps
 		}
 		else {
 			return 6; 
@@ -447,9 +450,17 @@ struct Scene {
 				.ptr = reinterpret_cast<XMFLOAT2*>(texturePathSlice.after()),
 				.len = numVerts,
 			};
+			
+			auto l = vertexLightmapTexcoordSlice.after();
+			auto f = data.after();
 
-			// TODO: initialize lightmap texcoord buffer
+			if (l >= f) {
+				printf("fuck\n");
+			}
+			vertexLightmapTexcoord.Init(vertexLightmapTexcoordSlice, device, descriptorAllocator, L"Lightmap Texcoord Buffer");
+
 			// TODO: read lightmap texture
+			lightmapTexture.Init(device, descriptorAllocator, commandList, L"./textures/lightmap32.dds");
 		}
 		else {
 			// dynamic scenes need skinning info
@@ -917,7 +928,7 @@ private:
 	ComPtr<ID3D12PipelineState> m_pipelineStateSkin;
 
 	// for debug drawing
-	ComPtr<ID3D12PipelineState> m_pipelineStateDebug;
+	// ComPtr<ID3D12PipelineState> m_pipelineStateDebug;
 
 	// for timer UI
 	
