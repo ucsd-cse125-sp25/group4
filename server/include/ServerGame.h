@@ -156,6 +156,9 @@ private:
 	static constexpr float BEAR_SPEED_MULTIPLIER = 0.75f;
 	static constexpr float BEAR_JUMP_BOOST = 1.0f * PLAYER_SCALING_FACTOR;
 	static constexpr float BEAR_HITBOX = 5.0f * PLAYER_SCALING_FACTOR;
+	int hunterBearStunTicks = 0;
+	static constexpr int BEAR_STUN_TIME = TICKS_PER_SEC * 3;
+	static constexpr float BEAR_STUN_MULTIPLIER = 0.1f;
 };
 
 static bool checkCollision(BoundingBox, BoundingBox);

@@ -698,7 +698,7 @@ void ServerGame::applyAttacks()
 		{
 			if (victimId == attackerId) continue;	// skip self
 			if (state->players[victimId].isDead) continue;	// skip dead players
-			if (state->players[victimId].isBear) continue;	// skip bear players
+			if (state->players[victimId].isBear || hunterBearStunTicks > state->tick) continue;	// skip bear players or while stunned
 			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
 
 			if (isHit(atk, state->players[victimId]))
@@ -870,6 +870,13 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 					state->players[clientId].zVelocity = 0;
 					// printf("[CLIENT %d] Collision with player detected. isGrounded=%d, zVelocity=%f\n", clientId, state->players[clientId].isGrounded ? 1 : 0, state->players[clientId].zVelocity);
 				}
+
+				// if bear collides with hunter, hunter is stunned
+				if (state->players[clientId].isBear && state->players[c].isHunter) {
+					hunterBearStunTicks = state->tick + BEAR_STUN_TIME;
+					state->players[clientId].isBear = false;
+					printf("HUNTER STUNNED\n");
+				}
 			}
 		}
 
@@ -905,9 +912,14 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 		}
 
 	}
-	state->players[clientId].x += delta[0];
-	state->players[clientId].y += delta[1];
-	state->players[clientId].z += delta[2];
+
+	// hunter cannot move if stunned by bear
+	if (!state->players[clientId].isHunter || hunterBearStunTicks <= state->tick)
+	{
+		state->players[clientId].x += delta[0];
+		state->players[clientId].y += delta[1];
+		state->players[clientId].z += delta[2];
+	}
 
 	if (state->players[clientId].z < 0) {
 		state->players[clientId].z = 0;
