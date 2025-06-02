@@ -13,12 +13,13 @@ BONES_PER_VERT = 4
 
 @dataclass
 class Mesh:
-    num_tris       : int
-    vert_positions : np.array # (tris, VERTS_PER_TRI, POS_FLOATS_PER_VERT)
-    vert_shade     : np.array # (tris, VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
-    material_ids   : np.array # (tris)
-    vert_bone_indices : np.array = None # (verts, BONES_PER_VERT)
-    vert_bone_weights : np.array = None # (verts, BONES_PER_VERT)
+    num_tris               : int
+    vert_positions         : np.array # (tris, VERTS_PER_TRI, POS_FLOATS_PER_VERT)
+    vert_shade             : np.array # (tris, VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
+    material_ids           : np.array # (tris)
+    vert_bone_indices      : np.array = None # (verts, BONES_PER_VERT)
+    vert_bone_weights      : np.array = None # (verts, BONES_PER_VERT)
+    vert_lightmap_texcoord : np.array = None # (verts, 2)
     
     def merge(self, other):
         if other is not None:
@@ -34,6 +35,9 @@ class Mesh:
 
                 self.vert_bone_indices = np.concatenate((self.vert_bone_indices, other.vert_bone_indices))
                 self.vert_bone_weights = np.concatenate((self.vert_bone_weights, other.vert_bone_weights))
+
+            if self.vert_lightmap_texcoord is not None:
+                self.vert_lightmap_texcoord = np.concatenate((self.vert_lightmap_texcoord, other.vert_lightmap_texcoord))
         return self
 
 @dataclass
@@ -253,6 +257,7 @@ for obj in bpy.data.objects:
     # vertex groups for skinning
     bone_indices =  None
     bone_weights = None
+    vert_lightmap_texcoord = None
     if armature is not None:
         bone_indices = np.zeros((len(bmesh.vertices), BONES_PER_VERT), dtype=np.int32)
         bone_weights = np.zeros((len(bmesh.vertices), BONES_PER_VERT), dtype=np.float32)
@@ -290,7 +295,10 @@ for obj in bpy.data.objects:
                 bone_weights[i, :num_written] = vertex_weights
         bone_indices = bone_indices[triangle_vert_indices]
         bone_weights = bone_weights[triangle_vert_indices]
-            
+    else:
+        vert_lightmap_texcoord = np.zeros((len(bmesh.vertices), UV_FLOATS_PER_VERT), dtype = np.float32)
+        
+        
             
     
     new_mesh = Mesh(
