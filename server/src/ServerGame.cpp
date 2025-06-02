@@ -36,6 +36,8 @@ ServerGame::ServerGame(void) :
 
 	timer = new Timer();
 	tiebreaker = false;
+	attackRange = ATTACK_DEFAULT_RANGE;
+	attackCooldownTicks = cdDefaultTicks;
 
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
@@ -48,6 +50,7 @@ ServerGame::ServerGame(void) :
 	//for (int i = 0; i < 100; i++) {
 	//	cout << randomHunterPowerupGen(rng) << endl;
 	//}
+	newGame();
 }
 
 void ServerGame::update() {
@@ -182,7 +185,7 @@ void ServerGame::receiveFromClients()
 				auto* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
 				pendingSwing = DelayedAttack{ *atk, state->tick + windupTicks };
 				hunterStartSlowdown = state->tick + windupTicks; // start slowing down after windup
-				hunterEndSlowdown = hunterStartSlowdown + cdTicks;
+				hunterEndSlowdown = hunterStartSlowdown + attackCooldownTicks;
 
 				printf("[HUNTER] swing queued (hit @ %llu, busy until %llu)\n",
 					pendingSwing->hitTick, hunterEndSlowdown);
@@ -261,10 +264,10 @@ void ServerGame::receiveFromClients()
 					if (bearActive) break;
 					
 					state->players[id].isBear = true;
-					hasBear[id] = false;
 
-					bearTicks = state->tick + BEAR_TICKS;
+					bearTicks = state->tick + (BEAR_TICKS * hasBear[id]);
 					state->players[id].z += 5.0f * PLAYER_SCALING_FACTOR; // bear is taller
+					hasBear[id] = 0;
 					printf("IT'S BEAR TIME!!!\n");
 				}
 
@@ -417,6 +420,9 @@ void ServerGame::newGame()
 	extraJumpPowerup.clear();
 	runner_points = 0;
 	hunter_points = 0;
+	attackRange = ATTACK_DEFAULT_RANGE;
+	attackCooldownTicks = cdDefaultTicks;
+
 	for (int i = 0; i < num_players; i++) {
 		state->players[i].coins = PLAYER_INIT_COINS;
 		state->players[i].speed = PLAYER_INIT_SPEED;
@@ -584,6 +590,12 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		state->players[id].jumpCounts++;
 		printf("[POWERUP] Player %d multi jump enabled, jump counts: %d\n", id, state->players[id].jumpCounts);
 		break;
+	case Powerup::H_REDUCE_ATTACK_CD:
+		attackCooldownTicks *= REDUCE_ATTACK_CD_MULTIPLIER;
+		break;
+	case Powerup::H_INC_ATTACK_RANGE:
+		attackRange += 5.0f;
+		break;
 	case Powerup::R_INCREASE_SPEED:
 		state->players[id].speed *= 1.5f;
 		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
@@ -642,12 +654,6 @@ void ServerGame::applyMovements() {
 			dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * player.speed;
 
 			dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * player.speed;
-
-			if (player.isBear)
-			{
-				dx *= BEAR_SPEED_MULTIPLIER;
-				dy *= BEAR_SPEED_MULTIPLIER;
-			}
 		}
 
 		/* physics logic embedded */
@@ -666,6 +672,9 @@ void ServerGame::applyMovements() {
 			printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
 			player.zVelocity += JUMP_VELOCITY + extraJumpPowerup[id];
 			player.availableJumps--;
+			if (player.isBear) {
+				player.zVelocity += BEAR_JUMP_BOOST;
+			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}
 		// gravity
@@ -679,6 +688,12 @@ void ServerGame::applyMovements() {
 			dx *= hunterSlowFactor;
 			dy *= hunterSlowFactor;
 			printf("[HUNTER] hunter %d is now slowed down\n", id);
+		}
+
+		if (player.isBear)
+		{
+			dx *= BEAR_SPEED_MULTIPLIER;
+			dy *= BEAR_SPEED_MULTIPLIER;
 		}
 
 		updateClientPositionWithCollision(id, dx, dy, player.zVelocity);
@@ -732,7 +747,7 @@ void ServerGame::applyAttacks()
 			if (state->players[victimId].isBear || hunterBearStunTicks > state->tick) continue;	// skip bear players or while stunned
 			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
 
-			if (isHit(pendingSwing->attack, state->players[victimId]))
+			if (isHit_(pendingSwing->attack, state->players[victimId]))
 			{
 				state->players[victimId].isDead = true;
 
@@ -813,7 +828,7 @@ void ServerGame::sendPlayerPowerups() {
 			if (p == Powerup::R_BEAR)
 			{
 				// reset bear status for the next round
-				hasBear[id] = true;
+				hasBear[id] += 1;
 			}
 			printf("%s, ", PowerupInfo[p].name.c_str());
 			data.powerupInfo[id][idx] = (uint8_t) p;
@@ -997,6 +1012,29 @@ static bool checkCollision(BoundingBox box1, BoundingBox box2) {
 		(box1.minZ < box2.maxZ && box1.maxZ > box2.minZ)
 		);
 	return isColliding;
+}
+
+bool ServerGame::isHit_(const AttackPayload& a, const PlayerState& victim)
+{
+	// forward direction from yaw/pitch → unit vector
+	float fx = cosf(a.pitch) * -sinf(a.yaw);
+	float fy = cosf(a.pitch) * cosf(a.yaw);
+	float fz = sinf(a.pitch);
+
+	// vector attacker → victim
+	float vx = victim.x - a.originX;
+	float vy = victim.y - a.originY;
+	float vz = victim.z - a.originZ;
+
+	float dist2 = vx * vx + vy * vy + vz * vz;
+	if (dist2 > attackRange * attackRange) return false;          // out of reach
+
+	float len = sqrtf(dist2);
+	if (len < 1e-4f) return false;                        // same spot?
+	float dot = (vx * fx + vy * fy + vz * fz) / len;          // cosθ
+	float cosMax = cosf(DirectX::XMConvertToRadians(ATTACK_ANGLE_DEG));
+	// Initialize the static member variable
+	return dot >= cosMax;                                 // within cone
 }
 
 // -----------------------------------------------------------------------------
