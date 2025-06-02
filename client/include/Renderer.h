@@ -755,6 +755,9 @@ public:
 	CurrPlayerRenderState currPlayer = { 0 };
 	void DBG_DrawCube(XMFLOAT3 min, XMFLOAT3 max);
 
+	static constexpr float CAMERA_DIST = 16.0f * PLAYER_SCALING_FACTOR;
+	static constexpr float CAMERA_UP = 6.0f * PLAYER_SCALING_FACTOR;
+
 	// helper getters
 	UINT getWidth() { return m_width; };
 	UINT getHeight() { return m_height; };
@@ -792,6 +795,10 @@ public:
 
 	GamePhase gamePhase;
 	bool activeScoreboard = true;
+
+	// spectator camera settings
+	bool detached = false;
+	XMFLOAT3 freecamPos = {};
 private:
 	DebugCubes debugCubes;
 
@@ -855,6 +862,7 @@ private:
 	bool WaitForGpu();
 
 	XMMATRIX computeViewProject(FXMVECTOR pos, LookDir lookDir);
+	XMMATRIX computeFreecamViewProject(FXMVECTOR pos, float yaw, float pitch);
 	XMMATRIX computeModelMatrix(PlayerRenderState &playerRenderState);
 	
 	ComPtr<ID3D12Resource> m_depthStencilBuffer;
@@ -863,8 +871,6 @@ private:
 	// CAMERA CONSTANTS
 	float cameraYaw   = 0.0f;
 	float cameraPitch = 0.0f;
-	static constexpr float CAMERA_DIST = 16.0f * PLAYER_SCALING_FACTOR;
-	static constexpr float CAMERA_UP = 6.0f * PLAYER_SCALING_FACTOR;
 };
 
 

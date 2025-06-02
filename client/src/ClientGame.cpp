@@ -353,10 +353,72 @@ bool ClientGame::processSpectatorCameraInput()
 
 void ClientGame::processSpectatorKeyboardInput()
 {
-	if (GetAsyncKeyState('1') & 0x8000) renderer.currPlayer.playerId = 0;
-	if (GetAsyncKeyState('2') & 0x8000) renderer.currPlayer.playerId = 1;
-	if (GetAsyncKeyState('3') & 0x8000) renderer.currPlayer.playerId = 2;
-	if (GetAsyncKeyState('4') & 0x8000) renderer.currPlayer.playerId = 3;
+	bool detachKeyDown = (GetAsyncKeyState('5') & 0x8000) != 0;
+	if (detachKeyDown && !renderer.detached) {
+		using namespace DirectX;
+		XMVECTOR playerPos = XMLoadFloat3(&renderer.players[renderer.currPlayer.playerId].pos);
+		XMVECTOR model_fwd = XMVectorSet(0, 1, 0, 0);
+		XMVECTOR rotation = XMVector3TransformNormal(model_fwd, XMMatrixRotationX(pitch) * XMMatrixRotationZ(yaw));
+		rotation = XMVector3Normalize(rotation);
+		// compute camPos exaclty like computeViewProject
+		static constexpr float FREECAM_DIST = Renderer::CAMERA_DIST;
+		static constexpr float FREECAM_UP = Renderer::CAMERA_UP;
+		XMVECTOR camPos = XMVectorSubtract(playerPos, XMVectorScale(rotation, FREECAM_DIST));
+		camPos = XMVectorAdd(camPos, XMVectorSet(0, 0, FREECAM_UP, 0));
+
+		XMStoreFloat3(&renderer.freecamPos, camPos);
+		renderer.detached = true;
+	}
+
+	if (GetAsyncKeyState('1') & 0x8000) {
+		renderer.currPlayer.playerId = 0;
+		renderer.detached = false;
+	}
+	if (GetAsyncKeyState('2') & 0x8000) {
+		renderer.currPlayer.playerId = 1;
+		renderer.detached = false;
+	}
+	if (GetAsyncKeyState('3') & 0x8000) {
+		renderer.currPlayer.playerId = 2;
+		renderer.detached = false;
+	}
+	if (GetAsyncKeyState('4') & 0x8000) {
+		renderer.currPlayer.playerId = 3;
+		renderer.detached = false;
+	}
+
+	if (renderer.detached) {
+		using namespace DirectX;
+		XMVECTOR model_fwd = XMVectorSet(0, 1, 0, 0);
+		XMVECTOR forward = XMVector3TransformNormal(model_fwd, XMMatrixRotationX(pitch) * XMMatrixRotationZ(yaw));
+		forward = XMVector3Normalize(forward);
+
+		XMVECTOR model_up = XMVectorSet(0, 0, 1, 0);
+		XMVECTOR right = XMVector3Normalize(XMVector3Cross(forward, model_up));
+
+		float moveSpeed = 0.025;
+
+		if (GetAsyncKeyState(VK_LSHIFT) & 0x8000) {
+			moveSpeed /= 2;
+		}
+
+		XMVECTOR pos = XMLoadFloat3(&renderer.freecamPos);
+
+		if (GetAsyncKeyState('W') & 0x8000) {
+			pos = XMVectorAdd(pos, XMVectorScale(forward, moveSpeed));
+		}
+		if (GetAsyncKeyState('S') & 0x8000) {
+			pos = XMVectorSubtract(pos, XMVectorScale(forward, moveSpeed));
+		}
+		if (GetAsyncKeyState('A') & 0x8000) {
+			pos = XMVectorSubtract(pos, XMVectorScale(right, moveSpeed));
+		}
+		if (GetAsyncKeyState('D') & 0x8000) {
+			pos = XMVectorAdd(pos, XMVectorScale(right, moveSpeed));
+		}
+
+		XMStoreFloat3(&renderer.freecamPos, pos);
+	}
 }
 
 bool ClientGame::processMovementInput()

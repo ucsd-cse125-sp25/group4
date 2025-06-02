@@ -631,6 +631,21 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	return XMMatrixTranspose(view * proj);
 }
 
+XMMATRIX Renderer::computeFreecamViewProject(FXMVECTOR camPos, float yaw, float pitch) {
+	using namespace DirectX;
+	XMVECTOR model_fwd = { 0, 1, 0, 0 };
+	XMVECTOR rotation =
+		XMVector3TransformNormal(
+			model_fwd,
+			XMMatrixRotationX(pitch) * XMMatrixRotationZ(yaw));
+	rotation = XMVector3Normalize(rotation);
+	XMVECTOR model_up = { 0, 0, 1, 0 };
+	XMMATRIX view = XMMatrixLookToRHToLH(camPos, rotation, model_up);
+	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01f, 100.0f);
+
+	return XMMatrixTranspose(view * proj);
+}
+
 XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
 	float uniformScale = PLAYER_SCALING_FACTOR;
 	XMMATRIX scale = XMMatrixScaling(uniformScale, uniformScale, uniformScale);
@@ -704,9 +719,15 @@ bool Renderer::Render() {
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 	
 	// camera logic
-	XMVECTOR playerPos = XMLoadFloat3(&players[currPlayer.playerId].pos);
-	// XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
-	XMMATRIX viewProject = computeViewProject(playerPos, {}); // lookat is not used
+	XMMATRIX viewProject;
+	if (detached) {
+		XMVECTOR camPos = XMLoadFloat3(&freecamPos);
+		viewProject = computeFreecamViewProject(camPos, cameraYaw, cameraPitch);
+	}
+	else {
+		XMVECTOR playerPos = XMLoadFloat3(&players[currPlayer.playerId].pos);
+		viewProject = computeViewProject(playerPos, {}); // lookat is not used
+	}
 
 
 	// draw scene
