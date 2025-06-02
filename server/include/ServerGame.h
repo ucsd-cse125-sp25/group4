@@ -23,6 +23,7 @@ public:
 	void sendGameStateUpdates();
 	void sendAppPhaseUpdates();
 	void sendShopOptions(ShopOptionsPayload *data, int dest);
+	void sendPlayerPowerups();
 
 	void applyMovements();
 	void applyCamera();

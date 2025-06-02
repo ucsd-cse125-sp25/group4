@@ -131,15 +131,19 @@ void ServerGame::receiveFromClients()
 
 				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
 
-				state_mu.lock();
-				phaseStatus[id] = false;
-				state_mu.unlock();
-
-				state->players[id].x = playerSpawns[id].x;
-				state->players[id].y = playerSpawns[id].y;
-				state->players[id].z = playerSpawns[id].z;
-				state->players[id].yaw = startYaw;
-				state->players[id].pitch = startPitch;
+				if (id != 4) {
+					state_mu.lock();
+					phaseStatus[id] = false;
+					state_mu.unlock();
+					state->players[id].x = playerSpawns[id].x;
+					state->players[id].y = playerSpawns[id].y;
+					state->players[id].z = playerSpawns[id].z;
+					state->players[id].yaw = startYaw;
+					state->players[id].pitch = startPitch;
+				}
+				else {
+					printf("[CLIENT %d] SPECTATOR INIT\n", id);
+				}
 
 				sendGameStateUpdates();
 
@@ -249,6 +253,7 @@ void ServerGame::receiveFromClients()
 // int seconds: length of round
 void ServerGame::startARound(int seconds) {
 	round_id++;
+	/*
 	for (auto [id,powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
 		for (auto p : powerups) {
@@ -256,6 +261,8 @@ void ServerGame::startARound(int seconds) {
 		}
 		printf("\n");
 	}
+	*/
+	sendPlayerPowerups();
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
 
@@ -747,6 +754,27 @@ void ServerGame::sendGameStateUpdates() {
 	NetworkServices::buildPacket<GameState>(PacketType::GAME_STATE, *state, packet_data);
 
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+}
+
+void ServerGame::sendPlayerPowerups() {
+
+	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
+	PlayerPowerupPayload data;
+	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
+	for (auto [id, powerups] : playerPowerups) {
+		printf("Player %d Powerups: ", id);
+		int idx = 0;
+		for (auto p : powerups) {
+			if (idx >= 20) break;
+			printf("%s, ", PowerupInfo[p].name.c_str());
+			data.powerupInfo[id][idx] = (uint8_t) p;
+			idx++;
+		}
+		printf("\n");
+	}
+	NetworkServices::buildPacket<PlayerPowerupPayload>(PacketType::PLAYER_POWERUPS, data, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(PlayerPowerupPayload));
 }
 
 void ServerGame::sendAppPhaseUpdates() {

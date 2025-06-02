@@ -32,6 +32,10 @@ public:
 	bool processMovementInput();
 	void processShopInputs();
 
+	void handleSpectatorInput();
+	bool processSpectatorCameraInput();
+	void processSpectatorKeyboardInput();
+
 	void handleShopItemSelection(int choice);
 	void storePowerups(int);
 
@@ -59,7 +63,7 @@ public:
 
 private:
 	HWND hwnd;
-	unsigned int id;
+	int id = -1; // -1 is pre-initialization. 0 should be hunter. 4 should be spectator
 	ClientNetwork* network;
 	char network_data[MAX_PACKET_SIZE]; //todo this should change once we define the packet sizes
 
@@ -70,6 +74,7 @@ private:
 	static constexpr float ATTACK_RANGE = 10.0f * PLAYER_SCALING_FACTOR;
 	bool localDead = false;
 
+	bool wasDown = false;
 	bool ready = false;
 	int tempCoins = 0;
 	std::vector<Powerup> powerups;
