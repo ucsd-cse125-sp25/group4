@@ -180,6 +180,8 @@ elif len(bpy.data.armatures) == 1:
 for obj in bpy.data.objects:
     if obj.type != "MESH" or obj.name[:3] == "bb#":
         continue
+    if obj.hide_get():
+        continue
     
     print(f"processing object {obj.name}")
     # apply modifiers
@@ -352,4 +354,4 @@ print(f"{filename}.jj written successfully")
 # use this to write "scene.jj" into your working directory
 # & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv4.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
 # & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\monsterv2.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
-# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\playerDOLLv3.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\playerDOLLv4_modified.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"

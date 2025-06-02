@@ -105,7 +105,7 @@
     <CopyFileToFolders Include="..\Assets\Walk.janim">
       <FileType>Document</FileType>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="..\Assets\playerDOLLv3.jj">
+    <CopyFileToFolders Include="..\Assets\playerDOLLv4_modified.jj">
       <FileType>Document</FileType>
     </CopyFileToFolders>
     <None Include="..\client\include\shaderShared.hlsli">

@@ -138,7 +138,7 @@ bool Renderer::Init(HWND window_handle) {
 		// frame-independent and textures
 		m_scene.ReadToCPU(L"bedroomv4.jj");
 		m_hunterRenderBuffers.ReadToCPU(L"monsterv2.jj");
-		m_runnerRenderBuffers.ReadToCPU(L"playerDOLLv3.jj");
+		m_runnerRenderBuffers.ReadToCPU(L"playerDOLLv4_modified.jj");
 
 	}
 	// ----------------------------------------------------------------------------------------------------------------
@@ -606,7 +606,7 @@ bool Renderer::Init(HWND window_handle) {
 	for (PlayerRenderState& state : players) {
 		state.animationStartTime = time;
 	}
-	players[0].isHunter = true;
+	// players[0].isHunter = true;
 	return true;
 }
 

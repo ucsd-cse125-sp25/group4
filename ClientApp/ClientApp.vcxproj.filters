@@ -107,7 +107,7 @@
     <CopyFileToFolders Include="..\Assets\Dodge.janim">
       <Filter>Resource Files</Filter>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="..\Assets\playerDOLLv3.jj">
+    <CopyFileToFolders Include="..\Assets\playerDOLLv4_modified.jj">
       <Filter>Resource Files</Filter>
     </CopyFileToFolders>
   </ItemGroup>
