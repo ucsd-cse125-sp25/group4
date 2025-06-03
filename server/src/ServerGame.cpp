@@ -428,6 +428,7 @@ void ServerGame::newGame()
 		state->players[i].speed = PLAYER_INIT_SPEED;
 		state->players[i].isDead = false;
 		state->players[i].isBear = false;
+		state->players[i].dodgeCollide = true;
 		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
 	}
 }
@@ -611,6 +612,10 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 	case Powerup::R_DECREASE_DODGE_CD:
 		dodgeCooldownTicks[id] *= REDUCE_DODGE_CD_MULTIPLIER;
 		printf("[POWERUP] Player %d dodge cooldown reduced to %.2f\n", id, dodgeCooldownTicks[id]);
+		break;
+	case Powerup::R_DODGE_NO_COLLIDE:
+		state->players[id].dodgeCollide = false;
+		printf("[POWERUP] Player %d dodge no collide enabled\n", id);
 		break;
 	default:
 		printf("[POWERUP] Player %d unknown powerup selection %d\n", id, selection);
@@ -953,35 +958,52 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 		}
 
 		// check for bounding box collisions
-		// TODO: currently the setup prevents anything else other than
-		// cube 0 to move.
 		for (size_t b = 0; b < boxes2d.size(); ++b) {
-			// simple AABB overlap test in 2D (X vs X, Y vs Y)
-			if (checkCollision(playerBox, boxes2d[b]))
-			{
-				// If the z is being changed DOWNWARDS and collides, reset z velocity and "ground" player
-				if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
-					// printf("[CLIENT %d] Collision DOWNWARD with box detected. zVelocity=%f, deltaZ=%f\n", clientId,  state->players[clientId].zVelocity, delta[2]);
+			bool dodging = !state->players[clientId].dodgeCollide && dashTicks[clientId] > 0;
 
-					// newZ - playerRadius	= surfaceZ
-					// newZ					= surfaceZ + playerRadius
-					// currentZ + deltaZ	= surfaceZ + playerRadius
-					// deltaZ				= surfaceZ + playerRadius - currentZ
+			// skip X and Y collision if dodging
+			if (dodging && i != 2) continue;
+
+			if (checkCollision(playerBox, boxes2d[b])) {
+				if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
+					// Landing on top of a box
 					delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
 					state->players[clientId].isGrounded = true;
-					state->players[clientId].availableJumps = state->players[clientId].jumpCounts; // reset jumps on ground contact
+					state->players[clientId].availableJumps = state->players[clientId].jumpCounts;
 					state->players[clientId].zVelocity = 0;
-					/*
-					printf("BOXID=%llu, box.minZ=%f, box.maxZ=%f\n", b, boxes2d[b].minZ, boxes2d[b].maxZ);
-					printf("Dynamic playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", playerBox.minZ, playerBox.maxZ);
-					printf("Static  playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", staticPlayerBox.minZ, staticPlayerBox.maxZ);
-					*/
 				}
 				else {
 					float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
 					if (abs(distance) < abs(delta[i])) delta[i] = distance;
 				}
 			}
+
+			
+			//if (checkCollision(playerBox, boxes2d[b]))
+			//{
+			//	// If the z is being changed DOWNWARDS and collides, reset z velocity and "ground" player
+			//	if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
+			//		// printf("[CLIENT %d] Collision DOWNWARD with box detected. zVelocity=%f, deltaZ=%f\n", clientId,  state->players[clientId].zVelocity, delta[2]);
+
+			//		// newZ - playerRadius	= surfaceZ
+			//		// newZ					= surfaceZ + playerRadius
+			//		// currentZ + deltaZ	= surfaceZ + playerRadius
+			//		// deltaZ				= surfaceZ + playerRadius - currentZ
+			//		delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
+			//		state->players[clientId].isGrounded = true;
+			//		state->players[clientId].availableJumps = state->players[clientId].jumpCounts; // reset jumps on ground contact
+			//		state->players[clientId].zVelocity = 0;
+			//		/*
+			//		printf("BOXID=%llu, box.minZ=%f, box.maxZ=%f\n", b, boxes2d[b].minZ, boxes2d[b].maxZ);
+			//		printf("Dynamic playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", playerBox.minZ, playerBox.maxZ);
+			//		printf("Static  playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", staticPlayerBox.minZ, staticPlayerBox.maxZ);
+			//		*/
+			//	}
+			//	else {
+			//		float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
+			//		if (abs(distance) < abs(delta[i])) delta[i] = distance;
+			//	}
+			//}
 		}
 
 	}

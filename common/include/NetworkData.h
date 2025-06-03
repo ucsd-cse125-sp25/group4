@@ -67,6 +67,7 @@ enum class Powerup : uint8_t {
 	R_BEAR,
 	R_MULTI_JUMPS,
 	R_BUNNY_HOP,
+	R_DODGE_NO_COLLIDE,
 	// ...
 	NUM_RUNNER_POWERUPS,
 };
@@ -94,6 +95,7 @@ static std::map<Powerup, PowerupMetadata> PowerupInfo{
 	{ Powerup::R_BEAR,				{10, 5, "R_BEAR",		L"textures\\cards\\r_bear.dds"} },
 	{ Powerup::R_MULTI_JUMPS,	    {11, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
 	{ Powerup::R_BUNNY_HOP,			{12, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
+	{ Powerup::R_DODGE_NO_COLLIDE,	{13, 3, "R_DODGE_NO_COLLIDE",	L"textures\\cards\\h_sniper.dds"} },//TODO CHANGE TEXTURE
 };
 
 // The packet header preceeds every packet
@@ -139,7 +141,7 @@ struct PlayerState {
 	bool isBear;
 	int jumpCounts; // for determining how many jumps can the player do in total
 	int availableJumps; // how many jumps are left for the player
-
+	bool dodgeCollide; // whether the player can collide with the boxes while dodging
 };
 
 struct EntityState { // this is for traps or placed objects

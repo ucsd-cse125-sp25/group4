@@ -557,57 +557,29 @@ void ClientGame::processShopInputs() {
 }
  
 void ClientGame::handleShopItemSelection(int choice) {
-		ShopItem* item = &(shopOptions[choice]);
-		int cost = PowerupInfo[item->item].cost;
-		if (item->isSelected) 
-		{
-			item->isSelected = false;
-			renderer.selectPowerup(3); // exceeds option
-			tempCoins += cost;
-		}
-		else
-		{
-			// Only select the item if client has enough coins
-			if (item->isBuyable)
-			{
-				for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
-				{
-					shopOptions[i].isSelected = (i == choice);
-				}
-				renderer.selectPowerup((uint8_t) choice);
-				tempCoins -= cost;
-			}
-		}
+	ShopItem* item = &(shopOptions[choice]);
+	int cost = PowerupInfo[item->item].cost;
+	if (item->isSelected) 
+	{
+		item->isSelected = false;
+		renderer.selectPowerup(3); // exceeds option
+		tempCoins += cost;
 	}
-/*
-void ClientGame::storePowerups(int selection) {
-	// actual implementation will depend on the powerup type
-	switch ((Powerup)selection) {
-		case Powerup::H_INCREASE_SPEED:
-			//gameState->players[id].speed *= 1.5f;
-			powerups.push_back(Powerup::H_INCREASE_SPEED);
-			break;
-		case Powerup::H_INCREASE_JUMP:
-			//gameState->players[id].zVelocity += 5.0f * PLAYER_SCALING_FACTOR; // increase jump height
-			powerups.push_back(Powerup::H_INCREASE_JUMP);
-			break;
-		case Powerup::H_INCREASE_VISION:
-			// TODO?
-			powerups.push_back(Powerup::H_INCREASE_VISION);
-			break;
-		case Powerup::R_INCREASE_SPEED:
-			//gameState->players[id].speed *= 1.5f;
-			powerups.push_back(Powerup::R_INCREASE_SPEED);
-			break;
-		case Powerup::R_INCREASE_JUMP:
-			//gameState->players[id].zVelocity += 5.0f * PLAYER_SCALING_FACTOR; // increase jump height
-			powerups.push_back(Powerup::R_INCREASE_JUMP);
-			break;
-		default:
-			break;
+	else
+	{
+		// Only select the item if client has enough coins
+		if (item->isBuyable)
+		{
+			for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
+			{
+				shopOptions[i].isSelected = (i == choice);
+			}
+			renderer.selectPowerup((uint8_t) choice);
+			tempCoins -= cost;
+		}
 	}
 }
-*/
+
 void ClientGame::handleInput()
 {
 	if (!isWindowFocused()) return;
