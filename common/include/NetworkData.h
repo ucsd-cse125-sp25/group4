@@ -41,7 +41,8 @@ enum class PacketType : uint32_t {
 	SHOP_INIT,			// server sends to each client the options
 	SHOP_UPDATE,			// client sends what was purchased
 	PLAYER_POWERUPS,		// powerup information of all players
-  BEAR
+  BEAR,
+  AUDIO
 };
 
 // when adding powerups
@@ -215,6 +216,13 @@ struct AppPhasePayload {
 
 struct PlayerPowerupPayload {
 	uint8_t powerupInfo[4][20];
+};
+
+struct AudioPayload {
+	uint8_t audioType;
+	float volume;
+	bool directional;
+	float x, y, z;
 };
 
 struct DodgePayload { float yaw, pitch; };
