@@ -1,8 +1,4 @@
 #include "shaderShared.hlsli"
-cbuffer SceneConstantBuffer : register(b0) // b0 is the "virtual register" where the constant buffer is stored
-{
-    float4x4 viewProject;
-};
 
 ConstantBuffer<PerDrawConstants> drawConstants : register(b1);
 

@@ -9,13 +9,17 @@ VERTS_PER_TRI = 3
 NORMAL_FLOATS_PER_VERT = 3
 POS_FLOATS_PER_VERT = 3
 UV_FLOATS_PER_VERT = 2
+BONES_PER_VERT = 4
 
 @dataclass
 class Mesh:
-    num_tris       : int
-    vert_positions : np.array # (tris, VERTS_PER_TRI, POS_FLOATS_PER_VERT)
-    vert_shade     : np.array # (tris, VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
-    material_ids   : np.array # (tris)
+    num_tris               : int
+    vert_positions         : np.array # (tris, VERTS_PER_TRI, POS_FLOATS_PER_VERT)
+    vert_shade             : np.array # (tris, VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
+    material_ids           : np.array # (tris)
+    vert_bone_indices      : np.array = None # (verts, BONES_PER_VERT)
+    vert_bone_weights      : np.array = None # (verts, BONES_PER_VERT)
+    vert_lightmap_texcoord : np.array = None # (verts, 2)
     
     def merge(self, other):
         if other is not None:
@@ -23,6 +27,17 @@ class Mesh:
             self.vert_positions = np.concatenate((self.vert_positions, other.vert_positions))
             self.vert_shade     = np.concatenate((self.vert_shade    , other.vert_shade))
             self.material_ids   = np.concatenate((self.material_ids  , other.material_ids))
+
+            if self.vert_bone_indices is not None:
+                assert(self.vert_bone_weights) is not None
+                assert(other.vert_bone_indices) is not None
+                assert(other.vert_bone_weights) is not None
+
+                self.vert_bone_indices = np.concatenate((self.vert_bone_indices, other.vert_bone_indices))
+                self.vert_bone_weights = np.concatenate((self.vert_bone_weights, other.vert_bone_weights))
+
+            if self.vert_lightmap_texcoord is not None:
+                self.vert_lightmap_texcoord = np.concatenate((self.vert_lightmap_texcoord, other.vert_lightmap_texcoord))
         return self
 
 @dataclass
@@ -46,10 +61,6 @@ class Material:
         normal     = 1 << 31)
 
     def serialize(self) -> bytes:
-        print(type(self.base_color), self.base_color)
-        print(type(self.metallic), self.metallic)
-        print(type(self.roughness), self.roughness)
-        print(type(self.normal), self.normal)
         metallic_format = "I" if isinstance(self.metallic, int) else "f"
         roughness_format = "I" if isinstance(self.roughness, int) else "f"
 
@@ -99,6 +110,7 @@ i = 1
 for material in used_materials:
     if material.name in material_names_to_indices:
         continue
+    print("processing material:", material.name)
     material_names_to_indices |= {material.name : i}
     i += 1
     output = material.node_tree.get_output_node("ALL")
@@ -155,46 +167,65 @@ for material in used_materials:
             output[input_type] = packed
             
     materials.append(Material(**output))
-            
 
+SCENE = bpy.data.scenes[0]
+
+armature = None
+num_bones = 0
+if len(bpy.data.armatures) > 1:
+    print("ERROR: scene has more than one armature")
+    exit(1)
+elif len(bpy.data.armatures) == 1:
+    armature = bpy.data.armatures[0]
+    bone_name_to_index = {bone.name : i for i, bone in enumerate(armature.bones)}
+    print(bone_name_to_index)
+    num_bones = len(armature.bones)
+            
 for obj in bpy.data.objects:
     if obj.type != "MESH" or obj.name[:3] == "bb#":
         continue
+    if obj.hide_get():
+        continue
     
     print(f"processing object {obj.name}")
-    bmesh = obj.data
+    # apply modifiers
+    # from https://blenderartists.org/t/alternative-to-bpy-ops-object-convert-target-mesh-command/1177790/3
+    
+    for modifier in obj.modifiers:
+        if modifier.type == "ARMATURE":
+            modifier.show_viewport = False
+        
+    dependencies_graph = bpy.context.evaluated_depsgraph_get()
+    bmesh = obj.evaluated_get(dependencies_graph).data.copy()
+    
     model_to_world_translation   = np.array(obj.matrix_world.to_translation(), dtype=np.float32)
     model_to_world_linear        = np.array(obj.matrix_world.to_3x3(), dtype=np.float32)
     model_to_world_adj_transpose = np.array(obj.matrix_world.to_3x3().adjugated().transposed(), dtype=np.float32)
 
 
-    print("model_to_world_adj:", model_to_world_adj_transpose)
 
     # vertex positions
-    verts = np.zeros(POS_FLOATS_PER_VERT * len(bmesh.vertices), dtype=np.float32) # (num_bmesh_verts * 3)
-    bmesh.vertices.foreach_get("co", verts)
+    verts = np.zeros((len(bmesh.vertices), POS_FLOATS_PER_VERT), dtype=np.float32) # (num_bmesh_verts, 3)
+    bmesh.vertices.foreach_get("co", verts.ravel())
 
-    indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.int32)
-    bmesh.loop_triangles.foreach_get("vertices", indices)
+    triangle_vert_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.int32)
+    bmesh.loop_triangles.foreach_get("vertices", triangle_vert_indices)
 
-    verts = verts.reshape(-1, POS_FLOATS_PER_VERT) # (num_bmesh_verts, 3)
-    verts = verts[indices]
     verts = np.dot(verts, model_to_world_linear.T)
     verts = verts + model_to_world_translation
+    verts = verts[triangle_vert_indices]
     verts = verts.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, POS_FLOATS_PER_VERT)
 
     # normals
-    normals = np.zeros(NORMAL_FLOATS_PER_VERT * VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.float32)
-    bmesh.loop_triangles.foreach_get("split_normals", normals)
-    normals = normals.reshape(-1, NORMAL_FLOATS_PER_VERT)
+    loop_normals = np.zeros((len(bmesh.loops), NORMAL_FLOATS_PER_VERT), dtype = np.float32)
+    bmesh.loops.foreach_get("normal", loop_normals.ravel())
+    loop_normals = np.dot(loop_normals, model_to_world_adj_transpose.T)
+    loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype=np.int32)
+    bmesh.loop_triangles.foreach_get("loops", loop_indices)
+    normals = loop_normals[loop_indices]
     EPS = 10e-6
-    # assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
-    norm = np.linalg.norm(normals, axis=-1)
-    normals[abs(norm-1) > EPS, :] = np.array([0, 0, 1])
-    normals = np.dot(normals, model_to_world_adj_transpose.T)
     norm = np.linalg.norm(normals, axis=-1)[:, np.newaxis]
     normals /= norm
-    assert(all(abs(np.linalg.norm(normals, axis=-1) - 1) < EPS))
 
     normals = normals.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, NORMAL_FLOATS_PER_VERT)
 
@@ -202,12 +233,9 @@ for obj in bpy.data.objects:
     if len(bmesh.uv_layers) == 0: # edge case: object has no UVs
         uv = np.full((len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT), 0.5) # sample from the center of the texture
     else:
-        uv_layer = bmesh.uv_layers[0].uv
-        loop_indices = np.zeros(VERTS_PER_TRI * len(bmesh.loop_triangles), dtype = np.int32)
-        bmesh.loop_triangles.foreach_get("loops", loop_indices)
-        loop_uvs = np.zeros(UV_FLOATS_PER_VERT * len(uv_layer), dtype = np.float32) # (num_bmesh_loops * 2)
-        uv_layer.foreach_get("vector", loop_uvs)
-        loop_uvs = loop_uvs.reshape(-1, UV_FLOATS_PER_VERT) # (num_bmesh_loops, 2)
+        uv_layer = bmesh.uv_layers[0].uv # WARNING: must be changed later for lighmaps
+        loop_uvs = np.zeros((len(uv_layer), UV_FLOATS_PER_VERT), dtype = np.float32) # (num_bmesh_loops * 2)
+        uv_layer.foreach_get("vector", loop_uvs.ravel())
         uv = loop_uvs[loop_indices]
         uv = uv.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT)
         # DirectX texture coordinates have a inverted u/y axis compared to Blender
@@ -226,52 +254,99 @@ for obj in bpy.data.objects:
         material_ids = slot_index_to_materialid[triangle_to_slot_index]
         
 
-    # add batch dimension for easy concatenation with other meshes
+    # vertex groups for skinning
+    bone_indices =  None
+    bone_weights = None
+    vert_lightmap_texcoord = None
+    if armature is not None:
+        bone_indices = np.zeros((len(bmesh.vertices), BONES_PER_VERT), dtype=np.int32)
+        bone_weights = np.zeros((len(bmesh.vertices), BONES_PER_VERT), dtype=np.float32)
+        if obj.parent_type == "BONE":
+            bone_indices[:, 0] = bone_name_to_index[obj.parent_bone]
+            bone_weights[:, 0] = 1
+        elif obj.find_armature() is not None:
+            # map object vertex groups to bone indices
+            vertex_group_names = [group.name for group in obj.vertex_groups]
+            vertex_group_to_bone = np.array([bone_name_to_index.get(vertex_group_name, 1000) for vertex_group_name in vertex_group_names], dtype=np.int32)
+        
+            for i, vertex in enumerate(bmesh.vertices):
+
+                num_written = min(len(vertex.groups), BONES_PER_VERT)
+                vertex_groups = np.zeros(len(vertex.groups), dtype=np.int32)
+                vertex_weights = np.zeros(len(vertex.groups), dtype=np.float32)
+                vertex.groups.foreach_get("group", vertex_groups)
+                vertex.groups.foreach_get("weight", vertex_weights)
+
+                if len(vertex.groups) > BONES_PER_VERT:
+                    # get the indices of the most influential BONES_PER_VERT weights/group indices
+                    top_selection = np.argpartition(vertex_weights, -BONES_PER_VERT)[-BONES_PER_VERT:]
+                    vertex_weights = vertex_weights[top_selection]
+                    vertex_groups = vertex_groups[top_selection]
+
+                # normalize vertex weights to add up to 1
+                vertex_weights /= np.sum(vertex_weights)
+                assert(.99 < np.sum(vertex_weights) and np.sum(vertex_weights) < 1.01)
+
+                # convert indices of vertex groups in object to indices of bones in armature
+                vertex_bone_indices = vertex_group_to_bone[vertex_groups]
+
+                
+                bone_indices[i, :num_written] = vertex_bone_indices
+                bone_weights[i, :num_written] = vertex_weights
+        bone_indices = bone_indices[triangle_vert_indices]
+        bone_weights = bone_weights[triangle_vert_indices]
+    else:
+        uv_layer = bmesh.uv_layers["lightmap"].uv 
+        loop_uvs = np.zeros((len(uv_layer), UV_FLOATS_PER_VERT), dtype = np.float32) # (num_bmesh_loops * 2)
+        uv_layer.foreach_get("vector", loop_uvs.ravel())
+        lightmap_uv = loop_uvs[loop_indices]
+        lightmap_uv = lightmap_uv.reshape(len(bmesh.loop_triangles), VERTS_PER_TRI, UV_FLOATS_PER_VERT)
+        # DirectX texture coordinates have a inverted u/y axis compared to Blender
+        lightmap_uv[:, :, 1] = 1 - lightmap_uv[:, :, 1]
+        
+            
+    
     new_mesh = Mesh(
-                       num_tris       = len(bmesh.loop_triangles),
-                       vert_positions = verts,
-                       vert_shade     = normal_uv_interleaved,
-                       material_ids   = material_ids
+                       num_tris               = len(bmesh.loop_triangles),
+                       vert_positions         = verts,
+                       vert_shade             = normal_uv_interleaved,
+                       material_ids           = material_ids,
+                       vert_bone_indices      = bone_indices,
+                       vert_bone_weights      = bone_weights,
+                       vert_lightmap_texcoord = lightmap_uv,
     )
     consolidated_mesh = new_mesh.merge(consolidated_mesh)
     assert(consolidated_mesh is not None)
 
-print("there are", len(materials), "materials in the array")
-print("there are", len(material_names_to_indices), "materials in the dict")
 
-print(material_names_to_indices)
-
-for name, i in material_names_to_indices.items():
-    print(i)
-    print(name)
-    print(materials[i])
-    
-print("num_textures:", num_textures)    
 
 def pack_bytes(layout : str, array : np.array) -> bytes:
     return pack(f"{array.size}{layout}", *array.flatten())
 
-
-with open('scene.jj', 'wb') as f:
+print(texture_paths)
+filename = bpy.path.basename(bpy.data.filepath).split(".")[0]
+dynamic : bool = armature is not None
+with open(f"{filename}.jj", 'wb') as f:
     # write header 
     # version
-    f.write(pack("I", 2))
+    f.write(pack("I", 3))
     # number of triangles
     f.write(pack("I", consolidated_mesh.num_tris))
     # number of materials
     f.write(pack("I", len(materials)))
     # number of textures
     f.write(pack("I", len(texture_paths)))
+    # whether there are vertex weights
+    f.write(pack("I", num_bones))
 
     # write vertex positions
     f.write(pack_bytes("f", consolidated_mesh.vert_positions))
-
     # write shading data
     f.write(pack_bytes("f", consolidated_mesh.vert_shade))
-
     # write material ids
     f.write(pack_bytes("H", consolidated_mesh.material_ids))
 
+    
     # write materials
     for material in materials:
         f.write(material.serialize())
@@ -283,7 +358,18 @@ with open('scene.jj', 'wb') as f:
         assert(len(path_bytes) < 512)
         # missing bytes are padded with null terminators
         f.write(pack("512s", path_bytes))
+    
+    if dynamic:    
+        # write vertex groups
+        f.write(pack_bytes("I", consolidated_mesh.vert_bone_indices))
+        f.write(pack_bytes("f", consolidated_mesh.vert_bone_weights))
+    else:
+        # write lightmap uvs
+        print(consolidated_mesh.vert_lightmap_texcoord.shape)
+        f.write(pack_bytes("f", consolidated_mesh.vert_lightmap_texcoord))
         
-print("File written successfully")
+print(f"{filename}.jj written successfully")
 # use this to write "scene.jj" into your working directory
-#  & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv4.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv5.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\monsterv2.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\playerDOLLv4_modified.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"

@@ -3,7 +3,13 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
-Assets/*
+# texture files
+*.dds
+# raw texture files
+*.png
+# lightmap
+*.exr
+
 .helix
 uv.lock
 .python-version
