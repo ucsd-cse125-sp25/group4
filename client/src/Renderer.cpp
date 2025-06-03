@@ -244,8 +244,8 @@ bool Renderer::Init(HWND window_handle) {
 			.Constants = {
 				.ShaderRegister = 1,
 				.RegisterSpace = 0,
-				.Num32BitValues = DRAW_CONSTANT_NUM_DWORDS,
-			}
+				.Num32BitValues = max(DRAW_CONSTANT_NUM_DWORDS, DRAW_CONSTANT_PLAYER_NUM_DWORDS),
+			},
 		};
 		// may add more parameters in the future for indices of resources
 
