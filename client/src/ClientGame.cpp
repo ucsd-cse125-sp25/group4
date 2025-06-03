@@ -159,7 +159,7 @@ void ClientGame::update() {
 
 	// check for server updates and process them accordingly
 	int len = network->receivePackets(network_data);
-	if (len > 0) {
+	while (len > 0) {
 		// here, network_data should contain the game state packet
 		PacketHeader* hdr = (PacketHeader*)network_data;
 		switch (hdr->type) {
@@ -267,7 +267,17 @@ void ClientGame::update() {
 		case PacketType::PLAYER_POWERUPS:
 		{
 			PlayerPowerupPayload* pwPayload = (PlayerPowerupPayload*)(network_data + HDR_SIZE);
+			
+			bunnyhop = false;
 
+			for (int i = 0; i < 20; i++)
+			{
+				powerups[i] = pwPayload->powerupInfo[id][i];
+				if (pwPayload->powerupInfo[id][i] == (uint8_t)Powerup::H_BUNNY_HOP ||
+					pwPayload->powerupInfo[id][i] == (uint8_t)Powerup::R_BUNNY_HOP) {
+					bunnyhop = true;
+				}
+			}
 			renderer.updatePlayerPowerups(&pwPayload->powerupInfo[0][0]);
 			break;
 		}
@@ -275,7 +285,7 @@ void ClientGame::update() {
 			// printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
 			break;
 		}
-
+		len = network->receivePackets(network_data);
 	}
 
 	// ---------------------------------------------------------------	
@@ -437,7 +447,14 @@ bool ClientGame::processMovementInput()
 	if (GetAsyncKeyState('S') & 0x8000) direction[0] -= 1;
 	if (GetAsyncKeyState('A') & 0x8000) direction[1] -= 1;
 	if (GetAsyncKeyState('D') & 0x8000) direction[1] += 1;
-	if (GetAsyncKeyState(' ') & 0x8000) jump = true;
+	
+	static bool rWasDown = false;
+	bool rNowDown = (GetAsyncKeyState(' ') & 0x8000) != 0;
+
+	if (rNowDown && (!rWasDown || bunnyhop))      // rising edge
+		jump = true;
+
+	rWasDown = rNowDown;
 
 	if (!direction[0] && !direction[1] && !direction[2] && !jump) return false;
 	sendMovePacket(direction, yaw, pitch, jump);
@@ -448,6 +465,7 @@ bool ClientGame::processMovementInput()
 void ClientGame::processAttackInput()
 {
 	if (renderer.currPlayer.playerId != 0) return;   // only hunter
+	bool wasDown = false;
 	bool  isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
 
 	if (isDown && !wasDown)            // rising edge
@@ -561,7 +579,7 @@ void ClientGame::handleShopItemSelection(int choice) {
 			}
 		}
 	}
-
+/*
 void ClientGame::storePowerups(int selection) {
 	// actual implementation will depend on the powerup type
 	switch ((Powerup)selection) {
@@ -589,7 +607,7 @@ void ClientGame::storePowerups(int selection) {
 			break;
 	}
 }
-
+*/
 void ClientGame::handleInput()
 {
 	if (!isWindowFocused()) return;

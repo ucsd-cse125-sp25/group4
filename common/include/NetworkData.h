@@ -56,6 +56,7 @@ enum class Powerup : uint8_t {
 	H_MULTI_JUMPS,
 	H_REDUCE_ATTACK_CD,
 	H_INC_ATTACK_RANGE,
+	H_BUNNY_HOP,
 	// ...
 	NUM_HUNTER_POWERUPS,
 
@@ -65,6 +66,7 @@ enum class Powerup : uint8_t {
 	R_DECREASE_DODGE_CD,
 	R_BEAR,
 	R_MULTI_JUMPS,
+	R_BUNNY_HOP,
 	// ...
 	NUM_RUNNER_POWERUPS,
 };
@@ -82,14 +84,16 @@ static std::map<Powerup, PowerupMetadata> PowerupInfo{
 	{ Powerup::H_INCREASE_SPEED,	{0, 2, "H_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
 	{ Powerup::H_INCREASE_JUMP,		{1, 1, "H_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
 	{ Powerup::H_INCREASE_VISION,	{2, 3, "H_INSTINCT",	L"textures\\cards\\h_instinct.dds"} },
-	{ Powerup::H_MULTI_JUMPS,	    {3, 3, "H_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },
+	{ Powerup::H_MULTI_JUMPS,	    {3, 3, "H_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
 	{ Powerup::H_REDUCE_ATTACK_CD,	{4, 3, "H_SNIPER",		L"textures\\cards\\h_sniper.dds"} },
 	{ Powerup::H_INC_ATTACK_RANGE,	{5, 3, "H_HUSTLER",		L"textures\\cards\\h_hustler.dds"} },
-	{ Powerup::R_INCREASE_SPEED,	{6, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
-	{ Powerup::R_INCREASE_JUMP,		{7, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
-	{ Powerup::R_DECREASE_DODGE_CD,	{8, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
-	{ Powerup::R_BEAR,				{9, 5, "R_BEAR",		L"textures\\cards\\r_bear.dds"} },
-	{ Powerup::R_MULTI_JUMPS,	    {10, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },
+	{ Powerup::H_BUNNY_HOP,			{6, 3, "H_HUSTLER",		L"textures\\cards\\h_hustler.dds"} }, //TODO CHANGE TEXTURE
+	{ Powerup::R_INCREASE_SPEED,	{7, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
+	{ Powerup::R_INCREASE_JUMP,		{8, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
+	{ Powerup::R_DECREASE_DODGE_CD,	{9, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
+	{ Powerup::R_BEAR,				{10, 5, "R_BEAR",		L"textures\\cards\\r_bear.dds"} },
+	{ Powerup::R_MULTI_JUMPS,	    {11, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
+	{ Powerup::R_BUNNY_HOP,			{12, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
 };
 
 // The packet header preceeds every packet

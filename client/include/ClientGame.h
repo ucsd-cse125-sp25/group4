@@ -76,9 +76,10 @@ private:
 	static constexpr float ATTACK_RANGE = 10.0f * PLAYER_SCALING_FACTOR;
 	bool localDead = false;
 
-	bool wasDown = false;
 	bool ready = false;
 	int tempCoins = 0;
-	std::vector<Powerup> powerups;
+	uint8_t powerups[20];
+
+	bool bunnyhop = false; // allow holding jump
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);
