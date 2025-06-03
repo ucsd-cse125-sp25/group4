@@ -405,4 +405,4 @@ FodyWeavers.xsd
 *.sln.iml
 
 # In-ignore FMOD
-!*/FMOD_API/*
+!FMOD_API/**
