@@ -30,12 +30,17 @@ public:
 	void handleInput();
 	void processAttackInput();
 	void processDodgeInput();
+	void processBearInput();
 	bool processCameraInput();
 	bool processMovementInput();
 	void processShopInputs();
 
+	void handleSpectatorInput();
+	bool processSpectatorCameraInput();
+	void processSpectatorKeyboardInput();
+
 	void handleShopItemSelection(int choice);
-	void updateBuyable();
+	void storePowerups(int);
 
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);
@@ -43,6 +48,7 @@ public:
 	void sendCameraPacket(float, float);
 	void sendAttackPacket(float origin[3], float yaw, float pitch);
 	void sendDodgePacket();
+	void sendBearPacket();
 	void sendReadyStatusPacket(uint8_t selection);
 	void update();
 
@@ -64,7 +70,7 @@ public:
 
 private:
 	HWND hwnd;
-	unsigned int id;
+	int id = -1; // -1 is pre-initialization. 0 should be hunter. 4 should be spectator
 	ClientNetwork* network;
 	char network_data[MAX_PACKET_SIZE]; //todo this should change once we define the packet sizes
 
@@ -72,11 +78,13 @@ private:
 	float yaw = 0.0;
 	float pitch = 0.0;
 	static constexpr float MOUSE_SENS = 0.002f;
-	static constexpr float ATTACK_RANGE = 4.0f;
+	static constexpr float ATTACK_RANGE = 10.0f * PLAYER_SCALING_FACTOR;
 	bool localDead = false;
 
 	bool ready = false;
 	int tempCoins = 0;
-	std::vector<Powerup> powerups;
+	uint8_t powerups[20];
+
+	bool bunnyhop = false; // allow holding jump
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);

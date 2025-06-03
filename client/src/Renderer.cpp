@@ -133,6 +133,10 @@ bool Renderer::Init(HWND window_handle) {
 
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 
+	// read Scenefile
+	{
+		m_scene.ReadToCPU(L"scene.jj");
+	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// descriptor heaps 
 	{
@@ -147,11 +151,22 @@ bool Renderer::Init(HWND window_handle) {
 		UNWRAP(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		
-		// all resource descriptors go here
+		uint32_t numSceneTextures = m_scene.header->numTextures;
+		uint32_t numTimerUITextures = 3; // clock base, hand, top
+		uint32_t numTimerUIVertexBuffers = 1;
+		uint32_t numShopUIVertexBuffers = 2;
+		uint32_t numShopUITextures = PowerupInfo.size() + 20; // 10 for each counter of souls and coins
+		uint32_t capacity = SCENE_BUFFER_TYPE_COUNT
+			+ 3
+			+ numSceneTextures
+			+ numTimerUITextures + numTimerUIVertexBuffers
+			+ numShopUITextures + numShopUIVertexBuffers;
+		// all resource descriptors go here.
+		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(
 			m_device.Get(),
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-			SCENE_BUFFER_TYPE_COUNT + 3,
+			capacity,
 			L"Resource Descriptor Heap");
 
 		// create Depth Stencil View (DSV) descriptor heap
@@ -161,10 +176,6 @@ bool Renderer::Init(HWND window_handle) {
 			.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 		};
 		UNWRAP(m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_depthStencilDescriptorHeap)));
-	}
-	// initialize scene 
-	{
-		m_scene.Init(m_device.Get(), &m_resourceDescriptorAllocator, L"scene.jj");
 	}
 	// ----------------------------------------------------------------------------------------------------------------
 	// create frame resources
@@ -200,7 +211,7 @@ bool Renderer::Init(HWND window_handle) {
 			.NumDescriptors = m_resourceDescriptorAllocator.capacity,
 			.BaseShaderRegister = 0,
 			.RegisterSpace = 0,
-			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC,
+			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE,
 			.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
 			}
 		};
@@ -220,7 +231,7 @@ bool Renderer::Init(HWND window_handle) {
 			.Constants = {
 				.ShaderRegister = 1,
 				.RegisterSpace = 0,
-				.Num32BitValues = 17,
+				.Num32BitValues = DRAW_CONSTANT_NUM_DWORDS,
 			}
 		};
 		parameters[ROOT_PARAMETERS_CONSTANT_DEBUG_CUBE_MATRICES] = {
@@ -233,13 +244,29 @@ bool Renderer::Init(HWND window_handle) {
 		};
 		// may add more parameters in the future for indices of resources
 
+		D3D12_STATIC_SAMPLER_DESC sampler = {
+			.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+			.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			.MipLODBias = 0,
+			.MaxAnisotropy = 0,
+			.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
+			.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
+			.MinLOD = 0.0f,
+			.MaxLOD = D3D12_FLOAT32_MAX,
+			.ShaderRegister = 0,
+			.RegisterSpace = 0,
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL,
+		};
+
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {
 			.Version = D3D_ROOT_SIGNATURE_VERSION_1_1,
 			.Desc_1_1 = {
 				.NumParameters = ROOT_PARAMETERS_COUNT,
 				.pParameters = parameters,
-				.NumStaticSamplers = 0,
-				.pStaticSamplers = nullptr,
+				.NumStaticSamplers = 1,
+				.pStaticSamplers = &sampler,
 				.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED,
 			}
 		};
@@ -272,20 +299,21 @@ bool Renderer::Init(HWND window_handle) {
 			// --------------------------------------------------------------------
 			// describe Main Pipeline State Object (PSO) 
 			
-			// TODO: use slices instead
-			std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs.cso");
-			std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps.cso");
+			Slice<BYTE> vertexShaderBytecode;
+			if (DX::ReadDataToSlice(L"vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			Slice<BYTE> pixelShaderBytecode;
+			if (DX::ReadDataToSlice(L"ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
 
 
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 				.pRootSignature = m_rootSignature.Get(),
 				.VS = {
-					.pShaderBytecode = vertexShaderBytecode.data(),
-					.BytecodeLength = vertexShaderBytecode.size(),
+					.pShaderBytecode = vertexShaderBytecode.ptr,
+					.BytecodeLength = vertexShaderBytecode.len,
 				},
 				.PS = {
-					.pShaderBytecode = pixelShaderBytecode.data(),
-					.BytecodeLength  = pixelShaderBytecode.size(),
+					.pShaderBytecode = pixelShaderBytecode.ptr,
+					.BytecodeLength  = pixelShaderBytecode.len,
 				},
 				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
 				.SampleMask = UINT_MAX,
@@ -305,7 +333,8 @@ bool Renderer::Init(HWND window_handle) {
 					.Count = 1,
 				},
 			};
-			psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
+			psoDesc.RasterizerState.FrontCounterClockwise = true;
+			// psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
 
 			// create the pipeline state object
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
@@ -315,19 +344,21 @@ bool Renderer::Init(HWND window_handle) {
 			// describe Debug Pipeline State Object (PSO) 
 			
 			// TODO: use slices instead
-			std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"dbg_cube_vs.cso");
-			std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"dbg_cube_ps.cso");
+			Slice<BYTE> vertexShaderBytecode;
+			if (DX::ReadDataToSlice(L"dbg_cube_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			Slice<BYTE> pixelShaderBytecode;
+			if (DX::ReadDataToSlice(L"dbg_cube_ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
 
 
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
 				.pRootSignature = m_rootSignature.Get(),
 				.VS = {
-					.pShaderBytecode = vertexShaderBytecode.data(),
-					.BytecodeLength = vertexShaderBytecode.size(),
+					.pShaderBytecode = vertexShaderBytecode.ptr,
+					.BytecodeLength = vertexShaderBytecode.len,
 				},
 				.PS = {
-					.pShaderBytecode = pixelShaderBytecode.data(),
-					.BytecodeLength  = pixelShaderBytecode.size(),
+					.pShaderBytecode = pixelShaderBytecode.ptr,
+					.BytecodeLength  = pixelShaderBytecode.len,
 				},
 				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
 				.SampleMask = UINT_MAX,
@@ -351,8 +382,75 @@ bool Renderer::Init(HWND window_handle) {
 
 			// create the pipeline state object
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateDebug)));
-
 		}
+
+		
+		{
+			// --------------------------------------------------------------------
+			// describe Timer UI Pipeline State Object (PSO) 
+
+			// TODO: use slices instead
+			// std::vector<uint8_t> vertexShaderBytecode = DX::ReadData(L"vs_ui.cso");
+			// std::vector<uint8_t> pixelShaderBytecode = DX::ReadData(L"ps_ui.cso");
+			Slice<BYTE> vertexShaderBytecode;
+			if (DX::ReadDataToSlice(L"timerui_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			Slice<BYTE> pixelShaderBytecode;
+			if (DX::ReadDataToSlice(L"timerui_ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+
+			// alpha blending for UI:
+			D3D12_BLEND_DESC blendDesc = {
+				.AlphaToCoverageEnable = FALSE,
+				.IndependentBlendEnable = FALSE,
+			};
+			blendDesc.RenderTarget[0] = {
+				.BlendEnable = TRUE,
+				.LogicOpEnable = FALSE,
+				.SrcBlend = D3D12_BLEND_SRC_ALPHA,
+				.DestBlend = D3D12_BLEND_INV_SRC_ALPHA,
+				.BlendOp = D3D12_BLEND_OP_ADD,
+				.SrcBlendAlpha = D3D12_BLEND_ONE,
+				.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA,
+				.BlendOpAlpha = D3D12_BLEND_OP_ADD,
+				.LogicOp = D3D12_LOGIC_OP_NOOP,
+				.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL,
+			};
+
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
+				.pRootSignature = m_rootSignature.Get(),
+				.VS = {
+					.pShaderBytecode = vertexShaderBytecode.ptr,
+					.BytecodeLength = vertexShaderBytecode.len,
+				},
+				.PS = {
+					.pShaderBytecode = pixelShaderBytecode.ptr,
+					.BytecodeLength = pixelShaderBytecode.len,
+				},
+				.BlendState = blendDesc,
+				.SampleMask = UINT_MAX,
+				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+				// NO DEPTH for UI
+				.DepthStencilState = {
+					.DepthEnable = FALSE,
+					.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+					.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+					.StencilEnable = FALSE,
+				},
+				.InputLayout = {},
+				.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+				.NumRenderTargets = 1,
+				.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+				.DSVFormat = DXGI_FORMAT_D32_FLOAT,
+				.SampleDesc = {
+					.Count = 1,
+				},
+
+			};
+			psoDesc.RasterizerState.FrontCounterClockwise = true;
+			psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
+
+			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateTimerUI)));
+		}
+		
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------
@@ -364,14 +462,13 @@ bool Renderer::Init(HWND window_handle) {
 		nullptr,
 		IID_PPV_ARGS(&m_commandList)));
 	
-	// we don't record any commands yet
 	UNWRAP(m_commandList->Close());
+	
+	
 	
 	// ----------------------------------------------------------------------------------------------------------------
 	// create vertex buffer for player
 	{
-		// Define the geometry for a triangle.
-		
 		// 6 faces
 		// 2 triangles per face
 		// 3 vertices per triangle
@@ -379,66 +476,34 @@ bool Renderer::Init(HWND window_handle) {
 	    Vertex cubeverts[6 * 2 * 3] = {
 	    	{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { 1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, 1.0f, -1.0 } },{ { 1.0f, -1.0f, -1.0 } },{ { -1.0f, -1.0f, -1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, 1.0f, 1.0 } },{ { -1.0f, -1.0f, 1.0 } },{ { 1.0f, -1.0f, 1.0 } }
 	    };
-		{
 			const Slice<Vertex> cubeVertsSlice = {
 				.ptr = cubeverts,
 				.len = _countof(cubeverts),
 			};
-
-			m_vertexBufferBindless.Init(m_device.Get(), cubeVertsSlice, L"Bindless Vertex Buffer");
-
-			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
-				.Format = DXGI_FORMAT_UNKNOWN,
-				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
-				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.Buffer = {
-					.FirstElement = 0,
-					.NumElements = cubeVertsSlice.len,
-					.StructureByteStride = sizeof(Vertex)
-				}
-			};
-
-			m_vertexBufferDescriptor = m_resourceDescriptorAllocator.Allocate();
-			m_device->CreateShaderResourceView(m_vertexBufferBindless.resource.Get(), &desc, m_vertexBufferDescriptor.cpu);
-		}
+			m_vertexBufferBindless.Init(cubeVertsSlice, m_device.Get(), &m_resourceDescriptorAllocator, L"Player Vertex Buffer");
 	}
 	// ----------------------------------------------------------------------------------------------------------------
-	// create vertex buffer for player
+	// create vertex buffer for debug cubes
+	
 	{
 		debugCubes.Init(m_device.Get(), &m_resourceDescriptorAllocator);
 	}
-		
+	
+
 	// ----------------------------------------------------------------------------------------------------------------
-	// create constant buffer 
-    // {
-    // 	m_constantBufferData.viewProject = computeViewProject(playerState.pos, playerState.lookDir);
-    // 
-    // 	const UINT constantBufferSize = sizeof(SceneConstantBuffer);
-    // 	D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD); 
-    // 	D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
-    // 	UNWRAP(m_device->CreateCommittedResource(
-    // 			&heapProperties,
-    // 			D3D12_HEAP_FLAG_NONE,
-    // 			&bufferDesc,
-    // 			D3D12_RESOURCE_STATE_GENERIC_READ,
-    // 			nullptr,
-    // 			IID_PPV_ARGS(&m_constantBuffer)
-    // 	));
-    // 
-    // 	// create constant buffer view
-    // 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
-    // 		.BufferLocation = m_constantBuffer->GetGPUVirtualAddress(),
-    // 		.SizeInBytes = constantBufferSize,
-    // 	};
-    // 	m_device->CreateConstantBufferView(&cbvDesc, m_resourceHeap->GetCPUDescriptorHandleForHeapStart());
-    // 	
-    // 	// initialize constant buffer
-    // 	// we don't unmap until the app closes
-    // 	D3D12_RANGE readRange = { 0, 0 };
-    // 	UNWRAP(m_constantBuffer->Map(0, &readRange, (void **)(&m_pCbvDataBegin)));
-    // 	memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
-    // }
+	// create vertex buffer for timer UI
+	
+	{
+		m_TimerUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
+	}
+
 	// ----------------------------------------------------------------------------------------------------------------
+	// create vertex buffer for shop UI
+
+	{
+		m_ShopUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
+	}
+	
 	// create depth stencil buffer 
 	{
 		D3D12_DEPTH_STENCIL_VIEW_DESC depthStencilDesc = {
@@ -490,6 +555,10 @@ bool Renderer::Init(HWND window_handle) {
 		UNWRAP(WaitForGpu());
 	}
 	return true;
+}
+
+Renderer::Renderer() {
+	return;
 }
 
 bool Renderer::WaitForGpu() {
@@ -557,15 +626,32 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	XMVECTOR model_up = { 0, 0, 1, 0 }; 
 	
 	XMMATRIX view = XMMatrixLookToRHToLH(camPos, pos - camPos, model_up);
-	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01, 100);
+	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01f, 100.0f);
+
+	return XMMatrixTranspose(view * proj);
+}
+
+XMMATRIX Renderer::computeFreecamViewProject(FXMVECTOR camPos, float yaw, float pitch) {
+	using namespace DirectX;
+	XMVECTOR model_fwd = { 0, 1, 0, 0 };
+	XMVECTOR rotation =
+		XMVector3TransformNormal(
+			model_fwd,
+			XMMatrixRotationX(pitch) * XMMatrixRotationZ(yaw));
+	rotation = XMVector3Normalize(rotation);
+	XMVECTOR model_up = { 0, 0, 1, 0 };
+	XMMATRIX view = XMMatrixLookToRHToLH(camPos, rotation, model_up);
+	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01f, 100.0f);
 
 	return XMMatrixTranspose(view * proj);
 }
 
 XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
+	float uniformScale = PLAYER_SCALING_FACTOR;
+	XMMATRIX scale = XMMatrixScaling(uniformScale, uniformScale, uniformScale);
 	XMMATRIX rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw);
 	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z);
-	return XMMatrixTranspose(rotate * translate);
+	return XMMatrixTranspose(scale * rotate * translate);
 }
 
 bool Renderer::Render() {
@@ -579,11 +665,25 @@ bool Renderer::Render() {
 	
 	// Set necessary state
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+
+	if (!m_scene.initialized) {
+		m_scene.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
+
+	if (!m_TimerUI.initialized) {
+		m_TimerUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
+
+	if (!m_ShopUI.initialized) {
+		m_ShopUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
 	
 	// set heaps for constant buffer
 	ID3D12DescriptorHeap *ppHeaps[] = {m_resourceDescriptorAllocator.heap.Get()};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	m_commandList->SetGraphicsRootDescriptorTable(0, m_resourceDescriptorAllocator.gpu_base);
+	
+
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
@@ -609,17 +709,7 @@ bool Renderer::Render() {
 
 
 	// clear buffers
-	float clearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
-	// temp game phase debugging
-	if (gamePhase == GamePhase::START_MENU) {
-		clearColor[0] = 0.4f;
-	}
-	else if (gamePhase == GamePhase::GAME_PHASE) {
-		clearColor[1] = 0.4f;
-	}
-	else {
-		clearColor[2] = 0.4f;
-	}
+	float clearColor[] = {0.1f, 0.1f, 0.2f, 1.0f};
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	m_commandList->ClearDepthStencilView(m_depthStencilDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
@@ -629,37 +719,157 @@ bool Renderer::Render() {
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 	
 	// camera logic
-	XMVECTOR playerPos = XMLoadFloat3(&players[currPlayer.playerId].pos);
-	// XMMATRIX viewProject = computeViewProject(playerState.pos, playerState.lookDir);
-	XMMATRIX viewProject = computeViewProject(playerPos, {}); // lookat is not used
+	XMMATRIX viewProject;
+	if (detached) {
+		XMVECTOR camPos = XMLoadFloat3(&freecamPos);
+		viewProject = computeFreecamViewProject(camPos, cameraYaw, cameraPitch);
+	}
+	else {
+		XMVECTOR playerPos = XMLoadFloat3(&players[currPlayer.playerId].pos);
+		viewProject = computeViewProject(playerPos, {}); // lookat is not used
+	}
 
 
 	// draw scene
-	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
-	uint32_t vertexPositionsIndex = m_scene.descriptors[SCENE_BUFFER_TYPE_VERTEX_POSITION].index;
-	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
-	m_commandList->DrawInstanced(3 * m_scene.triangles.len, 1, 0, 0);
+	{
+		PerDrawConstants drawConstants = {
+			.viewProject           = viewProject,
+			.modelMatrix           = XMMatrixIdentity(),
+			.modelInverseTranspose = XMMatrixIdentity(),
+			.vpos_idx              = m_scene.vertexPosition.descriptor.index,
+			.vshade_idx            = m_scene.vertexShading.descriptor.index,
+			.material_ids_idx      = m_scene.materialID.descriptor.index,
+			.materials_idx         = m_scene.materials.descriptor.index,
+			.first_texture_idx     = m_scene.textures.ptr[0].descriptor.index,
+		};
+	
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+		m_commandList->DrawInstanced(3 * m_scene.vertexPosition.data.len, 1, 0, 0);
+	}
 
 	// draw players
 	for (UINT8 i = 0; i < 4; ++i) {
 		XMMATRIX modelMatrix = computeModelMatrix(players[i]);
-		XMMATRIX modelViewProjectMatrix = viewProject * modelMatrix;
-		m_commandList->SetGraphicsRoot32BitConstants(1, 16, &modelViewProjectMatrix, 0);
-		vertexPositionsIndex = m_vertexBufferDescriptor.index;
-		m_commandList->SetGraphicsRoot32BitConstants(1, 1, &vertexPositionsIndex, 16);
+		XMMATRIX modelInverseTranspose = XMMatrixInverse(nullptr, XMMatrixTranspose(modelMatrix));
+		PerDrawConstants drawConstants = {
+			.viewProject           = viewProject,
+			.modelMatrix           = modelMatrix,
+			.modelInverseTranspose = modelInverseTranspose,
+			.vpos_idx              = m_vertexBufferBindless.descriptor.index,
+			.vshade_idx            = m_scene.vertexShading.descriptor.index // CHANGE LATER
+		};
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
 		m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
 	}
 
 	// draw debug cubes
-	m_commandList->SetPipelineState(m_pipelineStateDebug.Get());
-	m_commandList->SetGraphicsRoot32BitConstants(1, 16, &viewProject, 0);
-	vertexPositionsIndex = debugCubes.vertexBufferDescriptor.index;
-	// index of vertex buffer
-	m_commandList->SetGraphicsRoot32BitConstants(1, 1, &debugCubes.vertexBufferDescriptor.index, 16);
-	// index of transforms 
-    m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
-	m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, debugCubes.transforms.size(), 0, 0);
-	// m_commandList->DrawInstanced(m_vertexBufferBindless.data.len, 1, 0, 0);
+	{
+		PerDrawConstants drawConstants = {
+			.viewProject           = viewProject,
+			.modelMatrix           = XMMatrixIdentity(),
+			.modelInverseTranspose = XMMatrixIdentity(),
+			.vpos_idx              = debugCubes.vertexBuffer.descriptor.index,
+			.vshade_idx            = m_scene.vertexShading.descriptor.index, // CHANGE LATER
+		};
+		m_commandList->SetPipelineState(m_pipelineStateDebug.Get()); // bind the debug cube vertex and fragment shaders
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
+		// index of transforms 
+	  m_commandList->SetGraphicsRoot32BitConstants(2, 1, &debugCubes.descriptor.index, 0);
+		m_commandList->DrawInstanced(debugCubes.vertexBuffer.data.len, (UINT)debugCubes.transforms.size(), 0, 0);
+	}
+
+	// draw Timer UI
+	if (gamePhase != GamePhase::START_MENU) {
+		PerDrawConstants dc = {
+			.viewProject = m_TimerUI.ortho,
+			.modelMatrix = XMMatrixIdentity(),
+			.modelInverseTranspose = XMMatrixIdentity(),
+			.vpos_idx = m_TimerUI.vertexBuffer.descriptor.index,
+			.vshade_idx = m_scene.vertexShading.descriptor.index,
+			.first_texture_idx = m_TimerUI.uiTextures.ptr[0].descriptor.index,
+		};
+		// Base layer
+		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_TimerUI.vertexBuffer.data.len, 1, 0, 0);
+
+		// Hand layer
+		{
+			float centerX = m_TimerUI.screenW - m_TimerUI.inset - m_TimerUI.side * 0.5f;
+			float centerY = m_TimerUI.screenH - m_TimerUI.inset - m_TimerUI.side * 0.5f;
+			// minus timer angle so that the timerHandAngle represents a clockwise rotation.
+			XMMATRIX M = XMMatrixTranslation(-centerX, -centerY, 0) * XMMatrixRotationZ(-m_TimerUI.timerHandAngle) * XMMatrixTranslation(centerX, centerY, 0);
+
+			dc.modelMatrix = XMMatrixTranspose(M);
+			dc.first_texture_idx = m_TimerUI.uiTextures.ptr[1].descriptor.index;
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+			m_commandList->DrawInstanced(m_TimerUI.vertexBuffer.data.len, 1, 0, 0);
+		}
+
+		// Top Layer
+		dc.modelMatrix = XMMatrixIdentity();
+		dc.first_texture_idx = m_TimerUI.uiTextures.ptr[2].descriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_TimerUI.vertexBuffer.data.len, 1, 0, 0);
+	}
+
+	// draw SHOP if in shop...
+	if (gamePhase == GamePhase::SHOP_PHASE) {
+		PerDrawConstants dc = {
+			.viewProject = m_ShopUI.ortho,
+			.modelMatrix = XMMatrixIdentity(),
+			.modelInverseTranspose = XMMatrixIdentity(),
+			.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index,
+			.vshade_idx = m_scene.vertexShading.descriptor.index,
+		};
+
+		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+		for (int i = 0; i < 3; i++) {
+			if (i == m_ShopUI.currSelected) {
+				dc.modelMatrix = m_ShopUI.cardSelectedModelMatrix[i];
+			}
+			else {
+				dc.modelMatrix = m_ShopUI.cardModelMatrix[i];
+			}
+			dc.first_texture_idx = m_ShopUI.cardTextures.ptr[m_ShopUI.powerupIdxs[i]].descriptor.index;
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+			m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+		}
+
+		// draw counter for coins and souls
+		dc.vpos_idx = m_ShopUI.counterVertexBuffer.descriptor.index;
+		dc.modelMatrix = m_ShopUI.coinsModelMatrix;
+		dc.first_texture_idx = m_ShopUI.coinsTextures.ptr[m_ShopUI.coins].descriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+
+		dc.modelMatrix = m_ShopUI.soulsModelMatrix;
+		dc.first_texture_idx = m_ShopUI.soulsTextures.ptr[m_ShopUI.souls].descriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+	}
+	
+	if (activeScoreboard) {
+		PerDrawConstants dc = {
+				.viewProject = m_ShopUI.ortho,
+				.modelMatrix = XMMatrixIdentity(),
+				.modelInverseTranspose = XMMatrixIdentity(),
+				.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index,
+				.vshade_idx = m_scene.vertexShading.descriptor.index,
+		};
+		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+
+		for (int row = 0; row < 4; row++) {
+			for (int col = 0; col < 10; col++) {
+				uint8_t p = powerupInfo[row][col];
+				if (p == 255) break;
+				dc.modelMatrix = m_ShopUI.scoreboardCardModelMatrix[row][col];
+				dc.first_texture_idx = m_ShopUI.cardTextures.ptr[PowerupInfo[(Powerup) p].textureIdx].descriptor.index;
+				m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+				m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+			}
+		}
+	}
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {

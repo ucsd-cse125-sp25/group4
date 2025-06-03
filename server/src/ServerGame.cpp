@@ -1,6 +1,7 @@
 ﻿#include <random>
 #include <vector>
 #include <iostream>
+#include <numeric>
 #include "ServerGame.h"
 #include "Parson.h"
 
@@ -8,10 +9,9 @@
 using namespace std;
 unsigned int ServerGame::client_id;
 
-ServerGame::ServerGame(void) : 
+ServerGame::ServerGame(void) :
 	rng(dev()),
-	randomRunnerPowerupGen((unsigned int)Powerup::RUNNER_POWERUPS, (unsigned int)Powerup::NUM_RUNNER_POWERUPS - 1),
-	randomHunterPowerupGen((unsigned int)Powerup::HUNTER_POWERUPS, (unsigned int)Powerup::NUM_HUNTER_POWERUPS - 1)
+	randomSpawnLocationGen(0, (unsigned int)NUM_SPAWNS - 1)
 {
 	client_id = 0;
 	network = new ServerNetwork();
@@ -19,13 +19,14 @@ ServerGame::ServerGame(void) :
 
 	state = new GameState{
 		.tick = 0,
-		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded
+		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded, jumpCounts, availableJumps
 		.players = {
-			{ 4.0f,  4.0f, 20.0f, 0.0f, 0.0f, 0.1f, 0.15f, 0, true, false, false },
-			{-2.0f,  2.0f, 20.0f, 0.0f, 0.0f, -0.1f, 0.15f, 0, false, false, false },
-			{ 2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
-			{-2.0f, -2.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0, false, false, false },
-		}
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false, false, 1, 1 },
+			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
+			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
+			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
+		},
+		.timerFrac = 0.0f,
 	};
 
 	appState = new AppState{
@@ -34,6 +35,9 @@ ServerGame::ServerGame(void) :
 	};
 
 	timer = new Timer();
+	tiebreaker = false;
+	attackRange = ATTACK_DEFAULT_RANGE;
+	attackCooldownTicks = cdDefaultTicks;
 
 	//// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	//vector<vector<float>> boxes2d;
@@ -46,12 +50,16 @@ ServerGame::ServerGame(void) :
 	//for (int i = 0; i < 100; i++) {
 	//	cout << randomHunterPowerupGen(rng) << endl;
 	//}
+	newGame();
 }
 
 void ServerGame::update() {
 	auto now = std::chrono::steady_clock::now();
 	if (now < next_tick) {
 		std::this_thread::sleep_for(next_tick - now);
+	}
+	else {
+		printf("[WARNING] Tick %llu time surpassed expected time\n", state->tick);
 	}
 	next_tick = std::chrono::steady_clock::now() + TICK_DURATION;
 	++state->tick;
@@ -84,6 +92,11 @@ void ServerGame::update() {
 		case GamePhase::SHOP_PHASE:
 		{
 			handleShopPhase();
+			break;
+		}
+		case GamePhase::GAME_END:
+		{
+			handleEndPhase();
 			break;
 		}
 		default:
@@ -121,9 +134,22 @@ void ServerGame::receiveFromClients()
 
 				network->sendToClient(id, packet_data, HDR_SIZE + sizeof(IDPayload));
 
-				state_mu.lock();
-				phaseStatus[id] = false;
-				state_mu.unlock();
+				if (id != 4) {
+					state_mu.lock();
+					phaseStatus[id] = false;
+					state_mu.unlock();
+					state->players[id].x = playerSpawns[id].x;
+					state->players[id].y = playerSpawns[id].y;
+					state->players[id].z = playerSpawns[id].z;
+					state->players[id].yaw = startYaw;
+					state->players[id].pitch = startPitch;
+				}
+				else {
+					printf("[CLIENT %d] SPECTATOR INIT\n", id);
+				}
+
+				sendGameStateUpdates();
+
 				break;
 			}
 			case PacketType::DEBUG:
@@ -135,32 +161,42 @@ void ServerGame::receiveFromClients()
 			case PacketType::MOVE:
 			{
 				MovePayload* mv = (MovePayload*)&(network_data[i + HDR_SIZE]);
-				printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f, JUMP %d\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw, mv->jump);
 				// register the latest movement, but do not update yet
-				latestMovement[id] = *mv;
+				if ((id == 0 && state->tick > hunter_time)
+					|| (id != 0 && state->tick > runner_time))
+				{
+					//printf("[CLIENT %d] MOVE_PACKET: DIR (%f, %f, %f), PITCH %f, YAW %f, JUMP %d\n", id, mv->direction[0], mv->direction[1], mv->direction[2], mv->pitch, mv->yaw, mv->jump);
+ 					latestMovement[id] = *mv;
+				}
 				break;
 			}
 			case PacketType::CAMERA:
 			{
 				CameraPayload* cam = (CameraPayload*)&(network_data[i+HDR_SIZE]);
-				printf("[CLIENT %d] CAMERA_PACKET: PITCH %f, YAW %f\n", id, cam->pitch, cam->yaw);
+				// printf("[CLIENT %d] CAMERA_PACKET: PITCH %f, YAW %f\n", id, cam->pitch, cam->yaw);
 				latestCamera[id] = *cam;
 				break;
 			}
 			case PacketType::ATTACK:
 			{
-				AttackPayload* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
-				latestAttacks[id] = *atk;      // overwrite if multiple swings this tick
-				printf("[CLIENT %d] ATTACK at %.1f, %.1f, %.1f  yaw=%.2f  pitch=%.2f\n",
-					id, atk->originX, atk->originY, atk->originZ, atk->yaw, atk->pitch);
+				if (id != 0) break;                               // not the hunter
+				if (state->tick < hunterEndSlowdown) break;         // still in pipeline
+
+				auto* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
+				pendingSwing = DelayedAttack{ *atk, state->tick + windupTicks };
+				hunterStartSlowdown = state->tick + windupTicks; // start slowing down after windup
+				hunterEndSlowdown = hunterStartSlowdown + attackCooldownTicks;
+
+				printf("[HUNTER] swing queued (hit @ %llu, busy until %llu)\n",
+					pendingSwing->hitTick, hunterEndSlowdown);
 				break;
 			}
 			case PacketType::DODGE:
 			{
-				// hunters cannot dodge
-				if (state->players[id].isHunter || state->players[id].isDead) break;
+				// hunters and bear cannot dodge
+				if (state->players[id].isHunter || state->players[id].isDead || state->players[id].isBear) break;
 
-				bool offCooldown = (state->tick - lastDodgeTick[id]) >= DODGE_COOLDOWN_TICKS;
+				bool offCooldown = (state->tick - lastDodgeTick[id]) >= dodgeCooldownTicks[id];
 				if (!offCooldown) break;                           // silently ignore spam
 
 				// grant!
@@ -193,14 +229,48 @@ void ServerGame::receiveFromClients()
 					// Only save if they selected a powerup
 					if (status->selection != 0) 
 					{
-						playerPowerups[id].push_back(status->selection);
-						state->players[id].coins -= PowerupCosts[(Powerup)status->selection];
+						applyPowerups(id, status->selection);
+						state->players[id].coins -= PowerupInfo[(Powerup)status->selection].cost;
 					}
 				}
 				
 				state_mu.lock();
 				phaseStatus[id] = status->ready;
 				state_mu.unlock();
+
+				break;
+			}
+			case PacketType::BEAR:
+			{
+				// payload is empty
+				//BearPayload* bear = (BearPayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] BEAR_PACKET\n", id);
+
+				// drop if player doesn't have the powerup
+				if (!hasBear[id])
+					break;
+				
+				// check within range
+				if (state->players[id].x >= BEAR_POS.x - 0.3 &&
+					state->players[id].x <= BEAR_POS.x + 0.3 &&
+					state->players[id].y >= BEAR_POS.y - 0.3 &&
+					state->players[id].y <= BEAR_POS.y + 0.3)
+				{
+					// drop if anyone is bear
+					bool bearActive = false;
+					for (int i = 0; i < num_players; i++) {
+						bearActive = bearActive || state->players[i].isBear;
+					}
+					if (bearActive) break;
+					
+					state->players[id].isBear = true;
+
+					bearTicks = state->tick + (BEAR_TICKS * hasBear[id]);
+					state->players[id].z += 5.0f * PLAYER_SCALING_FACTOR; // bear is taller
+					hasBear[id] = 0;
+					printf("IT'S BEAR TIME!!!\n");
+				}
+
 
 				break;
 			}
@@ -215,27 +285,110 @@ void ServerGame::receiveFromClients()
 
 }
 
+
 // Start a round
 // int seconds: length of round
 void ServerGame::startARound(int seconds) {
 	round_id++;
-	for (auto [id,powerups] : playerPowerups) {
-		for (auto p : powerups) {
-			printf("Player %d Powerup: %d,\n", id, p);
+	sendPlayerPowerups();
+	for (unsigned int id = 0; id < num_players; ++id) {
+		auto& player = state->players[id];
+
+		// set spawn locations: center for hunter, random spots for runners
+		if (player.isHunter) {
+			player.x = hunterSpawn.x;
+			player.y = hunterSpawn.y;
+			player.z = hunterSpawn.z;
 		}
+		else
+		{
+			int spawn = randomSpawnLocationGen(rng);
+			player.x = spawnPoints[spawn].x;
+			player.y = spawnPoints[spawn].y;
+			player.z = spawnPoints[spawn].z;
+			
+			float jiggle = 3 * PLAYER_SCALING_FACTOR;
+			if (id == 2) {
+				player.x += jiggle;
+			}
+			else if (id == 3) {
+				player.y += jiggle;
+			}
+		}
+
+		player.isDead = false;
+		player.isBear = false;
+		// print player coin
+		printf("[round %d] Player %d coins: %d\n", round_id, id, player.coins);
 	}
+	int start_tick = state->tick;
+	runner_time = start_tick + (RUNNER_SPAWN_PERIOD * TICKS_PER_SEC);
+	hunter_time = start_tick + (HUNTER_SPAWN_PERIOD * TICKS_PER_SEC);
+
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
+		// check if it is a tiebreaker round
+		if (tiebreaker) {
+			// the points will never be the same for both teams.
+			if (runner_points > hunter_points) {
+				printf("[round %d] Tiebreaker round ended, survivors win!\n", round_id);
+			}
+			else {
+				printf("[round %d] Tiebreaker round ended, hunter wins!\n", round_id);
+			}
+			tiebreaker = false; // reset tiebreaker
+			return;
+		}
+		
 		state_mu.lock();
+
 		// set all status to true here, handle in the main game loop
 		for (auto& [id, status] : phaseStatus) {
 			status = true;
 		}
+
+		// Count how many survivors survived the round
+		unsigned int num_survivors = 0;
+		unsigned int hunter_id = 0;
+		for (unsigned int id = 0; id < num_players; ++id) {
+			if (!state->players[id].isDead && !state->players[id].isHunter) {
+				num_survivors++;
+			}
+			if (state->players[id].isHunter) {
+				hunter_id = id; // save hunter id
+			}
+		}
+		// Determine who wins this round
+		if (num_survivors == 0) {
+			printf("[round %d] No survivors survived the round, hunter wins!\n", round_id);
+		}
+		else {
+			printf("[round %d] %d survivors survived the round!\n", round_id, num_survivors);
+		}
+
+		// Add points to survivors and hunter
+		runner_points += num_survivors;
+		hunter_points += 3 - num_survivors; // hunter gets 1 points for each survivor dead
+		printf("[round %d] Runner points: %d, Hunter points: %d\n", round_id, runner_points, hunter_points);
+
+		// Survivors each get ${3-sum_survivors} coins, Hunter gets ${sum_survivors}.
+		for (unsigned int id = 0; id < num_players; ++id) {
+			if (!state->players[id].isHunter) {
+				state->players[id].coins += 3 - num_survivors;
+				printf("[round %d] Player %d coins: %d\n", round_id, id, state->players[id].coins);
+			}
+			else {
+				state->players[id].coins += num_survivors; // hunter gets more coins if more survivors are alive
+				//printf("adding %d coins to hunter %d\n", 3 - num_survivors, id);
+				printf("[round %d] Hunter %d coins: %d\n", round_id, id, state->players[id].coins);
+			}
+		}
+
 		// Don't send packets in timer!
 		// Socket wrapper isn't thread safe...
 		// sendAppPhaseUpdates();
 		state_mu.unlock();
-		});
+	});
 }
 
 void ServerGame::handleStartMenu() {
@@ -247,6 +400,7 @@ void ServerGame::handleStartMenu() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
+		// START A ROUND
 		num_players = phaseStatus.size();
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
@@ -258,11 +412,77 @@ void ServerGame::handleStartMenu() {
 	}
 }
 
+void ServerGame::newGame()
+{
+	round_id = 0;
+	tiebreaker = false;
+	playerPowerups.clear();
+	extraJumpPowerup.clear();
+	runner_points = 0;
+	hunter_points = 0;
+	attackRange = ATTACK_DEFAULT_RANGE;
+	attackCooldownTicks = cdDefaultTicks;
+
+	for (int i = 0; i < num_players; i++) {
+		state->players[i].coins = PLAYER_INIT_COINS;
+		state->players[i].speed = PLAYER_INIT_SPEED;
+		state->players[i].isDead = false;
+		state->players[i].isBear = false;
+		state->players[i].dodgeCollide = true;
+		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
+	}
+}
+
+void ServerGame::resetGamePos()
+{
+	for (int i = 0; i < num_players; i++)
+	{
+		state->players[i].x = playerSpawns[i].x;
+		state->players[i].y = playerSpawns[i].y;
+		state->players[i].z = playerSpawns[i].z;
+		state->players[i].yaw = startYaw;
+		state->players[i].pitch = startPitch;
+	}
+
+	sendGameStateUpdates();
+}
+
+void ServerGame::handleEndPhase() {
+	bool ready = true;
+	for (auto& [id, status] : phaseStatus) {
+		if (!status) {
+			ready = false;
+		}
+	}
+
+
+	if (ready && !phaseStatus.empty()) {
+		newGame();
+		appState->gamePhase = GamePhase::START_MENU;
+		sendAppPhaseUpdates();
+		// reset status
+		for (auto& [id, status] : phaseStatus) {
+			status = false;
+		}
+	}
+	else {
+		resetGamePos();
+	}
+}
+
+// -----------------------------------------------------------------------------
+// GAME DEV HELPING FUNCTION
+// -----------------------------------------------------------------------------
+bool ServerGame::anyWinners() {
+	return (runner_points >= WIN_THRESHOLD || hunter_points >= WIN_THRESHOLD);
+}
+
 // -----------------------------------------------------------------------------
 // GAME PHASE PHASE LOGIC
 // -----------------------------------------------------------------------------
 
 void ServerGame::handleGamePhase() {
+	state->timerFrac = timer->getFracElapsed();
 	bool ready = true;
 	for (auto& [id, status] : phaseStatus) {
 		if (!status) {
@@ -271,9 +491,26 @@ void ServerGame::handleGamePhase() {
 	}
 
 	if (ready && !phaseStatus.empty()) {
-		appState->gamePhase = GamePhase::SHOP_PHASE;
-		//sendAppPhaseUpdates();
-		startShopPhase();
+		// Check if anyone won the game	
+		if (anyWinners()) {
+			if (runner_points == hunter_points) {
+				printf("[round %d] Game over! It's a tie! Starting a tiebreaker round. \n", round_id);
+				tiebreaker = true;
+				appState->gamePhase = GamePhase::SHOP_PHASE;
+				startShopPhase();
+			}
+			else {
+				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= WIN_THRESHOLD) ? "survivors" : "hunter");
+				appState->gamePhase = GamePhase::GAME_END;
+				sendAppPhaseUpdates();
+			}
+		}
+		else
+		{
+			appState->gamePhase = GamePhase::SHOP_PHASE;
+			startShopPhase();
+		}
+
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
 		}
@@ -309,20 +546,80 @@ void ServerGame::startShopPhase() {
 		ShopOptionsPayload* options = new ShopOptionsPayload();
 		if (state->players[id].isHunter)
 		{
+			std::vector<int> v((int)Powerup::NUM_HUNTER_POWERUPS - (int)Powerup::HUNTER_POWERUPS - 1);
+			std::iota(v.begin(), v.end(), (int)Powerup::HUNTER_POWERUPS + 1);
+			std::shuffle(v.begin(), v.end(), rng);
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = randomHunterPowerupGen(rng);
-				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
+				options->options[p] = (uint8_t) v[p];
+				printf("Hunter option %d: %d %s\n", p+1, v[p], PowerupInfo[(Powerup)v[p]].name.c_str());
 			}
 		}
 		else
 		{
+			std::vector<int> v((int)Powerup::NUM_RUNNER_POWERUPS - (int)Powerup::RUNNER_POWERUPS - 1);
+			std::iota(v.begin(), v.end(), (int)Powerup::RUNNER_POWERUPS + 1);
+			std::shuffle(v.begin(), v.end(), rng);
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = randomRunnerPowerupGen(rng);
-				printf("Player %d Option %d: %d\n", id, p, options->options[p]);
+				options->options[p] = (uint8_t) v[p];
+				printf("Runner %d option %d: %d %s\n", id, p+1, v[p], PowerupInfo[(Powerup)v[p]].name.c_str());
 
 			}
 		}
+		options->runner_score = runner_points;
+		options->hunter_score = hunter_points;
 		sendShopOptions(options, id);
+	}
+}
+
+void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
+{
+	playerPowerups[id].push_back(static_cast<Powerup>(selection));
+	// TODO: add more powerups here
+	switch ((Powerup)selection) {
+	case Powerup::H_INCREASE_SPEED:
+		state->players[id].speed *= 1.5f;
+		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
+		break;
+	case Powerup::H_INCREASE_JUMP:
+		extraJumpPowerup[id] += JUMP_POWERUP; // increase jump height
+		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
+		break;
+	case Powerup::H_INCREASE_VISION:
+		printf("[POWERUP] Player %d increase vision (place holder)", id);
+		break;
+	case Powerup::H_MULTI_JUMPS:
+		state->players[id].jumpCounts++;
+		printf("[POWERUP] Player %d multi jump enabled, jump counts: %d\n", id, state->players[id].jumpCounts);
+		break;
+	case Powerup::H_REDUCE_ATTACK_CD:
+		attackCooldownTicks *= REDUCE_ATTACK_CD_MULTIPLIER;
+		break;
+	case Powerup::H_INC_ATTACK_RANGE:
+		attackRange += 5.0f;
+		break;
+	case Powerup::R_INCREASE_SPEED:
+		state->players[id].speed *= 1.5f;
+		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
+		break;
+	case Powerup::R_INCREASE_JUMP:
+		extraJumpPowerup[id] += JUMP_POWERUP; // increase jump height
+		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
+		break;
+	case Powerup::R_MULTI_JUMPS:
+		state->players[id].jumpCounts++;
+		printf("[POWERUP] Player %d multi jump enabled, jump counts: %d\n", id, state->players[id].jumpCounts);
+		break;
+	case Powerup::R_DECREASE_DODGE_CD:
+		dodgeCooldownTicks[id] *= REDUCE_DODGE_CD_MULTIPLIER;
+		printf("[POWERUP] Player %d dodge cooldown reduced to %.2f\n", id, dodgeCooldownTicks[id]);
+		break;
+	case Powerup::R_DODGE_NO_COLLIDE:
+		state->players[id].dodgeCollide = false;
+		printf("[POWERUP] Player %d dodge no collide enabled\n", id);
+		break;
+	default:
+		printf("[POWERUP] Player %d unknown powerup selection %d\n", id, selection);
+		break;
 	}
 }
 
@@ -331,33 +628,80 @@ void ServerGame::startShopPhase() {
 // -----------------------------------------------------------------------------
 
 void ServerGame::applyMovements() {
-	for (auto& [id, mv] : latestMovement) {
-		//printf("[CLIENT %d] MOVE_INTENT: DIR '%c', PITCH %f, YAW %f\n", id, mv.direction, mv.pitch, mv.yaw);
-		// update direction regardless of collision
-		state->players[id].yaw = mv.yaw;
-		state->players[id].pitch = mv.pitch;
+	for (unsigned int id = 0; id < num_players; ++id) {
+		auto& player = state->players[id];
+		// printf("[CLIENT %d] isGrounded=%d z=%f zVelocity=%f\n", id, player.isGrounded ? 1 : 0, player.z, player.zVelocity);
 
-		if (mv.jump && state->players[id].isGrounded == true)
-			state->players[id].zVelocity = JUMP_VELOCITY;
+		// check if bear power runs out
+		if (player.isBear && bearTicks <= state->tick)
+		{
+			player.isBear = false;
+		}
 
-		// normalize the direction vector
-		float magnitude = sqrt(powf(mv.direction[0], 2) + powf(mv.direction[1], 2) + powf(mv.direction[2], 2));
-		if (magnitude != 0)
-			for (int i = 0; i < 3; i++)
-				mv.direction[i] /= magnitude;
+		float dx = 0, dy = 0;
+		if (latestMovement.count(id)) {
+			auto& mv = latestMovement[id];
+			// update direction regardless of collision
+			player.yaw = mv.yaw;
+			player.pitch = mv.pitch;
 
-		// convert intent + yaw into 2d vector
-		// CLOCKWISE positive
-		// foward x/y, actual delta x/y
-		float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), fz = 1, dx = 0, dy = 0, dz = 0;
-		
-		dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * state->players[id].speed;
+			// normalize the direction vector
+			float magnitude = sqrt(powf(mv.direction[0], 2) + powf(mv.direction[1], 2) + powf(mv.direction[2], 2));
+			if (magnitude != 0)
+				for (int i = 0; i < 3; i++)
+					mv.direction[i] /= magnitude;
 
-		dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * state->players[id].speed;
+			// convert intent + yaw into 2d vector
+			// CLOCKWISE positive
+			// foward x/y, actual delta x/y
+			float fx = -sinf(mv.yaw), fy = cosf(mv.yaw), fz = 1;
 
-		dz = 0;
+			dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * player.speed;
 
-		updateClientPositionWithCollision(id, dx, dy, dz);
+			dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * player.speed;
+		}
+
+		/* physics logic embedded */
+		/*bool wasGrounded = player.isGrounded;
+		player.isGrounded = false;
+
+		if (latestMovement.count(id) && latestMovement[id].jump && wasGrounded == true) {
+			player.zVelocity = JUMP_VELOCITY + extraJumpPowerup[id];
+			if (player.isBear) {
+				player.zVelocity += BEAR_JUMP_BOOST;
+			}
+			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
+		}*/
+
+		if (latestMovement.count(id) && latestMovement[id].jump && player.availableJumps > 0 && player.zVelocity <= 0) {
+			printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
+			player.zVelocity += JUMP_VELOCITY + extraJumpPowerup[id];
+			player.availableJumps--;
+			if (player.isBear) {
+				player.zVelocity += BEAR_JUMP_BOOST;
+			}
+			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
+		}
+		// gravity
+		player.zVelocity -= GRAVITY;
+		if (player.zVelocity < TERMINAL_VELOCITY)
+			player.zVelocity = TERMINAL_VELOCITY;
+
+		// apply speed modifiers here:
+		// hunter slow debuff
+		if (player.isHunter && state->tick >= hunterStartSlowdown && state->tick < hunterEndSlowdown) {
+			dx *= hunterSlowFactor;
+			dy *= hunterSlowFactor;
+			printf("[HUNTER] hunter %d is now slowed down\n", id);
+		}
+
+		if (player.isBear)
+		{
+			dx *= BEAR_SPEED_MULTIPLIER;
+			dy *= BEAR_SPEED_MULTIPLIER;
+		}
+
+		updateClientPositionWithCollision(id, dx, dy, player.zVelocity);
 	}
 
 	latestMovement.clear(); // consume the movement, don't keep for next tick
@@ -372,6 +716,7 @@ void ServerGame::applyCamera() {
 }
 
 void ServerGame::applyPhysics() {
+	/*
 	for (int c = 0; c < 4; c++) {
 		// By default, assumes the player is not on the ground
 		state->players[c].isGrounded = false;
@@ -383,39 +728,61 @@ void ServerGame::applyPhysics() {
 		state->players[c].zVelocity -= GRAVITY;
 		if (state->players[c].zVelocity < TERMINAL_VELOCITY) state->players[c].zVelocity = TERMINAL_VELOCITY;
 	}
+	*/
 }
 
 void ServerGame::applyAttacks()
 {
-	for (auto& [attackerId, atk] : latestAttacks)
+	/* ---------- resolve hunter's queued swing ------------------------- */
+	if (pendingSwing && state->tick >= pendingSwing->hitTick)
 	{
-		for (unsigned victimId = 0; victimId < 4; ++victimId)
+		printf("[HUNTER] resolving atk\n");
+		// update the pending swing to the latest received movements
+		pendingSwing->attack.originX = state->players[0].x;
+		pendingSwing->attack.originY = state->players[0].y;
+		pendingSwing->attack.originZ = state->players[0].z;
+		pendingSwing->attack.pitch = state->players[0].pitch;
+		pendingSwing->attack.yaw = state->players[0].yaw;
+		// leave range unchanged
+
+		for (unsigned victimId = 1; victimId < 4; ++victimId)      // only survivors
 		{
-			if (victimId == attackerId) continue;	// skip self
+			// if (victimId == attackerId) continue;	// skip self
 			if (state->players[victimId].isDead) continue;	// skip dead players
+			if (state->players[victimId].isBear || hunterBearStunTicks > state->tick) continue;	// skip bear players or while stunned
 			if (invulTicks[victimId] > 0) continue;	// skip invulnerable players
 
-			if (isHit(atk, state->players[victimId]))
+			if (isHit_(pendingSwing->attack, state->players[victimId]))
 			{
-				printf("[HIT] attacker %u hits victim %u (tick %llu)\n",
-					attackerId, victimId, state->tick);
-
-				// simple reward: +1 coin
-				state->players[attackerId].coins++;
-
-				// mark victim as dead
 				state->players[victimId].isDead = true;
-				printf("[HIT] victim %u is dead\n", victimId);
 
-				HitPayload hp{ attackerId, victimId };
+				/* notify victim */
+				HitPayload hp{ 0u, victimId };
 				char buf[HDR_SIZE + sizeof hp];
 				NetworkServices::buildPacket(PacketType::HIT, hp, buf);
 				network->sendToClient(victimId, buf, sizeof buf);
 
+				printf("[HIT] hunter hits runner %u  (tick %llu)\n", victimId, state->tick);
+				break;                                           // one hit per swing
 			}
 		}
+		pendingSwing.reset();   // swing consumed
+
+		//state->players[0].speed *= hunterSlowFactor; // slow down hunter after swing
 	}
-	latestAttacks.clear();
+
+	/* ---------- win-condition check ------------------------- */
+	bool allDead = true;
+	for (unsigned id = 0; id < num_players; ++id)
+		if (!state->players[id].isDead && !state->players[id].isHunter) { 
+			allDead = false; 
+			break; 
+		}
+
+	if (allDead) { 
+		printf("[GAME] all survivors dead\n"); 
+		timer->cancelTimer(); 
+	}
 }
 
 void ServerGame::applyDodge()
@@ -424,7 +791,19 @@ void ServerGame::applyDodge()
 		int8_t prevDashTick = dashTicks[i];
 		if (invulTicks[i] > 0) invulTicks[i]--;
 		if (dashTicks[i] > 0) dashTicks[i]--;
-		if (dashTicks[i] == 0 && prevDashTick > 0) state->players[i].speed /= DASH_SPEED_MULTIPLIER;
+		if (dashTicks[i] == 0 && prevDashTick > 0)
+		{
+			// reset speed
+			state->players[i].speed /= DASH_SPEED_MULTIPLIER;
+
+			// players are slowed until end of cooldown
+			state->players[i].speed *= DASH_COOLDOWN_PENALTY;
+		}
+		else if (dashTicks[i] == 0 && (state->tick - lastDodgeTick[i]) >= dodgeCooldownTicks[i]) {
+			// end of cooldown
+			dashTicks[i] = -1; // prevents from happening multiple times
+			state->players[i].speed /= DASH_COOLDOWN_PENALTY;
+		}
 	}
 }
 
@@ -441,6 +820,32 @@ void ServerGame::sendGameStateUpdates() {
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
 }
 
+void ServerGame::sendPlayerPowerups() {
+
+	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
+	PlayerPowerupPayload data;
+	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
+	for (auto [id, powerups] : playerPowerups) {
+		printf("Player %d Powerups: ", id);
+		int idx = 0;
+		for (auto p : powerups) {
+			if (idx >= 20) break;
+			if (p == Powerup::R_BEAR)
+			{
+				// reset bear status for the next round
+				hasBear[id] += 1;
+			}
+			printf("%s, ", PowerupInfo[p].name.c_str());
+			data.powerupInfo[id][idx] = (uint8_t) p;
+			idx++;
+		}
+		printf("\n");
+	}
+	NetworkServices::buildPacket<PlayerPowerupPayload>(PacketType::PLAYER_POWERUPS, data, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(PlayerPowerupPayload));
+}
+
 void ServerGame::sendAppPhaseUpdates() {
 
 	char packet_data[HDR_SIZE + sizeof(AppPhasePayload)];
@@ -453,7 +858,7 @@ void ServerGame::sendAppPhaseUpdates() {
 
 	NetworkServices::buildPacket<AppPhasePayload>(PacketType::APP_PHASE, *data, packet_data);
 
-	network->sendToAll(packet_data, HDR_SIZE + sizeof(GameState));
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(AppPhasePayload));
 }
 
 void ServerGame::sendShopOptions(ShopOptionsPayload* data, int dest) {
@@ -473,28 +878,31 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 	float delta[3] = { dx, dy, dz };
 
 	// Bounding box for the current client
-	float temp = 1.0f;
+	float playerRadius = 1.0f * PLAYER_SCALING_FACTOR;
+	if (state->players[clientId].isBear) {
+		playerRadius = BEAR_HITBOX;
+	}
 
 	// Bounding box before player moves
 	BoundingBox staticPlayerBox = {
-			state->players[clientId].x - temp,
-			state->players[clientId].y - temp,
-			state->players[clientId].z - temp,
-			state->players[clientId].x + temp,
-			state->players[clientId].y + temp,
-			state->players[clientId].z + temp
+			state->players[clientId].x - playerRadius,
+			state->players[clientId].y - playerRadius,
+			state->players[clientId].z - playerRadius,
+			state->players[clientId].x + playerRadius,
+			state->players[clientId].y + playerRadius,
+			state->players[clientId].z + playerRadius
 	};
 
 	for (int i = 0; i < 3; i++) {
 		bool isColliding = false;
 
 		BoundingBox playerBox = {
-			state->players[clientId].x - temp,
-			state->players[clientId].y - temp,
-			state->players[clientId].z - temp,
-			state->players[clientId].x + temp,
-			state->players[clientId].y + temp,
-			state->players[clientId].z + temp
+			state->players[clientId].x - playerRadius,
+			state->players[clientId].y - playerRadius,
+			state->players[clientId].z - playerRadius,
+			state->players[clientId].x + playerRadius,
+			state->players[clientId].y + playerRadius,
+			state->players[clientId].z + playerRadius
 		};
 
 		if (i == 0) {
@@ -518,56 +926,101 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 			}
 
 			BoundingBox otherClientBox = {
-				state->players[c].x - temp,
-				state->players[c].y - temp,
-				state->players[c].z - temp,
-				state->players[c].x + temp,
-				state->players[c].y + temp,
-				state->players[c].z + temp,
+				state->players[c].x - playerRadius,
+				state->players[c].y - playerRadius,
+				state->players[c].z - playerRadius,
+				state->players[c].x + playerRadius,
+				state->players[c].y + playerRadius,
+				state->players[c].z + playerRadius,
 			};
 
 			if (checkCollision(playerBox, otherClientBox)) {
-				printf("Collision detected between client %d and client %d, %d\n", clientId, c, i);
+				// printf("[CLIENT %d] Collision detected with client %d, axis=%d\n", clientId, c, i);
 
 				float distance = findDistance(staticPlayerBox, otherClientBox, i) * (delta[i] > 0 ? 1 : -1);
 				if (abs(distance) < abs(delta[i])) delta[i] = distance;
 
 				// If the z is being changed, reset z velocity and "ground" player
 				if (i == 2) {
+					// Check with zVelocity, not dz
+					if (state->players[clientId].zVelocity < 0) state->players[clientId].isGrounded = true;
 					state->players[clientId].zVelocity = 0;
-					// The if statement here blocks climbing on the ceiling
-					if (delta[2] < 0) state->players[clientId].isGrounded = true;
+					// printf("[CLIENT %d] Collision with player detected. isGrounded=%d, zVelocity=%f\n", clientId, state->players[clientId].isGrounded ? 1 : 0, state->players[clientId].zVelocity);
+				}
+
+				// if bear collides with hunter, hunter is stunned
+				if (state->players[clientId].isBear && state->players[c].isHunter) {
+					hunterBearStunTicks = state->tick + BEAR_STUN_TIME;
+					state->players[clientId].isBear = false;
+					printf("HUNTER STUNNED\n");
 				}
 			}
 		}
 
 		// check for bounding box collisions
-		// TODO: currently the setup prevents anything else other than
-		// cube 0 to move.
 		for (size_t b = 0; b < boxes2d.size(); ++b) {
-			// simple AABB overlap test in 2D (X vs X, Y vs Y)
-			if (checkCollision(playerBox, boxes2d[b]))
-			{
-				float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
-				if (abs(distance) < abs(delta[i])) delta[i] = distance;
+			bool dodging = !state->players[clientId].dodgeCollide && dashTicks[clientId] > 0;
 
-				// If the z is being changed, reset z velocity and "ground" player
-				if (i == 2) {
+			// skip X and Y collision if dodging
+			if (dodging && i != 2) continue;
+
+			if (checkCollision(playerBox, boxes2d[b])) {
+				if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
+					// Landing on top of a box
+					delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
+					state->players[clientId].isGrounded = true;
+					state->players[clientId].availableJumps = state->players[clientId].jumpCounts;
 					state->players[clientId].zVelocity = 0;
-					if (delta[2] < 0) state->players[clientId].isGrounded = true;
+				}
+				else {
+					float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
+					if (abs(distance) < abs(delta[i])) delta[i] = distance;
 				}
 			}
+
+			
+			//if (checkCollision(playerBox, boxes2d[b]))
+			//{
+			//	// If the z is being changed DOWNWARDS and collides, reset z velocity and "ground" player
+			//	if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
+			//		// printf("[CLIENT %d] Collision DOWNWARD with box detected. zVelocity=%f, deltaZ=%f\n", clientId,  state->players[clientId].zVelocity, delta[2]);
+
+			//		// newZ - playerRadius	= surfaceZ
+			//		// newZ					= surfaceZ + playerRadius
+			//		// currentZ + deltaZ	= surfaceZ + playerRadius
+			//		// deltaZ				= surfaceZ + playerRadius - currentZ
+			//		delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
+			//		state->players[clientId].isGrounded = true;
+			//		state->players[clientId].availableJumps = state->players[clientId].jumpCounts; // reset jumps on ground contact
+			//		state->players[clientId].zVelocity = 0;
+			//		/*
+			//		printf("BOXID=%llu, box.minZ=%f, box.maxZ=%f\n", b, boxes2d[b].minZ, boxes2d[b].maxZ);
+			//		printf("Dynamic playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", playerBox.minZ, playerBox.maxZ);
+			//		printf("Static  playerbox: PLAYERBOX.minZ=%f, PLAYERBOX.maxZ=%f\n", staticPlayerBox.minZ, staticPlayerBox.maxZ);
+			//		*/
+			//	}
+			//	else {
+			//		float distance = findDistance(staticPlayerBox, boxes2d[b], i) * (delta[i] > 0 ? 1 : -1);
+			//		if (abs(distance) < abs(delta[i])) delta[i] = distance;
+			//	}
+			//}
 		}
 
 	}
-	state->players[clientId].x += delta[0];
-	state->players[clientId].y += delta[1];
-	state->players[clientId].z += delta[2];
+
+	// hunter cannot move if stunned by bear
+	if (!state->players[clientId].isHunter || hunterBearStunTicks <= state->tick)
+	{
+		state->players[clientId].x += delta[0];
+		state->players[clientId].y += delta[1];
+		state->players[clientId].z += delta[2];
+	}
 
 	if (state->players[clientId].z < 0) {
 		state->players[clientId].z = 0;
 		state->players[clientId].zVelocity = 0;
 		if (delta[2] < 0) state->players[clientId].isGrounded = true;
+		// printf("[CLIENT %d] Collision with z-plane detected. isGrounded=%d, zVelocity=%f\n", clientId, state->players[clientId].isGrounded ? 1 : 0, state->players[clientId].zVelocity);
 	}
 
 	//printf("[CLIENT %d] MOVE: %f, %f, %f\n", clientId, state->players[clientId].x, state->players[clientId].y, state->players[clientId].z);
@@ -581,6 +1034,29 @@ static bool checkCollision(BoundingBox box1, BoundingBox box2) {
 		(box1.minZ < box2.maxZ && box1.maxZ > box2.minZ)
 		);
 	return isColliding;
+}
+
+bool ServerGame::isHit_(const AttackPayload& a, const PlayerState& victim)
+{
+	// forward direction from yaw/pitch → unit vector
+	float fx = cosf(a.pitch) * -sinf(a.yaw);
+	float fy = cosf(a.pitch) * cosf(a.yaw);
+	float fz = sinf(a.pitch);
+
+	// vector attacker → victim
+	float vx = victim.x - a.originX;
+	float vy = victim.y - a.originY;
+	float vz = victim.z - a.originZ;
+
+	float dist2 = vx * vx + vy * vy + vz * vz;
+	if (dist2 > attackRange * attackRange) return false;          // out of reach
+
+	float len = sqrtf(dist2);
+	if (len < 1e-4f) return false;                        // same spot?
+	float dot = (vx * fx + vy * fy + vz * fz) / len;          // cosθ
+	float cosMax = cosf(DirectX::XMConvertToRadians(ATTACK_ANGLE_DEG));
+	// Initialize the static member variable
+	return dot >= cosMax;                                 // within cone
 }
 
 // -----------------------------------------------------------------------------
@@ -601,11 +1077,20 @@ void ServerGame::readBoundingBoxes() {
 	static std::random_device rd;                                    // seed source
 	static std::mt19937       gen(rd());                             // mersenne twister engine
 	static std::uniform_int_distribution<int> distRGBA(150, 255);    // for R,G,B
-	const char* fileAddr = "bb#_bboxes.json";
+	const wchar_t* fileAddr = L"bb#_bboxes.json";
+	
+	
+	Slice<BYTE> fileData;
+	DX::ReadDataStatus readStatus = DX::ReadDataToSlice(fileAddr, fileData, true);
+	if (readStatus != DX::ReadDataStatus::SUCCESS) {
+		fwprintf(stderr, L"Cannot read file %s\n", fileAddr);
+	};
 
-	JSON_Value* rootVal = json_parse_file(fileAddr);
-	if (!rootVal) { fprintf(stderr, "Cannot parse %s\n", fileAddr); }
-	else {printf("Parsed %s\n", fileAddr);}
+	JSON_Value* rootVal = json_parse_string(reinterpret_cast<char*>(fileData.ptr));
+	free(fileData.ptr);
+
+	if (!rootVal) { fwprintf(stderr, L"Cannot parse %s\n", fileAddr); }
+	else {wprintf(L"Parsed %s\n", fileAddr);}
 	JSON_Object* rootObj = json_value_get_object(rootVal);
 	size_t       boxCnt = json_object_get_count(rootObj);
 

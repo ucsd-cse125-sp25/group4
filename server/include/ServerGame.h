@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "ServerNetwork.h"
 #include "NetworkData.h"
+#include "ReadData.h"
 #include "Timer.h"
 #include <chrono>
 #include <thread>
@@ -12,13 +13,6 @@
 #include <random>
 #include <mutex>
 
-#define GRAVITY 0.01f
-#define JUMP_VELOCITY 0.2f
-#define TERMINAL_VELOCITY -0.2f
-#define ATTACK_RANGE 4.0f
-#define ATTACK_ANGLE_DEG 45.0f
-
-
 class ServerGame {
 public:
 	ServerGame(void);
@@ -29,6 +23,7 @@ public:
 	void sendGameStateUpdates();
 	void sendAppPhaseUpdates();
 	void sendShopOptions(ShopOptionsPayload *data, int dest);
+	void sendPlayerPowerups();
 
 	void applyMovements();
 	void applyCamera();
@@ -39,9 +34,15 @@ public:
 	void readBoundingBoxes();
 	void handleGamePhase();
 	void handleStartMenu();
+	void handleEndPhase();
+	void newGame();
+	void resetGamePos();
+
 	void startARound(int);
 	void handleShopPhase();
 	void startShopPhase();
+	void applyPowerups(uint8_t, uint8_t);
+	bool anyWinners();
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;
@@ -52,6 +53,32 @@ private:
 	ServerNetwork* network;
 	char network_data[MAX_PACKET_SIZE];
 
+	int runner_time, hunter_time; // times for each of the players to start moving
+	int runner_points, hunter_points; // points for each of the players
+	
+	Point hunterSpawn = { -1.17, 0.042, 0.068 }; // center of the carpet cross
+	
+	static constexpr int NUM_SPAWNS = 7;
+	Point spawnPoints[NUM_SPAWNS] =
+	{
+		{ -2.175f, 2.307f, 0.92f },		// desk next to sun god
+		{ -1.533f, 1.115f, 0.48f },		// on chair
+		{ -1.162f, -1.346f, 0.14f },	// in bookshelf
+		{ 2.255f, 2.054f, 0.03f },		// under bed
+		{ 2.268f, 0.339f, 0.89f },		// on top of drawers/dresser
+		{ -0.274f, -1.386f, 0.03f },	// floor next to the chimney thing
+		{ -0.976f, 2.263f, 0.03f }		// under desk
+	};
+
+	// Player spawns for start and end phases
+	Point playerSpawns[4] =
+	{
+		{ -2.30, 2.536, 0.913247 },
+		{ -2.225, 2.536, 0.913247 },
+		{ -2.15, 2.536, 0.913247 },
+		{ -2.075, 2.536, 0.913247 },
+	};
+
 	/* Collision */
 	// each box → 6 floats: {min.x, min.y, min.z, max.x, max.y, max.z}
 	vector<BoundingBox> boxes2d;
@@ -60,11 +87,11 @@ private:
 
 	int num_players = 4;
 	int round_id;
+	bool tiebreaker;
 
 	std::random_device dev;
 	std::mt19937 rng;
-	std::uniform_int_distribution<std::mt19937::result_type> randomHunterPowerupGen;
-	std::uniform_int_distribution<std::mt19937::result_type> randomRunnerPowerupGen;
+	std::uniform_int_distribution<std::mt19937::result_type> randomSpawnLocationGen;
 
 
 	/* State */
@@ -81,43 +108,52 @@ private:
 
 	/* Attack */
 	std::unordered_map<unsigned, AttackPayload> latestAttacks;
-	static bool isHit(const AttackPayload& a,
-		const PlayerState& victim)
-	{
-		// forward direction from yaw/pitch → unit vector
-		float fx = cosf(a.pitch) * -sinf(a.yaw);
-		float fy = cosf(a.pitch) * cosf(a.yaw);
-		float fz = sinf(a.pitch);
+	static constexpr uint32_t windupTicks = 32;                    // 0.5 s
+	static constexpr uint32_t cdDefaultTicks = TICKS_PER_SEC * 2;     // 2 s
+	static constexpr uint32_t slowTicks = 32;                    // 0.5 s
+	static constexpr float hunterSlowFactor = 0.2f;
 
-		// vector attacker → victim
-		float vx = victim.x - a.originX;
-		float vy = victim.y - a.originY;
-		float vz = victim.z - a.originZ;
+	uint64_t hunterStartSlowdown = 0;
+	uint64_t hunterEndSlowdown = 0;   // wind-up + cool-down window ends at tick
 
-		float dist2 = vx * vx + vy * vy + vz * vz;
-		if (dist2 > a.range * a.range) return false;          // out of reach
+	struct DelayedAttack { AttackPayload attack; uint64_t hitTick; };
+	std::optional<DelayedAttack> pendingSwing;
 
-		float len = sqrtf(dist2);
-		if (len < 1e-4f) return false;                        // same spot?
-		float dot = (vx * fx + vy * fy + vz * fz) / len;          // cosθ
-		float cosMax = cosf(DirectX::XMConvertToRadians(ATTACK_ANGLE_DEG));
-        // Initialize the static member variable
-		return dot >= cosMax;                                 // within cone
-	}
+	static constexpr float ATTACK_DEFAULT_RANGE = 12.0f * PLAYER_SCALING_FACTOR;
+	float attackRange;
+	static constexpr float REDUCE_ATTACK_CD_MULTIPLIER = 0.5f;
+	int attackCooldownTicks;
+
+	bool isHit_(const AttackPayload& a, const PlayerState& victim);
 
 	// Dodge
-	static constexpr uint64_t DODGE_COOLDOWN_TICKS = TICKS_PER_SEC * 2;   // 2 s  (change to 60 if desired)
+	static constexpr uint8_t DODGE_COOLDOWN_DEFAULT_TICKS = TICKS_PER_SEC * 2;   // 2 s  (change to 60 if desired)
 	static constexpr uint8_t  INVUL_TICKS = TICKS_PER_SEC / 4;    // 0.25 s
 	static constexpr float    DASH_SPEED_MULTIPLIER = 2.5f; // run speed while dashing
+	static constexpr float    DASH_COOLDOWN_PENALTY = 0.25f; // run speed while on cooldown
+	static constexpr float    REDUCE_DODGE_CD_MULTIPLIER = 0.75f; // each time powerup is bought, reduce cooldown by 0.75x
 
 	std::array<uint64_t, 4> lastDodgeTick{ 0,0,0,0 };    // when each survivor last dodged
 	std::array<int8_t, 4> invulTicks{ 0,0,0,0 };    // frames of invulnerability left
-	std::array<int8_t, 4> dashTicks{ 0,0,0,0 };    // frames of dash‑speed left
+	std::array<int8_t, 4> dashTicks{ -1,-1,-1,-1 };    // frames of dash‑speed left
+	std::array<float, 4> dodgeCooldownTicks{ DODGE_COOLDOWN_DEFAULT_TICKS,DODGE_COOLDOWN_DEFAULT_TICKS,DODGE_COOLDOWN_DEFAULT_TICKS,DODGE_COOLDOWN_DEFAULT_TICKS };    // cooldown of each player
 
 
 	// Shop
-	std::unordered_map<uint8_t, vector<uint8_t>> playerPowerups;
+	std::unordered_map<uint8_t, vector<Powerup>> playerPowerups;
 
+	// Powerups
+	std::unordered_map<uint8_t, float> extraJumpPowerup;
+	int hasBear[4]{ 0, 0, 0, 0 };
+	int bearTicks = 0;
+	static constexpr int BEAR_TICKS = TICKS_PER_SEC * 10;
+	static constexpr Point BEAR_POS{ 1.849596, 2.404163, 0.513342 };
+	static constexpr float BEAR_SPEED_MULTIPLIER = 0.75f;
+	static constexpr float BEAR_JUMP_BOOST = 1.0f * PLAYER_SCALING_FACTOR;
+	static constexpr float BEAR_HITBOX = 5.0f * PLAYER_SCALING_FACTOR;
+	int hunterBearStunTicks = 0;
+	static constexpr int BEAR_STUN_TIME = TICKS_PER_SEC * 3;
+	static constexpr float BEAR_STUN_MULTIPLIER = 0.1f;
 };
 
 static bool checkCollision(BoundingBox, BoundingBox);
