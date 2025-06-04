@@ -25,6 +25,7 @@
     <ClInclude Include="..\client\include\ddspp.h" />
     <ClInclude Include="..\client\include\InputDialog.h" />
     <ClInclude Include="..\client\include\Renderer.h" />
+    <ClInclude Include="AudioEngine.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
@@ -33,6 +34,7 @@
     <ClCompile Include="..\client\src\ClientNetwork.cpp" />
     <ClCompile Include="..\client\src\InputDialog.cpp" />
     <ClCompile Include="..\client\src\Renderer.cpp" />
+    <ClCompile Include="AudioEngine.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="dbg_cube_ps.hlsl">

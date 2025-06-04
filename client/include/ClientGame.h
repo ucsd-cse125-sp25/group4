@@ -7,6 +7,7 @@
 #include "Renderer.h"
 #include "fmod.hpp"
 #include "fmod_errors.h"
+#include "ClientAudioEngine.h"
 #include <string>
 using namespace std;
 
@@ -56,8 +57,7 @@ public:
 	AppState* appState;
 	Renderer renderer;
 
-	FMOD::System *fmod_system;
-	FMOD::Sound* sound;
+	CAudioEngine* audioEngine;
 
 	struct ShopItem {
 		Powerup item;
