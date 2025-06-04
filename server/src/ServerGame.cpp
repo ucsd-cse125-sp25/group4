@@ -198,7 +198,7 @@ void ServerGame::receiveFromClients()
 
 				// grant!
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_DODGE;
-				animationState.isLoop[id] = true; // TODO this is for debug, change to false in production
+				animationState.isLoop[id] = false; // TODO this is for debug, change to false in production
 				lastDodgeTick[id] = state->tick;
 				invulTicks[id] = INVUL_TICKS;
 				dashTicks[id] = INVUL_TICKS;                   // dash lasts same 30 ticks
