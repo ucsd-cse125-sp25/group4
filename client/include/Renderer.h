@@ -59,6 +59,7 @@ struct PlayerRenderState {
 
 	void loopAnimation(UINT8 animation) {
 		loop = true;
+		animationStartTime = std::chrono::steady_clock::now();
 		if (isHunter) {
 			hunterAnimation = (HunterAnimation)animation;
 		}
@@ -68,6 +69,7 @@ struct PlayerRenderState {
 	}
 	void playAnimationToEnd(UINT8 animation) {
 		loop = false;
+		animationStartTime = std::chrono::steady_clock::now();
 		if (isHunter) {
 			hunterAnimation = (HunterAnimation)animation;
 		}
