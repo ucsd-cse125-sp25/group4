@@ -535,8 +535,8 @@ bool Renderer::Init(HWND window_handle) {
 	{
 		// animation data
 		m_hunterAnimations[HUNTER_ANIMATION_IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Idle.janim");
-		m_hunterAnimations[HUNTER_ANIMATION_CHASE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Attack.janim");
-		m_hunterAnimations[HUNTER_ANIMATION_ATTACK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Chase.janim");
+		m_hunterAnimations[HUNTER_ANIMATION_CHASE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Chase.janim");
+		m_hunterAnimations[HUNTER_ANIMATION_ATTACK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Attack.janim");
 
 		m_runnerAnimations[RUNNER_ANIMATION_WALK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Walk.janim");
 		m_runnerAnimations[RUNNER_ANIMATION_DODGE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Dodge.janim");
