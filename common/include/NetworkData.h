@@ -41,7 +41,8 @@ enum class PacketType : uint32_t {
 	SHOP_INIT,			// server sends to each client the options
 	SHOP_UPDATE,			// client sends what was purchased
 	PLAYER_POWERUPS,		// powerup information of all players
-  BEAR
+	BEAR,
+	ANIMATION_STATE,
 };
 
 // when adding powerups
@@ -217,6 +218,11 @@ struct PlayerPowerupPayload {
 	uint8_t powerupInfo[4][20];
 };
 
+struct AnimationState {
+	uint8_t curAnims[4];
+	bool isLoop[4];
+};
+
 struct DodgePayload { float yaw, pitch; };
 
 struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a placeholder for now
@@ -241,3 +247,14 @@ struct Packet {
 	}
 };
 
+enum RunnerAnimation : UINT8 {
+	RUNNER_ANIMATION_WALK,
+	RUNNER_ANIMATION_DODGE,
+	RUNNER_ANIMATION_COUNT
+};
+enum HunterAnimation : UINT8 {
+	HUNTER_ANIMATION_IDLE,
+	HUNTER_ANIMATION_CHASE,
+	HUNTER_ANIMATION_ATTACK,
+	HUNTER_ANIMATION_COUNT
+};

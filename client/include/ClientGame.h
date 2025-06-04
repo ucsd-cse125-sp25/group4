@@ -62,6 +62,11 @@ public:
 
 	ShopItem shopOptions[NUM_POWERUP_OPTIONS];
 
+	bool jumpWasDown = false;
+	bool dodgeWasDown = false;
+	bool attackWasDown = false;
+
+	AnimationState localAnimState;
 
 private:
 	HWND hwnd;

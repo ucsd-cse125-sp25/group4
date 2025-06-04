@@ -105,6 +105,8 @@ void ServerGame::update() {
 		}
 	}
 	state_mu.unlock();
+
+	sendAnimationUpdates();
 }
 
 void ServerGame::receiveFromClients() 
@@ -200,6 +202,8 @@ void ServerGame::receiveFromClients()
 				if (!offCooldown) break;                           // silently ignore spam
 
 				// grant!
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_DODGE;
+				animationState.isLoop[id] = true; // TODO this is for debug, change to false in production
 				lastDodgeTick[id] = state->tick;
 				invulTicks[id] = INVUL_TICKS;
 				dashTicks[id] = INVUL_TICKS;                   // dash lasts same 30 ticks
@@ -431,6 +435,14 @@ void ServerGame::newGame()
 		state->players[i].dodgeCollide = true;
 		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
 	}
+
+	animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_IDLE;
+	animationState.isLoop[0] = true;
+	// TODO runner IDLE anim!
+	for (int i = 1; i < 4; i++) {
+		animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+		animationState.curAnims[i] = true;
+	}
 }
 
 void ServerGame::resetGamePos()
@@ -638,8 +650,34 @@ void ServerGame::applyMovements() {
 			player.isBear = false;
 		}
 
+		// reset to idle ONLY FROM MOVEMENT if no input
+		if (!latestMovement.count(id)) {
+			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE) {
+				// reset animation back to idle only if it was previouslly moving
+				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
+				animationState.isLoop[id] = true;
+			}
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+				// TODO idle instead of walk
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+				animationState.isLoop[id] = true;
+			}
+		}
+
 		float dx = 0, dy = 0;
 		if (latestMovement.count(id)) {
+			// set movement ONLY IF at idle
+			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE) {
+				// reset animation back to idle only if it was previouslly moving
+				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_CHASE;
+				animationState.isLoop[id] = true;
+			}
+			// TODO check idle instead of walk
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+				animationState.isLoop[id] = true;
+			}
+
 			auto& mv = latestMovement[id];
 			// update direction regardless of collision
 			player.yaw = mv.yaw;
@@ -803,6 +841,10 @@ void ServerGame::applyDodge()
 			// end of cooldown
 			dashTicks[i] = -1; // prevents from happening multiple times
 			state->players[i].speed /= DASH_COOLDOWN_PENALTY;
+
+			// TODO replace walk with idle
+			animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+			animationState.isLoop[i] = true;
 		}
 	}
 }
@@ -810,6 +852,14 @@ void ServerGame::applyDodge()
 // -----------------------------------------------------------------------------
 // NETWORK
 // -----------------------------------------------------------------------------
+
+void ServerGame::sendAnimationUpdates() {
+	char packet_data[HDR_SIZE + sizeof(AnimationState)];
+
+	NetworkServices::buildPacket<AnimationState>(PacketType::ANIMATION_STATE, animationState, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(AnimationState));
+}
 
 void ServerGame::sendGameStateUpdates() {
 

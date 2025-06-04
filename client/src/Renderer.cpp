@@ -694,8 +694,14 @@ XMMATRIX Renderer::computeFreecamViewProject(FXMVECTOR camPos, float yaw, float 
 XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
 	float uniformScale = PLAYER_SCALING_FACTOR;
 	XMMATRIX scale = XMMatrixScaling(uniformScale, uniformScale, uniformScale);
-	XMMATRIX rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw + XM_PI);
-	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z);
+	XMMATRIX rotate;
+	if (playerRenderState.isHunter) {
+		rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw + XM_PI );
+	}
+	else {
+		rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw /* + XM_PI */);
+	}
+	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z - 0.7 * uniformScale);
 	return XMMatrixTranspose(scale * rotate * translate);
 }
 

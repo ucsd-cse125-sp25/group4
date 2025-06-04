@@ -76,6 +76,23 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	//memset((&initPowerups[0][0] + 60), 103, 20);
 	memset(initPowerups, 255, sizeof(initPowerups));
 	renderer.updatePlayerPowerups(&initPowerups[0][0]);
+
+	jumpWasDown = false;
+	dodgeWasDown = false;
+	attackWasDown = false;
+
+	localAnimState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_IDLE;
+	localAnimState.isLoop[0] = true;
+	// TODO runner IDLE anim!
+	for (int i = 1; i < 4; i++) {
+		localAnimState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+		localAnimState.curAnims[i] = true;
+	}
+
+	renderer.players[0].loopAnimation(HunterAnimation::HUNTER_ANIMATION_IDLE);
+	renderer.players[1].loopAnimation(RunnerAnimation::RUNNER_ANIMATION_WALK);
+	renderer.players[2].loopAnimation(RunnerAnimation::RUNNER_ANIMATION_WALK);
+	renderer.players[3].loopAnimation(RunnerAnimation::RUNNER_ANIMATION_WALK);
 }
 
 void ClientGame::sendDebugPacket(const char* message) {
@@ -174,8 +191,7 @@ void ClientGame::update() {
 				renderer.players[i].pos.x = gameState->players[i].x;
 				renderer.players[i].pos.y = gameState->players[i].y;
 				renderer.players[i].pos.z = gameState->players[i].z;
-				//renderer.players[i].isDead = state->players[i].isDead;      // NEW
-				//renderer.players[i].isHunter = state->players[i].isHunter;  // NEW
+				renderer.players[i].isHunter = gameState->players[i].isHunter;  // NEW
 
 				// update the rotation from other players only (only if not spectator, otherwise gotta update everything) (only for game phase)
 				if (id != 4 && i == renderer.currPlayer.playerId && appState->gamePhase == GamePhase::GAME_PHASE) continue;
@@ -279,6 +295,33 @@ void ClientGame::update() {
 				}
 			}
 			renderer.updatePlayerPowerups(&pwPayload->powerupInfo[0][0]);
+			break;
+		}
+		case PacketType::ANIMATION_STATE:
+		{
+			AnimationState* remoteAnimState = (AnimationState*)(network_data + HDR_SIZE);
+			for (int i = 0; i < 4; i++) {
+				if (remoteAnimState->curAnims[i] != localAnimState.curAnims[i]) {
+					localAnimState.curAnims[i] = remoteAnimState->curAnims[i];
+					localAnimState.isLoop[i] = remoteAnimState->isLoop[i];
+					if (i == 0) {
+						if (remoteAnimState->isLoop) {
+							renderer.players[i].loopAnimation((HunterAnimation)remoteAnimState->curAnims[i]);
+						}
+						else {
+							renderer.players[i].playAnimationToEnd((HunterAnimation)remoteAnimState->curAnims[i]);
+						}
+					}
+					else {
+						if (remoteAnimState->isLoop) {
+							renderer.players[i].loopAnimation((RunnerAnimation)remoteAnimState->curAnims[i]);
+						}
+						else {
+							renderer.players[i].playAnimationToEnd((RunnerAnimation)remoteAnimState->curAnims[i]);
+						}
+					}
+				}
+			}
 			break;
 		}
 		default:
@@ -448,13 +491,12 @@ bool ClientGame::processMovementInput()
 	if (GetAsyncKeyState('A') & 0x8000) direction[1] -= 1;
 	if (GetAsyncKeyState('D') & 0x8000) direction[1] += 1;
 	
-	static bool rWasDown = false;
-	bool rNowDown = (GetAsyncKeyState(' ') & 0x8000) != 0;
+	bool jumpNowDown = (GetAsyncKeyState(' ') & 0x8000) != 0;
 
-	if (rNowDown && (!rWasDown || bunnyhop))      // rising edge
+	if (jumpNowDown && (!jumpWasDown || bunnyhop))      // rising edge
 		jump = true;
 
-	rWasDown = rNowDown;
+	jumpWasDown = jumpNowDown;
 
 	if (!direction[0] && !direction[1] && !direction[2] && !jump) return false;
 	sendMovePacket(direction, yaw, pitch, jump);
@@ -465,10 +507,9 @@ bool ClientGame::processMovementInput()
 void ClientGame::processAttackInput()
 {
 	if (renderer.currPlayer.playerId != 0) return;   // only hunter
-	bool wasDown = false;
-	bool  isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+	bool attackNowDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
 
-	if (isDown && !wasDown)            // rising edge
+	if (attackNowDown && !attackWasDown)            // rising edge
 	{
 		float pos[3] = {
 			renderer.players[0].pos.x,
@@ -476,8 +517,9 @@ void ClientGame::processAttackInput()
 			renderer.players[0].pos.z
 		};
 		sendAttackPacket(pos, yaw, pitch);
+		renderer.players[id].loopAnimation(HUNTER_ANIMATION_ATTACK);
 	}
-	wasDown = isDown;
+	attackWasDown = attackNowDown;
 }
 
 void ClientGame::processDodgeInput()
@@ -485,13 +527,12 @@ void ClientGame::processDodgeInput()
 	if (renderer.currPlayer.playerId == 0) return;   // hunter cannot dash
 	if (gameState->players[id].isBear) return;		 // bear cannot dash
 
-	static bool rWasDown = false;
-	bool rNowDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+	bool dodgeNowDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
 
-	if (rNowDown && !rWasDown)      // rising edge
+	if (dodgeNowDown && !dodgeWasDown)      // rising edge
 		sendDodgePacket();
 
-	rWasDown = rNowDown;
+	dodgeWasDown = dodgeNowDown;
 }
 
 void ClientGame::processBearInput()
