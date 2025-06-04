@@ -404,7 +404,7 @@ void ServerGame::handleStartMenu() {
 		num_players = phaseStatus.size();
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(ROUND_DURATION);
+		startARound(ROUND_DURATION + roundTimeAdjustment);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
@@ -532,7 +532,7 @@ void ServerGame::handleShopPhase() {
 	if (ready && !phaseStatus.empty()) {
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(ROUND_DURATION);
+		startARound(ROUND_DURATION + roundTimeAdjustment);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
@@ -596,6 +596,9 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		break;
 	case Powerup::H_INC_ATTACK_RANGE:
 		attackRange += 5.0f;
+		break;
+	case Powerup::H_INCREASE_ROUND_TIME:
+		roundTimeAdjustment += 30; // increase round time by 30 seconds
 		break;
 	case Powerup::R_INCREASE_SPEED:
 		state->players[id].speed *= 1.5f;
@@ -672,9 +675,11 @@ void ServerGame::applyMovements() {
 			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}*/
-
-		if (latestMovement.count(id) && latestMovement[id].jump && player.availableJumps > 0 && player.zVelocity <= 0) {
+		if (latestMovement.count(id) && latestMovement[id].jump) {
 			printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
+		}
+		if (latestMovement.count(id) && latestMovement[id].jump && player.availableJumps > 0 && player.zVelocity <= 0) {
+			//printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
 			player.zVelocity += JUMP_VELOCITY + extraJumpPowerup[id];
 			player.availableJumps--;
 			if (player.isBear) {
@@ -965,7 +970,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 			if (dodging && i != 2) continue;
 
 			if (checkCollision(playerBox, boxes2d[b])) {
-				if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
+				if (i == 2 && playerBox.minZ <= boxes2d[b].maxZ && delta[2] < 0) {
 					// Landing on top of a box
 					delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
 					state->players[clientId].isGrounded = true;
@@ -1049,6 +1054,15 @@ bool ServerGame::isHit_(const AttackPayload& a, const PlayerState& victim)
 	float vz = victim.z - a.originZ;
 
 	float dist2 = vx * vx + vy * vy + vz * vz;
+
+	// If the victim is within a radius (thus a sphere), always hit regardless of direction
+	float directDist = sqrtf(dist2);
+	float radius = 1e-1f;
+	if (directDist <= radius) {
+		printf("[HIT] victim is within hunter sphere. The attack counts.\n");
+		return true;
+	}
+
 	if (dist2 > attackRange * attackRange) return false;          // out of reach
 
 	float len = sqrtf(dist2);
