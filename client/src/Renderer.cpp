@@ -701,7 +701,7 @@ XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
 	else {
 		rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw /* + XM_PI */);
 	}
-	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z - 0.7 * uniformScale);
+	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z - 1.0f * uniformScale);
 	return XMMatrixTranspose(scale * rotate * translate);
 }
 

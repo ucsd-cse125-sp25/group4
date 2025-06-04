@@ -156,6 +156,7 @@ private:
 	int hunterBearStunTicks = 0;
 	static constexpr int BEAR_STUN_TIME = TICKS_PER_SEC * 3;
 	static constexpr float BEAR_STUN_MULTIPLIER = 0.1f;
+	int roundTimeAdjustment = 0;
 
 	// animation
 	AnimationState animationState;
