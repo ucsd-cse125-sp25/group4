@@ -45,11 +45,6 @@ ServerGame::ServerGame(void) :
 	//vector<vector<int>> colors2d;
 
 
-	// TODO: test RNG on the atkinson hall computers
-	//cout << "Entropy: " << dev.entropy() << endl;
-	//for (int i = 0; i < 100; i++) {
-	//	cout << randomHunterPowerupGen(rng) << endl;
-	//}
 	newGame();
 }
 
@@ -433,6 +428,7 @@ void ServerGame::newGame()
 		state->players[i].isDead = false;
 		state->players[i].isBear = false;
 		state->players[i].dodgeCollide = true;
+		state->players[i].jumpCounts = 1;
 		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
 	}
 
@@ -607,7 +603,7 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		attackCooldownTicks *= REDUCE_ATTACK_CD_MULTIPLIER;
 		break;
 	case Powerup::H_INC_ATTACK_RANGE:
-		attackRange += 5.0f;
+		attackRange += 5.0f * PLAYER_SCALING_FACTOR;
 		break;
 	case Powerup::H_INCREASE_ROUND_TIME:
 		roundTimeAdjustment += 30; // increase round time by 30 seconds
@@ -1094,9 +1090,9 @@ static bool checkCollision(BoundingBox box1, BoundingBox box2) {
 bool ServerGame::isHit_(const AttackPayload& a, const PlayerState& victim)
 {
 	// forward direction from yaw/pitch → unit vector
-	float fx = cosf(a.pitch) * -sinf(a.yaw);
-	float fy = cosf(a.pitch) * cosf(a.yaw);
-	float fz = sinf(a.pitch);
+	float fx = cosf(0) * -sinf(a.yaw);
+	float fy = cosf(0) * cosf(a.yaw);
+	float fz = sinf(0);
 
 	// vector attacker → victim
 	float vx = victim.x - a.originX;
@@ -1107,7 +1103,7 @@ bool ServerGame::isHit_(const AttackPayload& a, const PlayerState& victim)
 
 	// If the victim is within a radius (thus a sphere), always hit regardless of direction
 	float directDist = sqrtf(dist2);
-	float radius = 1e-1f;
+	float radius = 3e-1f;
 	if (directDist <= radius) {
 		printf("[HIT] victim is within hunter sphere. The attack counts.\n");
 		return true;
