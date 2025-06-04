@@ -154,6 +154,10 @@ private:
 	int hunterBearStunTicks = 0;
 	static constexpr int BEAR_STUN_TIME = TICKS_PER_SEC * 3;
 	static constexpr float BEAR_STUN_MULTIPLIER = 0.1f;
+	
+	int phantomTicks = 0;
+	static constexpr int PHANTOM_TICKS = TICKS_PER_SEC * 5;
+	int hasPhantom = 0;
 };
 
 static bool checkCollision(BoundingBox, BoundingBox);

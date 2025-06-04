@@ -274,6 +274,26 @@ void ServerGame::receiveFromClients()
 
 				break;
 			}
+			case PacketType::PHANTOM:
+			{
+				// payload is empty
+				//PhantomPayload* phantom = (PhantomPayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] PHANTOM_PACKET\n", id);
+				// drop if player doesn't have the powerup
+				if (!hasPhantom)
+					break;
+				// drop if phantom is already active
+				if (state->players[id].isPhantom)
+					break;
+				else 
+				{
+					state->players[id].isPhantom = true;
+					phantomTicks = state->tick + (PHANTOM_TICKS * hasPhantom);
+					hasPhantom = 0; // reset phantom powerup
+					printf("IT'S PHANTOM TIME!!!\n");
+				}
+				break;
+			}
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
 				break;
@@ -318,6 +338,7 @@ void ServerGame::startARound(int seconds) {
 
 		player.isDead = false;
 		player.isBear = false;
+		player.isPhantom = false;
 		// print player coin
 		printf("[round %d] Player %d coins: %d\n", round_id, id, player.coins);
 	}
@@ -429,6 +450,7 @@ void ServerGame::newGame()
 		state->players[i].isDead = false;
 		state->players[i].isBear = false;
 		state->players[i].dodgeCollide = true;
+		state->players[i].isPhantom = false;
 		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
 	}
 }
@@ -638,7 +660,13 @@ void ServerGame::applyMovements() {
 			player.isBear = false;
 		}
 
-		float dx = 0, dy = 0;
+		// check if phantom power runs out
+		if (player.isPhantom && phantomTicks <= state->tick)
+		{
+			player.isPhantom = false;
+		}
+
+		float dx = 0, dy = 0, dz = 0;
 		if (latestMovement.count(id)) {
 			auto& mv = latestMovement[id];
 			// update direction regardless of collision
@@ -659,6 +687,8 @@ void ServerGame::applyMovements() {
 			dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * player.speed;
 
 			dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * player.speed;
+
+			dz = mv.direction[2] * player.speed; // vertical movement, if any
 		}
 
 		/* physics logic embedded */
@@ -682,10 +712,16 @@ void ServerGame::applyMovements() {
 			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}
+
 		// gravity
-		player.zVelocity -= GRAVITY;
-		if (player.zVelocity < TERMINAL_VELOCITY)
-			player.zVelocity = TERMINAL_VELOCITY;
+		if (player.isHunter && player.isPhantom) {
+			player.zVelocity = dz;
+		}
+		else {
+			player.zVelocity -= GRAVITY;
+			if (player.zVelocity < TERMINAL_VELOCITY)
+				player.zVelocity = TERMINAL_VELOCITY;
+		}
 
 		// apply speed modifiers here:
 		// hunter slow debuff
@@ -827,6 +863,8 @@ void ServerGame::sendPlayerPowerups() {
 	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
 	for (auto [id, powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
+		hasBear[id] = 0;
+		hasPhantom = 0;
 		int idx = 0;
 		for (auto p : powerups) {
 			if (idx >= 20) break;
@@ -834,6 +872,11 @@ void ServerGame::sendPlayerPowerups() {
 			{
 				// reset bear status for the next round
 				hasBear[id] += 1;
+			}
+			if (p == Powerup::H_PHANTOM)
+			{
+				// reset phantom status for the next round
+				hasPhantom += 1;
 			}
 			printf("%s, ", PowerupInfo[p].name.c_str());
 			data.powerupInfo[id][idx] = (uint8_t) p;
