@@ -87,18 +87,18 @@ static std::map<Powerup, PowerupMetadata> PowerupInfo{
 	{ Powerup::H_INCREASE_SPEED,	{0, 2, "H_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
 	{ Powerup::H_INCREASE_JUMP,		{1, 1, "H_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
 	{ Powerup::H_INCREASE_VISION,	{2, 3, "H_INSTINCT",	L"textures\\cards\\h_instinct.dds"} },
-	{ Powerup::H_MULTI_JUMPS,	    {3, 3, "H_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
+	{ Powerup::H_MULTI_JUMPS,	    {3, 3, "H_JUMPPERS",	L"textures\\cards\\r_skittish.dds"} },
 	{ Powerup::H_REDUCE_ATTACK_CD,	{4, 3, "H_SNIPER",		L"textures\\cards\\h_sniper.dds"} },
 	{ Powerup::H_INC_ATTACK_RANGE,	{5, 3, "H_HUSTLER",		L"textures\\cards\\h_hustler.dds"} },
-	{ Powerup::H_BUNNY_HOP,			{6, 3, "H_HUSTLER",		L"textures\\cards\\h_hustler.dds"} }, //TODO CHANGE TEXTURE
+	{ Powerup::H_BUNNY_HOP,			{6, 3, "H_HUSTLER",		L"textures\\cards\\r_bhopp.dds"} }, 
 	{ Powerup::H_INCREASE_ROUND_TIME,{7, 2, "H_TIMER",      L"textures\\cards\\h_hustler.dds"} }, //TODO CHANGE TEXTURE
 	{ Powerup::R_INCREASE_SPEED,	{8, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
 	{ Powerup::R_INCREASE_JUMP,		{9, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
 	{ Powerup::R_DECREASE_DODGE_CD,	{10, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
 	{ Powerup::R_BEAR,				{11, 5, "R_BEAR",		L"textures\\cards\\r_bear.dds"} },
-	{ Powerup::R_MULTI_JUMPS,	    {12, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
-	{ Powerup::R_BUNNY_HOP,			{13, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
-	{ Powerup::R_DODGE_NO_COLLIDE,	{14, 3, "R_DODGE_NO_COLLIDE",	L"textures\\cards\\h_sniper.dds"} },//TODO CHANGE TEXTURE
+	{ Powerup::R_MULTI_JUMPS,	    {12, 3, "R_JUMPPERS",	L"textures\\cards\\r_skittish.dds"} },
+	{ Powerup::R_BUNNY_HOP,			{13, 3, "R_JUMPPERS",	L"textures\\cards\\r_bhopp.dds"} },
+	{ Powerup::R_DODGE_NO_COLLIDE,	{14, 3, "R_DODGE_NO_COLLIDE",	L"textures\\cards\\r_clipper.dds"} },
 };
 
 // The packet header preceeds every packet

@@ -693,6 +693,7 @@ struct ShopUI {
 
 	XMMATRIX cardModelMatrix[3];
 	XMMATRIX cardSelectedModelMatrix[3];
+	XMMATRIX cardCostModelMatrix[3];
 	XMMATRIX coinsModelMatrix;
 	XMMATRIX soulsModelMatrix;
 	float selectedCardMult = 1.2f;
@@ -705,12 +706,13 @@ struct ShopUI {
 	float screenW = 1920.0f, screenH = 1080.0f;
 	float centerX = screenW * 0.5f, centerY = screenH * 0.5f, spacing = 50.0f;
 
-	float cardW = 724.0f/1.5, cardH = 1236.0f/1.5; // magic numbers for scale!!
+	float cardW = 724.0f/1.5, cardH = 1034.0f/1.5; // magic numbers for scale!!
 	float cardCenterX = cardW / 2, cardCenterY = cardH / 2;
 
 	float counterW = 400.0f/1.5f, counterH = 200.0f/1.5f;
 
 	uint8_t powerupIdxs[3] = {0, 0, 0};
+	uint8_t powerupCosts[3] = { 0, 0, 0 };
 	uint8_t currSelected = 3; // surpasses 0, 1, 2, so that nothing gets highlighted!
 	uint8_t coins;
 	uint8_t souls;
@@ -757,11 +759,13 @@ struct ShopUI {
 
 			XMMATRIX m = XMMatrixTranslation(tx, ty, 0);
 			cardModelMatrix[i] = XMMatrixTranspose(m);
+			cardCostModelMatrix[i] = XMMatrixTranspose(XMMatrixTranslation(tx, screenH-counterH-50, 0));
 			m = XMMatrixTranslation(-cardCenterX, -cardCenterY, 0)
 				* XMMatrixScaling(selectedCardMult, selectedCardMult, 1)
 				* XMMatrixTranslation(cardCenterX, cardCenterY, 0)
 				* m;
 			cardSelectedModelMatrix[i] = XMMatrixTranspose(m);
+
 		}
 		coinsModelMatrix = XMMatrixTranspose(XMMatrixTranslation(screenW - counterW - 20.0f, 20.0f + counterH, 0));
 		soulsModelMatrix = XMMatrixTranspose(XMMatrixTranslation(screenW - counterW - 20.0f, 20.0f, 0));
@@ -901,6 +905,9 @@ public:
 		m_ShopUI.powerupIdxs[0] = PowerupInfo[p0].textureIdx;
 		m_ShopUI.powerupIdxs[1] = PowerupInfo[p1].textureIdx;
 		m_ShopUI.powerupIdxs[2] = PowerupInfo[p2].textureIdx;
+		m_ShopUI.powerupCosts[0] = PowerupInfo[p0].cost;
+		m_ShopUI.powerupCosts[1] = PowerupInfo[p1].cost;
+		m_ShopUI.powerupCosts[2] = PowerupInfo[p2].cost;
 	}
 
 	void selectPowerup(uint8_t selection) {

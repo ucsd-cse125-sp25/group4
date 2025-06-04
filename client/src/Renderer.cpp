@@ -902,6 +902,7 @@ bool Renderer::Render() {
 
 		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
 		for (int i = 0; i < 3; i++) {
+			dc.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index;
 			if (i == m_ShopUI.currSelected) {
 				dc.modelMatrix = m_ShopUI.cardSelectedModelMatrix[i];
 			}
@@ -909,6 +910,13 @@ bool Renderer::Render() {
 				dc.modelMatrix = m_ShopUI.cardModelMatrix[i];
 			}
 			dc.first_texture_idx = m_ShopUI.cardTextures.ptr[m_ShopUI.powerupIdxs[i]].descriptor.index;
+			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+			m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
+			
+			// draw cost separately
+			dc.vpos_idx = m_ShopUI.counterVertexBuffer.descriptor.index;
+			dc.modelMatrix = m_ShopUI.cardCostModelMatrix[i];
+			dc.first_texture_idx = m_ShopUI.coinsTextures.ptr[m_ShopUI.powerupCosts[i]].descriptor.index;
 			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
 			m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
 		}
