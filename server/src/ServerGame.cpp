@@ -105,6 +105,8 @@ void ServerGame::update() {
 		}
 	}
 	state_mu.unlock();
+
+	sendAnimationUpdates();
 }
 
 void ServerGame::receiveFromClients() 
@@ -200,6 +202,8 @@ void ServerGame::receiveFromClients()
 				if (!offCooldown) break;                           // silently ignore spam
 
 				// grant!
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_DODGE;
+				animationState.isLoop[id] = true; // TODO this is for debug, change to false in production
 				lastDodgeTick[id] = state->tick;
 				invulTicks[id] = INVUL_TICKS;
 				dashTicks[id] = INVUL_TICKS;                   // dash lasts same 30 ticks
@@ -404,7 +408,7 @@ void ServerGame::handleStartMenu() {
 		num_players = phaseStatus.size();
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(ROUND_DURATION);
+		startARound(ROUND_DURATION + roundTimeAdjustment);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
@@ -430,6 +434,14 @@ void ServerGame::newGame()
 		state->players[i].isBear = false;
 		state->players[i].dodgeCollide = true;
 		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
+	}
+
+	animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_IDLE;
+	animationState.isLoop[0] = true;
+	// TODO runner IDLE anim!
+	for (int i = 1; i < 4; i++) {
+		animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+		animationState.curAnims[i] = true;
 	}
 }
 
@@ -532,7 +544,7 @@ void ServerGame::handleShopPhase() {
 	if (ready && !phaseStatus.empty()) {
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(ROUND_DURATION);
+		startARound(ROUND_DURATION + roundTimeAdjustment);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
@@ -597,6 +609,9 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 	case Powerup::H_INC_ATTACK_RANGE:
 		attackRange += 5.0f;
 		break;
+	case Powerup::H_INCREASE_ROUND_TIME:
+		roundTimeAdjustment += 30; // increase round time by 30 seconds
+		break;
 	case Powerup::R_INCREASE_SPEED:
 		state->players[id].speed *= 1.5f;
 		printf("[POWERUP] Player %d speed increased to %.2f\n", id, state->players[id].speed);
@@ -638,8 +653,34 @@ void ServerGame::applyMovements() {
 			player.isBear = false;
 		}
 
+		// reset to idle ONLY FROM MOVEMENT if no input
+		if (!latestMovement.count(id)) {
+			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE) {
+				// reset animation back to idle only if it was previouslly moving
+				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
+				animationState.isLoop[id] = true;
+			}
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+				// TODO idle instead of walk
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+				animationState.isLoop[id] = true;
+			}
+		}
+
 		float dx = 0, dy = 0;
 		if (latestMovement.count(id)) {
+			// set movement ONLY IF at idle
+			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE) {
+				// reset animation back to idle only if it was previouslly moving
+				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_CHASE;
+				animationState.isLoop[id] = true;
+			}
+			// TODO check idle instead of walk
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+				animationState.isLoop[id] = true;
+			}
+
 			auto& mv = latestMovement[id];
 			// update direction regardless of collision
 			player.yaw = mv.yaw;
@@ -672,9 +713,11 @@ void ServerGame::applyMovements() {
 			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}*/
-
-		if (latestMovement.count(id) && latestMovement[id].jump && player.availableJumps > 0 && player.zVelocity <= 0) {
+		if (latestMovement.count(id) && latestMovement[id].jump) {
 			printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
+		}
+		if (latestMovement.count(id) && latestMovement[id].jump && player.availableJumps > 0 && player.zVelocity <= 0) {
+			//printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
 			player.zVelocity += JUMP_VELOCITY + extraJumpPowerup[id];
 			player.availableJumps--;
 			if (player.isBear) {
@@ -803,6 +846,10 @@ void ServerGame::applyDodge()
 			// end of cooldown
 			dashTicks[i] = -1; // prevents from happening multiple times
 			state->players[i].speed /= DASH_COOLDOWN_PENALTY;
+
+			// TODO replace walk with idle
+			animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+			animationState.isLoop[i] = true;
 		}
 	}
 }
@@ -810,6 +857,14 @@ void ServerGame::applyDodge()
 // -----------------------------------------------------------------------------
 // NETWORK
 // -----------------------------------------------------------------------------
+
+void ServerGame::sendAnimationUpdates() {
+	char packet_data[HDR_SIZE + sizeof(AnimationState)];
+
+	NetworkServices::buildPacket<AnimationState>(PacketType::ANIMATION_STATE, animationState, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(AnimationState));
+}
 
 void ServerGame::sendGameStateUpdates() {
 
@@ -965,7 +1020,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 			if (dodging && i != 2) continue;
 
 			if (checkCollision(playerBox, boxes2d[b])) {
-				if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
+				if (i == 2 && playerBox.minZ <= boxes2d[b].maxZ && delta[2] < 0) {
 					// Landing on top of a box
 					delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
 					state->players[clientId].isGrounded = true;
@@ -1049,6 +1104,15 @@ bool ServerGame::isHit_(const AttackPayload& a, const PlayerState& victim)
 	float vz = victim.z - a.originZ;
 
 	float dist2 = vx * vx + vy * vy + vz * vz;
+
+	// If the victim is within a radius (thus a sphere), always hit regardless of direction
+	float directDist = sqrtf(dist2);
+	float radius = 1e-1f;
+	if (directDist <= radius) {
+		printf("[HIT] victim is within hunter sphere. The attack counts.\n");
+		return true;
+	}
+
 	if (dist2 > attackRange * attackRange) return false;          // out of reach
 
 	float len = sqrtf(dist2);

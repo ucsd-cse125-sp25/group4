@@ -42,7 +42,8 @@ enum class PacketType : uint32_t {
 	SHOP_INIT,			// server sends to each client the options
 	SHOP_UPDATE,			// client sends what was purchased
 	PLAYER_POWERUPS,		// powerup information of all players
-	BEAR
+	BEAR,
+	ANIMATION_STATE,
 };
 
 // when adding powerups
@@ -58,6 +59,7 @@ enum class Powerup : uint8_t {
 	H_REDUCE_ATTACK_CD,
 	H_INC_ATTACK_RANGE,
 	H_BUNNY_HOP,
+	H_INCREASE_ROUND_TIME,
 	// ...
 	NUM_HUNTER_POWERUPS,
 
@@ -90,13 +92,14 @@ static std::map<Powerup, PowerupMetadata> PowerupInfo{
 	{ Powerup::H_REDUCE_ATTACK_CD,	{4, 3, "H_SNIPER",		L"textures\\cards\\h_sniper.dds"} },
 	{ Powerup::H_INC_ATTACK_RANGE,	{5, 3, "H_HUSTLER",		L"textures\\cards\\h_hustler.dds"} },
 	{ Powerup::H_BUNNY_HOP,			{6, 3, "H_HUSTLER",		L"textures\\cards\\h_hustler.dds"} }, //TODO CHANGE TEXTURE
-	{ Powerup::R_INCREASE_SPEED,	{7, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
-	{ Powerup::R_INCREASE_JUMP,		{8, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
-	{ Powerup::R_DECREASE_DODGE_CD,	{9, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
-	{ Powerup::R_BEAR,				{10, 5, "R_BEAR",		L"textures\\cards\\r_bear.dds"} },
-	{ Powerup::R_MULTI_JUMPS,	    {11, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
-	{ Powerup::R_BUNNY_HOP,			{12, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
-	{ Powerup::R_DODGE_NO_COLLIDE,	{13, 3, "R_DODGE_NO_COLLIDE",	L"textures\\cards\\h_sniper.dds"} },//TODO CHANGE TEXTURE
+	{ Powerup::H_INCREASE_ROUND_TIME,{7, 2, "H_TIMER",      L"textures\\cards\\h_hustler.dds"} }, //TODO CHANGE TEXTURE
+	{ Powerup::R_INCREASE_SPEED,	{8, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
+	{ Powerup::R_INCREASE_JUMP,		{9, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
+	{ Powerup::R_DECREASE_DODGE_CD,	{10, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
+	{ Powerup::R_BEAR,				{11, 5, "R_BEAR",		L"textures\\cards\\r_bear.dds"} },
+	{ Powerup::R_MULTI_JUMPS,	    {12, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
+	{ Powerup::R_BUNNY_HOP,			{13, 3, "R_JUMPPERS",	L"textures\\cards\\h_instinct.dds"} },//TODO CHANGE TEXTURE
+	{ Powerup::R_DODGE_NO_COLLIDE,	{14, 3, "R_DODGE_NO_COLLIDE",	L"textures\\cards\\h_sniper.dds"} },//TODO CHANGE TEXTURE
 };
 
 // The packet header preceeds every packet
@@ -218,6 +221,11 @@ struct PlayerPowerupPayload {
 	uint8_t powerupInfo[4][20];
 };
 
+struct AnimationState {
+	uint8_t curAnims[4];
+	bool isLoop[4];
+};
+
 struct DodgePayload { float yaw, pitch; };
 
 struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a placeholder for now
@@ -242,3 +250,14 @@ struct Packet {
 	}
 };
 
+enum RunnerAnimation : UINT8 {
+	RUNNER_ANIMATION_WALK,
+	RUNNER_ANIMATION_DODGE,
+	RUNNER_ANIMATION_COUNT
+};
+enum HunterAnimation : UINT8 {
+	HUNTER_ANIMATION_IDLE,
+	HUNTER_ANIMATION_CHASE,
+	HUNTER_ANIMATION_ATTACK,
+	HUNTER_ANIMATION_COUNT
+};

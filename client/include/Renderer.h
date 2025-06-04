@@ -46,17 +46,6 @@ struct LookDir {
 	float yaw; 
 };
 
-enum RunnerAnimation : UINT8 {
-	RUNNER_ANIMATION_WALK,
-	RUNNER_ANIMATION_DODGE,
-	RUNNER_ANIMATION_COUNT
-};
-enum HunterAnimation : UINT8 {
-	HUNTER_ANIMATION_IDLE,
-	HUNTER_ANIMATION_CHASE,
-	HUNTER_ANIMATION_ATTACK,
-	HUNTER_ANIMATION_COUNT
-};
 struct PlayerRenderState {
 	XMFLOAT3 pos;
 	std::chrono::time_point<std::chrono::steady_clock> animationStartTime;
