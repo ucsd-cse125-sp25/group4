@@ -160,6 +160,10 @@ private:
 
 	// animation
 	AnimationState animationState;
+	
+	int phantomTicks = 0;
+	static constexpr int PHANTOM_TICKS = TICKS_PER_SEC * 5;
+	int hasPhantom = 0;
 };
 
 static bool checkCollision(BoundingBox, BoundingBox);

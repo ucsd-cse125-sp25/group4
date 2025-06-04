@@ -43,6 +43,7 @@ enum class PacketType : uint32_t {
 	PLAYER_POWERUPS,		// powerup information of all players
 	BEAR,
 	ANIMATION_STATE,
+	PHANTOM
 };
 
 // when adding powerups
@@ -58,6 +59,7 @@ enum class Powerup : uint8_t {
 	H_REDUCE_ATTACK_CD,
 	H_INC_ATTACK_RANGE,
 	H_BUNNY_HOP,
+	H_PHANTOM,
 	H_INCREASE_ROUND_TIME,
 	// ...
 	NUM_HUNTER_POWERUPS,
@@ -91,14 +93,15 @@ static std::map<Powerup, PowerupMetadata> PowerupInfo{
 	{ Powerup::H_REDUCE_ATTACK_CD,	{4, 3, "H_SNIPER",		L"textures\\cards\\h_sniper.dds"} },
 	{ Powerup::H_INC_ATTACK_RANGE,	{5, 3, "H_HUSTLER",		L"textures\\cards\\h_hustler.dds"} },
 	{ Powerup::H_BUNNY_HOP,			{6, 3, "H_HUSTLER",		L"textures\\cards\\r_bhopp.dds"} }, 
-	{ Powerup::H_INCREASE_ROUND_TIME,{7, 2, "H_TIMER",      L"textures\\cards\\h_hustler.dds"} }, //TODO CHANGE TEXTURE
-	{ Powerup::R_INCREASE_SPEED,	{8, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
-	{ Powerup::R_INCREASE_JUMP,		{9, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
-	{ Powerup::R_DECREASE_DODGE_CD,	{10, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
-	{ Powerup::R_BEAR,				{11, 5, "R_BEAR",		L"textures\\cards\\r_bear.dds"} },
-	{ Powerup::R_MULTI_JUMPS,	    {12, 3, "R_JUMPPERS",	L"textures\\cards\\r_skittish.dds"} },
-	{ Powerup::R_BUNNY_HOP,			{13, 3, "R_JUMPPERS",	L"textures\\cards\\r_bhopp.dds"} },
-	{ Powerup::R_DODGE_NO_COLLIDE,	{14, 3, "R_DODGE_NO_COLLIDE",	L"textures\\cards\\r_clipper.dds"} },
+	{ Powerup::H_PHANTOM,			{7, 1, "H_PHANTOM",	L"textures\\cards\\h_sniper.dds"} },//TODO CHANGE TEXTURE
+	{ Powerup::H_INCREASE_ROUND_TIME,{8, 2, "H_TIMER",      L"textures\\cards\\h_hustler.dds"} }, //TODO CHANGE TEXTURE
+	{ Powerup::R_INCREASE_SPEED,	{9, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
+	{ Powerup::R_INCREASE_JUMP,		{10, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
+	{ Powerup::R_DECREASE_DODGE_CD,	{11, 3, "R_REDBEAR",		L"textures\\cards\\r_redbear.dds"} },
+	{ Powerup::R_BEAR,				{12, 5, "R_BEAR",		L"textures\\cards\\r_bear.dds"} },
+	{ Powerup::R_MULTI_JUMPS,	    {13, 3, "R_JUMPPERS",	L"textures\\cards\\r_skittish.dds"} },
+	{ Powerup::R_BUNNY_HOP,			{14, 3, "R_JUMPPERS",	L"textures\\cards\\r_bhopp.dds"} },
+	{ Powerup::R_DODGE_NO_COLLIDE,	{15, 3, "R_DODGE_NO_COLLIDE",	L"textures\\cards\\r_clipper.dds"} },
 };
 
 // The packet header preceeds every packet
@@ -142,6 +145,7 @@ struct PlayerState {
 	bool isDead;
 	bool isGrounded; // is on the ground
 	bool isBear;
+	bool isPhantom;
 	int jumpCounts; // for determining how many jumps can the player do in total
 	int availableJumps; // how many jumps are left for the player
 	bool dodgeCollide; // whether the player can collide with the boxes while dodging
@@ -236,6 +240,8 @@ struct ShopOptionsPayload {
 };
 
 struct BearPayload {};
+
+struct PhantomPayload {};
 
 struct Packet {
 	unsigned int packet_type;

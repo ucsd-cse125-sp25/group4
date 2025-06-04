@@ -172,6 +172,14 @@ void ClientGame::sendBearPacket()
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
 
+void ClientGame::sendPhantomPacket()
+{
+	PhantomPayload pp{ };
+	char buf[HDR_SIZE + sizeof pp];
+	NetworkServices::buildPacket(PacketType::PHANTOM, pp, buf);
+	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
+}
+
 void ClientGame::update() {
 
 	// check for server updates and process them accordingly
@@ -490,13 +498,22 @@ bool ClientGame::processMovementInput()
 	if (GetAsyncKeyState('S') & 0x8000) direction[0] -= 1;
 	if (GetAsyncKeyState('A') & 0x8000) direction[1] -= 1;
 	if (GetAsyncKeyState('D') & 0x8000) direction[1] += 1;
-	
-	bool jumpNowDown = (GetAsyncKeyState(' ') & 0x8000) != 0;
+
+	// if hunter phantom, hold space to fly up and hold control to fly down
+	if (renderer.currPlayer.playerId == 0 && gameState->players[id].isPhantom) 
+	{
+		if (GetAsyncKeyState(' ') & 0x8000) direction[2] += 1; // up
+		if (GetAsyncKeyState(VK_CONTROL) & 0x8000) direction[2] -= 1; // down
+	}
+	else 
+	{
+		bool jumpNowDown = (GetAsyncKeyState(' ') & 0x8000) != 0;
 
 	if (jumpNowDown && (!jumpWasDown || bunnyhop))      // rising edge
 		jump = true;
 
 	jumpWasDown = jumpNowDown;
+	}
 
 	if (!direction[0] && !direction[1] && !direction[2] && !jump) return false;
 	sendMovePacket(direction, yaw, pitch, jump);
@@ -546,6 +563,17 @@ void ClientGame::processBearInput()
 	if (rNowDown && !rWasDown)      // rising edge
 		sendBearPacket();
 
+	rWasDown = rNowDown;
+}
+
+void ClientGame::processPhantomInput()
+{
+	if (renderer.currPlayer.playerId != 0) return;   // runner cannot phantom
+	if (gameState->players[id].isPhantom) return;	 // phantom cannot phantom
+	static bool rWasDown = false;
+	bool rNowDown = (GetAsyncKeyState('E') & 0x8000) != 0;
+	if (rNowDown && !rWasDown)      // rising edge
+		sendPhantomPacket();
 	rWasDown = rNowDown;
 }
 
@@ -671,6 +699,7 @@ void ClientGame::handleInput()
 		processAttackInput();
 		processDodgeInput();
 		processBearInput();
+		processPhantomInput();
 		break;
 	}
 	default:
