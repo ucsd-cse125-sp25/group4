@@ -11,10 +11,6 @@
 
 using namespace std;
 
-struct Vector3 {
-	float x, y, z;
-};
-
 struct Implementation {
     Implementation();
     ~Implementation();
@@ -27,8 +23,10 @@ struct Implementation {
     int mnNextChannelId = 0;
 
     typedef map<string, FMOD::Sound*> SoundMap;
+    typedef map<int, FMOD::Channel*> ChannelMap;
     
     SoundMap mSounds;
+    ChannelMap mChannels;
 };
 
 class CAudioEngine {
@@ -38,8 +36,8 @@ public:
     static void Shutdown();
     static int ErrorCheck(FMOD_RESULT result);
 
-    void LoadSound(const string& strSoundName);
-    int PlaySound(const string& strSoundName, const Vector3& vPos = Vector3{ 0, 0, 0 }, float fVolumedB = 0.0f);
+    void LoadSound(const string& strSoundName, bool bLooping = false);
+    int PlayOneSound(const string& strSoundName, float volume = 1);
 };
 
 #endif

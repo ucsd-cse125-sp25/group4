@@ -69,6 +69,13 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	appState->gamePhase = GamePhase::START_MENU;
 	appState->gameState = gameState;
 
+	audioEngine->Init();
+
+	audioEngine->LoadSound("music.wav", true);
+	audioEngine->LoadSound("jump.wav");
+
+	audioEngine->PlayOneSound("music.wav", 0.3f);
+
 	uint8_t initPowerups[4][20];
 	
 	// debugging, ignore
@@ -313,6 +320,7 @@ void ClientGame::update() {
 
 ClientGame::~ClientGame() {
 	delete network;
+	delete audioEngine;
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -454,7 +462,10 @@ bool ClientGame::processMovementInput()
 	bool rNowDown = (GetAsyncKeyState(' ') & 0x8000) != 0;
 
 	if (rNowDown && (!rWasDown || bunnyhop))      // rising edge
+	{
 		jump = true;
+		audioEngine->PlayOneSound("jump.wav", 0.2f);
+	}
 
 	rWasDown = rNowDown;
 

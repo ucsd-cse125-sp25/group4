@@ -19,13 +19,13 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\client\include\AudioEngine.h" />
     <ClInclude Include="..\client\include\ClientGame.h" />
     <ClInclude Include="..\client\include\ClientNetwork.h" />
     <ClInclude Include="..\client\include\d3dx12.h" />
     <ClInclude Include="..\client\include\ddspp.h" />
     <ClInclude Include="..\client\include\InputDialog.h" />
     <ClInclude Include="..\client\include\Renderer.h" />
-    <ClInclude Include="AudioEngine.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

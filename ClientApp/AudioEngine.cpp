@@ -1,9 +1,9 @@
-#include "ClientAudioEngine.h"
+#include "AudioEngine.h"
 
 Implementation::Implementation() {
 	mpStudioSystem = NULL;
 	CAudioEngine::ErrorCheck(FMOD::Studio::System::create(&mpStudioSystem));
-	CAudioEngine::ErrorCheck(mpStudioSystem->initialize(1, FMOD_STUDIO_INIT_LIVEUPDATE, FMOD_INIT_PROFILE_ENABLE, NULL));
+	CAudioEngine::ErrorCheck(mpStudioSystem->initialize(32, FMOD_STUDIO_INIT_LIVEUPDATE, FMOD_INIT_PROFILE_ENABLE, NULL));
 
 	mpSystem = NULL;
 	CAudioEngine::ErrorCheck(mpStudioSystem->getCoreSystem(&mpSystem));
@@ -15,6 +15,20 @@ Implementation::~Implementation() {
 }
 
 void Implementation::Update() {
+    vector<ChannelMap::iterator> pStoppedChannels;
+    for (auto it = mChannels.begin(), itEnd = mChannels.end(); it != itEnd; ++it)
+    {
+        bool bIsPlaying = false;
+        it->second->isPlaying(&bIsPlaying);
+        if (!bIsPlaying)
+        {
+            pStoppedChannels.push_back(it);
+        }
+    }
+    for (auto& it : pStoppedChannels)
+    {
+        mChannels.erase(it);
+    }
 	CAudioEngine::ErrorCheck(mpStudioSystem->update());
 }
 
@@ -28,12 +42,13 @@ void CAudioEngine::Update() {
 	sgpImplementation->Update();
 }
 
-void CAudioEngine::LoadSound(const std::string& strSoundName) {
+void CAudioEngine::LoadSound(const string& strSoundName, bool bLooping) {
     auto tFoundIt = sgpImplementation->mSounds.find(strSoundName);
     if (tFoundIt != sgpImplementation->mSounds.end())
         return;
 
     FMOD_MODE eMode = FMOD_DEFAULT;
+    eMode |= bLooping ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF;
 
     FMOD::Sound* pSound = nullptr;
     CAudioEngine::ErrorCheck(sgpImplementation->mpSystem->createSound(strSoundName.c_str(), eMode, nullptr, &pSound));
@@ -42,9 +57,9 @@ void CAudioEngine::LoadSound(const std::string& strSoundName) {
     }
 }
 
-int CAudioEngine::PlaySound(const string& strSoundName, const Vector3& vPosition, float fVolumedB)
+int CAudioEngine::PlayOneSound(const string& strSoundName, float volume)
 {
-    int nChannelId = 0;
+    int nChannelId = sgpImplementation->mnNextChannelId++;
     auto tFoundIt = sgpImplementation->mSounds.find(strSoundName);
     if (tFoundIt == sgpImplementation->mSounds.end())
     {
@@ -59,7 +74,7 @@ int CAudioEngine::PlaySound(const string& strSoundName, const Vector3& vPosition
     CAudioEngine::ErrorCheck(sgpImplementation->mpSystem->playSound(tFoundIt->second, nullptr, true, &pChannel));
     if (pChannel)
     {
-        CAudioEngine::ErrorCheck(pChannel->setVolume(1));
+        CAudioEngine::ErrorCheck(pChannel->setVolume(volume));
         CAudioEngine::ErrorCheck(pChannel->setPaused(false));
     }
     return nChannelId;
