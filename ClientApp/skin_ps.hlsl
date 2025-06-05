@@ -31,6 +31,7 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     const float3 lightpos = float3(-2, -2, 2);
     // const float3 diffuseColor = float3(0.7, 0.1, 0.1);
     
+    
     float3 toLight = lightpos - input.positionGlobal.xyz;
     float3 lightDir = normalize(toLight);
 

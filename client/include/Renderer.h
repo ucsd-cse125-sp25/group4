@@ -856,7 +856,7 @@ public:
 	bool Render();
 	void OnUpdate();
 	~Renderer();
-	// TODO: have a constant buffer for each frame
+
 	// SceneConstantBuffer m_constantBufferData; // temporary storage of constant buffer on the CPU side
 
 	PlayerRenderState players[4] = {
@@ -940,6 +940,9 @@ public:
 	// spectator camera settings
 	bool detached = false;
 	XMFLOAT3 freecamPos = {};
+
+	// nocturnal powerup
+	bool nocturnal = false;
 private:
 	DebugCubes debugCubes;
 

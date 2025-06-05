@@ -137,8 +137,8 @@ bool Renderer::Init(HWND window_handle) {
 	{
 		// frame-independent and textures
 		m_scene.ReadToCPU(L"bedroomv5.jj");
-		m_hunterRenderBuffers.ReadToCPU(L"monsterv2.jj");
-		m_runnerRenderBuffers.ReadToCPU(L"playerDOLLv4_modified.jj");
+		m_hunterRenderBuffers.ReadToCPU(L"monsterv4.jj");
+		m_runnerRenderBuffers.ReadToCPU(L"playerDOLLv5.jj");
 
 	}
 	// ----------------------------------------------------------------------------------------------------------------
@@ -534,12 +534,14 @@ bool Renderer::Init(HWND window_handle) {
 	// create buffers for animation
 	{
 		// animation data
-		m_hunterAnimations[HUNTER_ANIMATION_IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Idle.janim");
+		m_hunterAnimations[HUNTER_ANIMATION_IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"HunterIdle.janim");
 		m_hunterAnimations[HUNTER_ANIMATION_CHASE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Chase.janim");
 		m_hunterAnimations[HUNTER_ANIMATION_ATTACK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Attack.janim");
 
+		m_runnerAnimations[RUNNER_ANIMATION_IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"RunnerIdle.janim");
 		m_runnerAnimations[RUNNER_ANIMATION_WALK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Walk.janim");
 		m_runnerAnimations[RUNNER_ANIMATION_DODGE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Dodge.janim");
+		m_runnerAnimations[RUNNER_ANIMATION_DEAD].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Dead.janim");
 	}
 	
 	// create depth stencil buffer 
@@ -695,12 +697,14 @@ XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
 	float uniformScale = PLAYER_SCALING_FACTOR;
 	XMMATRIX scale = XMMatrixScaling(uniformScale, uniformScale, uniformScale);
 	XMMATRIX rotate;
+	rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw /* + XM_PI */);
+	/*
 	if (playerRenderState.isHunter) {
 		rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw + XM_PI );
 	}
 	else {
-		rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw /* + XM_PI */);
-	}
+		rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw );
+	}*/
 	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z - 1.0f * uniformScale);
 	return XMMatrixTranspose(scale * rotate * translate);
 }
@@ -796,16 +800,26 @@ bool Renderer::Render() {
 		PerDrawConstants drawConstants = {
 			.viewProject           = viewProject,
 			.modelMatrix           = XMMatrixIdentity(),
-			.modelInverseTranspose = XMMatrixIdentity(),
 			.vpos_idx              = m_scene.vertexPosition.descriptor.index,
 			.vshade_idx            = m_scene.vertexShading.descriptor.index,
 			.material_ids_idx      = m_scene.materialID.descriptor.index,
 			.materials_idx         = m_scene.materials.descriptor.index,
 			.first_texture_idx     = m_scene.textures.ptr[0].descriptor.index,
 			.lightmap_texcoord_idx = m_scene.vertexLightmapTexcoord.descriptor.index,
-			.lightmap_texture_idx  = m_scene.lightmapTexture.descriptor.index
+			.lightmap_texture_idx  = m_scene.lightmapTexture.descriptor.index,
 		};
-	
+		memcpy(&(drawConstants.p1x), &(players[1].pos), 3 * sizeof(float));
+		memcpy(&(drawConstants.p2x), &(players[2].pos), 3 * sizeof(float));
+		memcpy(&(drawConstants.p3x), &(players[3].pos), 3 * sizeof(float));
+		if (nocturnal) {
+			if (currPlayer.playerId == 0) {
+				drawConstants.flags |= FLAG_NOCTURNAL_HUNTER;
+			}
+			else {
+				drawConstants.flags |= FLAG_NOCTURNAL_RUNNER;
+			}
+
+		}
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
 		m_commandList->DrawInstanced(3 * m_scene.vertexPosition.data.len, 1, 0, 0);
 	}
@@ -866,7 +880,6 @@ bool Renderer::Render() {
 		PerDrawConstants dc = {
 			.viewProject = m_TimerUI.ortho,
 			.modelMatrix = XMMatrixIdentity(),
-			.modelInverseTranspose = XMMatrixIdentity(),
 			.vpos_idx = m_TimerUI.vertexBuffer.descriptor.index,
 			.vshade_idx = m_scene.vertexShading.descriptor.index,
 			.first_texture_idx = m_TimerUI.uiTextures.ptr[0].descriptor.index,
@@ -901,7 +914,6 @@ bool Renderer::Render() {
 		PerDrawConstants dc = {
 			.viewProject = m_ShopUI.ortho,
 			.modelMatrix = XMMatrixIdentity(),
-			.modelInverseTranspose = XMMatrixIdentity(),
 			.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index,
 			.vshade_idx = m_scene.vertexShading.descriptor.index,
 		};
@@ -944,7 +956,6 @@ bool Renderer::Render() {
 		PerDrawConstants dc = {
 				.viewProject = m_ShopUI.ortho,
 				.modelMatrix = XMMatrixIdentity(),
-				.modelInverseTranspose = XMMatrixIdentity(),
 				.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index,
 				.vshade_idx = m_scene.vertexShading.descriptor.index,
 		};

@@ -202,7 +202,7 @@ void ServerGame::receiveFromClients()
 
 				// grant!
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_DODGE;
-				animationState.isLoop[id] = false; // TODO this is for debug, change to false in production
+				animationState.isLoop[id] = false; 
 				lastDodgeTick[id] = state->tick;
 				invulTicks[id] = INVUL_TICKS;
 				dashTicks[id] = INVUL_TICKS;                   // dash lasts same 30 ticks
@@ -460,9 +460,8 @@ void ServerGame::newGame()
 
 	animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_IDLE;
 	animationState.isLoop[0] = true;
-	// TODO runner IDLE anim!
 	for (int i = 1; i < 4; i++) {
-		animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+		animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 		animationState.curAnims[i] = true;
 	}
 }
@@ -687,8 +686,7 @@ void ServerGame::applyMovements() {
 				}
 			}
 			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
-				// TODO idle instead of walk
-				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 				animationState.isLoop[id] = true;
 			}
 		}
@@ -710,8 +708,7 @@ void ServerGame::applyMovements() {
 					animationState.isLoop[0] = true;
 				}
 			}         
-			// TODO check idle instead of walk
-			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_IDLE) {
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
 				animationState.isLoop[id] = true;
 			}
@@ -891,8 +888,7 @@ void ServerGame::applyDodge()
 			dashTicks[i] = -1; // prevents from happening multiple times
 			state->players[i].speed /= DASH_COOLDOWN_PENALTY;
 
-			// TODO replace walk with idle
-			animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+			animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 			animationState.isLoop[i] = true;
 		}
 	}

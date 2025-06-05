@@ -115,14 +115,35 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     const float3 lightpos = float3(-2, -2, 2);
     // const float3 diffuseColor = float3(0.7, 0.1, 0.1);
     
-    float3 toLight = lightpos - input.positionGlobal.xyz;
-    float3 lightDir = normalize(toLight);
 
-    float diffuseStrength = clamp(dot(lightDir, normalize(input.normal)), 0.3, 1);
+    // float diffuseStrength = clamp(dot(lightDir, normalize(input.normal)), 0.3, 1);
     
     Texture2D lightmap = ResourceDescriptorHeap[drawConstants.lightmap_texture_idx];
     float3 lightmapColor = lightmap.Sample(g_sampler, input.lightmap_texcoord).rgb;
-    // return float4(lightmapColor, 1);
+    
+    if ((drawConstants.flags & FLAG_NOCTURNAL_RUNNER) != 0)
+    {
+        lightmapColor *= 0.001;
+        float3 playerPositions[3] =
+        {
+            float3(drawConstants.p1x, drawConstants.p1y, drawConstants.p1z),
+            float3(drawConstants.p2x, drawConstants.p2y, drawConstants.p2z),
+            float3(drawConstants.p3x, drawConstants.p3y, drawConstants.p3z)
+        };
+        
+        for (int i = 0; i < 3; ++i)
+        {
+            float3 lightpos = playerPositions[i];
+            float3 toLight = lightpos - input.positionGlobal.xyz;
+            float dist2toLight = dot(toLight, toLight);
+            float3 lightDir = normalize(toLight);
+            float brightness = 0.0005 * max(dot(lightDir, normalize(input.normal)), 0) / dist2toLight;
+            float3 tint = float3(0.6, 0.6, 1);
+            lightmapColor += brightness * tint;
+        }
+
+    }
+    
     float3 col = lightmapColor * diffuseColor;
     
     col = agx(col);
