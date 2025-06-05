@@ -3,6 +3,7 @@
 #include <cstring>
 #include <string>
 #include <map>
+#include <numbers>
 
 #define MAX_PACKET_SIZE 1000
 #define NUM_POWERUP_OPTIONS 3 // Number of options that display in the shop each round
@@ -22,7 +23,7 @@
 
 constexpr float PLAYER_SCALING_FACTOR = 0.025;
 
-constexpr float startYaw = 0.0f;
+constexpr float startYaw = std::numbers::pi;
 constexpr float startPitch = 0.0f;
 
 enum class PacketType : uint32_t {

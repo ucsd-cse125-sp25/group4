@@ -684,7 +684,7 @@ void ClientGame::handleInput()
 	case GamePhase::START_MENU:
 	case GamePhase::GAME_END:
 	{
-		yaw = startYaw;
+		yaw = 0.0f;
 		pitch = startPitch;
 		
 		// Avoid sending multiple ready packets
