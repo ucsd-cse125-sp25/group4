@@ -21,7 +21,7 @@ ServerGame::ServerGame(void) :
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded, jumpCounts, availableJumps
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false, false, 1, 1 },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, HUNTER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false, false, 1, 1 },
 			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
 			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
 			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
@@ -338,6 +338,7 @@ void ServerGame::receiveFromClients()
 void ServerGame::startARound(int seconds) {
 	round_id++;
 	sendPlayerPowerups();
+	isNocturnal = false;
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
 
@@ -410,11 +411,11 @@ void ServerGame::startARound(int seconds) {
 		// Survivors each get ${3-sum_survivors} coins, Hunter gets ${sum_survivors}.
 		for (unsigned int id = 0; id < num_players; ++id) {
 			if (!state->players[id].isHunter) {
-				state->players[id].coins += 3 - num_survivors;
+				state->players[id].coins += 4 - num_survivors;
 				printf("[round %d] Player %d coins: %d\n", round_id, id, state->players[id].coins);
 			}
 			else {
-				state->players[id].coins += num_survivors; // hunter gets more coins if more survivors are alive
+				state->players[id].coins += num_survivors + 1; // hunter gets more coins if more survivors are alive
 				//printf("adding %d coins to hunter %d\n", 3 - num_survivors, id);
 				printf("[round %d] Hunter %d coins: %d\n", round_id, id, state->players[id].coins);
 			}
@@ -483,6 +484,7 @@ void ServerGame::newGame()
 		state->players[i].isPhantom = false;
 		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
 	}
+	state->players[0].speed = HUNTER_INIT_SPEED;
 
 	animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_IDLE;
 	animationState.isLoop[0] = true;
@@ -961,8 +963,8 @@ void ServerGame::sendPlayerPowerups() {
 	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
 	PlayerPowerupPayload data;
 	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
-	hasPhantom = 1;//TODO REMOVE
-	hasNocturnal = 1;
+	hasPhantom = 0;
+	hasNocturnal = 0;
 	for (auto [id, powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
 		hasBear[id] = 0;
