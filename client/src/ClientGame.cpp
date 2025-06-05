@@ -249,7 +249,10 @@ void ClientGame::update() {
 			if (gameState->tick >= nocturnalExpireTick) {
 				renderer.nocturnal = false;
 			}
-			
+			for (int i = 0; i < 4; ++i) {
+				renderer.players[i].isDead = gameState->players[i].isDead;
+				renderer.players[i].isBear = gameState->players[i].isBear;
+			}
 			break;
 		}
 		case PacketType::DEBUG: 

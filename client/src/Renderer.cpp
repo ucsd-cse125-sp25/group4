@@ -139,6 +139,7 @@ bool Renderer::Init(HWND window_handle) {
 		m_scene.ReadToCPU(L"bedroomv5.jj");
 		m_hunterRenderBuffers.ReadToCPU(L"monsterv4.jj");
 		m_runnerRenderBuffers.ReadToCPU(L"playerDOLLv5.jj");
+		m_bearRenderBuffers.ReadToCPU(L"bear.jj");
 
 	}
 	// ----------------------------------------------------------------------------------------------------------------
@@ -166,6 +167,10 @@ bool Renderer::Init(HWND window_handle) {
 		uint32_t numRunnerTextures = m_runnerRenderBuffers.header->numTextures;
 		uint32_t numRunnerBuffers = m_runnerRenderBuffers.getNumBuffers() + (2 * RUNNER_ANIMATION_COUNT);
 		uint32_t numRunnerDescriptors = numRunnerTextures + numRunnerBuffers;
+		
+		uint32_t numBearTextures = m_bearRenderBuffers.header->numTextures;
+		uint32_t numBearBuffers = m_bearRenderBuffers.getNumBuffers() + (2 * RUNNER_ANIMATION_COUNT);
+		uint32_t numBearDescriptors = numBearTextures + numBearBuffers;
 
 		uint32_t numTimerUITextures = 3; // clock base, hand, top
 		uint32_t numTimerUIVertexBuffers = 3;
@@ -176,7 +181,7 @@ bool Renderer::Init(HWND window_handle) {
 		uint32_t numScreenVertexBuffers = 1;
 		uint32_t numScreenUITextures = 3; // win, lose, start
 		uint32_t capacity = 
-			  numSceneDescriptors + numHunterDescriptors + numRunnerDescriptors + 
+			  numSceneDescriptors + numHunterDescriptors + numRunnerDescriptors +  numBearDescriptors +
 			+ numTimerUITextures + numTimerUIVertexBuffers
 			+ numShopUITextures + numShopUIVertexBuffers
 			+ numScreenVertexBuffers + numScreenUITextures;
@@ -599,6 +604,13 @@ bool Renderer::Init(HWND window_handle) {
 		m_runnerAnimations[RUNNER_ANIMATION_WALK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Walk.janim");
 		m_runnerAnimations[RUNNER_ANIMATION_DODGE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Dodge.janim");
 		m_runnerAnimations[RUNNER_ANIMATION_DEAD].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Dead.janim");
+
+
+		m_bearAnimations[RUNNER_ANIMATION_IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"BearIdle.janim");
+		m_bearAnimations[RUNNER_ANIMATION_WALK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"BearHop.janim");
+		m_bearAnimations[RUNNER_ANIMATION_DODGE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"BearIdle.janim");
+		m_bearAnimations[RUNNER_ANIMATION_DEAD].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"BearIdle.janim");
+
 	}
 	
 	// create depth stencil buffer 
@@ -717,15 +729,19 @@ inline XMMATRIX XM_CALLCONV XMMatrixLookToRHToLH
 
     return M;
 }
-matAndCam  Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
+matAndCam  Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir, bool isBear) {
 	using namespace DirectX;
 	XMVECTOR model_fwd = { 0, 1, 0, 0 };
     XMVECTOR rotation =
     	XMVector3TransformNormal(
     		model_fwd,
     		 XMMatrixRotationX(cameraPitch) * XMMatrixRotationZ(cameraYaw));
-
-	XMVECTOR camPos = pos - rotation * CAMERA_DIST + XMVECTORF32{ 0, 0, CAMERA_UP, 0 };
+	
+	float dist_multiplier = 1;
+	if (isBear) {
+		dist_multiplier = 2;
+	}
+	XMVECTOR camPos = pos - (rotation * CAMERA_DIST * dist_multiplier + XMVECTORF32{ 0, 0, CAMERA_UP, 0 });
 
 	XMVECTOR model_up = { 0, 0, 1, 0 }; 
 	
@@ -781,26 +797,23 @@ bool Renderer::Render() {
 	// Set necessary state
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 	
-	int numBuffersUsed = 0;
 	if (!m_scene.initialized) {
 		m_scene.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
-		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_hunterRenderBuffers.initialized) {
 		m_hunterRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
-		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_runnerRenderBuffers.initialized) {
 		m_runnerRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
-		numBuffersUsed = m_resourceDescriptorAllocator.at;
+	}
+	if (!m_bearRenderBuffers.initialized) {
+		m_bearRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
 	}
 	if (!m_TimerUI.initialized) {
 		m_TimerUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
-		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_ShopUI.initialized) {
 		m_ShopUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
-		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_ScreenUI.initialized) {
 		m_ScreenUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
@@ -855,7 +868,7 @@ bool Renderer::Render() {
 	}
 	else {
 		XMVECTOR playerPos = XMLoadFloat3(&players[currPlayer.playerId].pos);
-		matAndCam matcam = computeViewProject(playerPos, {}); // lookat is not used
+		matAndCam matcam = computeViewProject(playerPos, {}, players[currPlayer.playerId].isBear); // lookat is not used
 		viewProject = matcam.mat;
 		camPos = matcam.pos; // AAAA this is a mess
 	}
@@ -922,24 +935,27 @@ bool Renderer::Render() {
 		}
 		else {
 			UINT8 animationIdx = players[i].runnerAnimation;
+			Scene& renderBuffers = players[i].isBear ? m_bearRenderBuffers : m_runnerRenderBuffers;
+			Animation* animations = players[i].isBear ? m_bearAnimations : m_runnerAnimations;
 			PlayerDrawConstants drawConstants = {
 				.viewProject              = viewProject,
 				.modelMatrix              = modelMatrix,
 				.modelInverseTranspose    = modelInverseTranspose,
-				.vpos_idx                 = m_runnerRenderBuffers.vertexPosition.descriptor.index,
-				.vshade_idx               = m_runnerRenderBuffers.vertexShading.descriptor.index ,
-				.material_ids_idx         = m_runnerRenderBuffers.materialID.descriptor.index,
-				.materials_idx            = m_runnerRenderBuffers.materials.descriptor.index,
-				.first_texture_idx        = m_runnerRenderBuffers.textures.ptr[0].descriptor.index,
-				.vbone_idx                = m_runnerRenderBuffers.vertexBoneIdx.descriptor.index,
-				.vweight_idx              = m_runnerRenderBuffers.vertexBoneWeight.descriptor.index,
-				.bone_transforms_idx      = m_runnerAnimations[animationIdx].invBindTransform.descriptor.index,
-				.bone_adj_transforms_idx  = m_runnerAnimations[animationIdx].invBindAdjTransform.descriptor.index,
-				.frame_number             = m_runnerAnimations[animationIdx].getFrame(players[i].animationStartTime, time, loop),
-				.num_bones                = m_runnerRenderBuffers.header->numBones,
+				.vpos_idx                 = renderBuffers.vertexPosition.descriptor.index,
+				.vshade_idx               = renderBuffers.vertexShading.descriptor.index ,
+				.material_ids_idx         = renderBuffers.materialID.descriptor.index,
+				.materials_idx            = renderBuffers.materials.descriptor.index,
+				.first_texture_idx        = renderBuffers.textures.ptr[0].descriptor.index,
+				.vbone_idx                = renderBuffers.vertexBoneIdx.descriptor.index,
+				.vweight_idx              = renderBuffers.vertexBoneWeight.descriptor.index,
+				.bone_transforms_idx      = animations[animationIdx].invBindTransform.descriptor.index,
+				.bone_adj_transforms_idx  = animations[animationIdx].invBindAdjTransform.descriptor.index,
+				.frame_number             = animations[animationIdx].getFrame(players[i].animationStartTime, time, loop),
+				.num_bones                = renderBuffers.header->numBones,
 			};
 			m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_PLAYER_NUM_DWORDS, &drawConstants, 0);
-			m_commandList->DrawInstanced(3 * m_runnerRenderBuffers.vertexPosition.data.len, 1, 0, 0);
+			m_commandList->DrawInstanced(3 * renderBuffers
+			                    .vertexPosition.data.len, 1, 0, 0);
 		}
 	}
 	

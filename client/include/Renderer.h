@@ -51,6 +51,8 @@ struct PlayerRenderState {
 	std::chrono::time_point<std::chrono::steady_clock> animationStartTime;
 	LookDir lookDir;
 	bool isHunter;
+	bool isBear;
+	bool isDead;
 	union {
 		RunnerAnimation runnerAnimation;
 		HunterAnimation hunterAnimation;
@@ -1133,9 +1135,11 @@ private:
 	Scene m_scene;
 	Scene m_runnerRenderBuffers;
 	Scene m_hunterRenderBuffers;
+	Scene m_bearRenderBuffers;
 
 	Animation m_hunterAnimations[HUNTER_ANIMATION_COUNT];
 	Animation m_runnerAnimations[RUNNER_ANIMATION_COUNT];
+	Animation m_bearAnimations[RUNNER_ANIMATION_COUNT];
 	
 
 	// ComPtr<ID3D12DescriptorHeap> m_resourceHeap;
@@ -1146,7 +1150,7 @@ private:
 	bool MoveToNextFrame();
 	bool WaitForGpu();
 
-	matAndCam computeViewProject(FXMVECTOR pos, LookDir lookDir);
+	matAndCam computeViewProject(FXMVECTOR pos, LookDir lookDir, bool isBear = false);
 	XMMATRIX computeFreecamViewProject(FXMVECTOR pos, float yaw, float pitch);
 	XMMATRIX computeModelMatrix(PlayerRenderState &playerRenderState);
 	
