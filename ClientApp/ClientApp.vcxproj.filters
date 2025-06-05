@@ -95,12 +95,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="..\Assets\monsterv2.jj">
-      <Filter>Resource Files</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\Assets\Idle.janim">
-      <Filter>Resource Files</Filter>
-    </CopyFileToFolders>
     <CopyFileToFolders Include="..\Assets\RestPose.janim">
       <Filter>Resource Files</Filter>
     </CopyFileToFolders>
@@ -120,6 +114,21 @@
       <Filter>Resource Files</Filter>
     </CopyFileToFolders>
     <CopyFileToFolders Include="..\Assets\bedroomv5.jj">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\monsterv4.jj">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\HunterIdle.janim">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\Dead.janim">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\RunnerIdle.janim">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\playerDOLLv5.jj">
       <Filter>Resource Files</Filter>
     </CopyFileToFolders>
   </ItemGroup>

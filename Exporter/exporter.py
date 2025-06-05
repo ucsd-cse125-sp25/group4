@@ -257,7 +257,7 @@ for obj in bpy.data.objects:
     # vertex groups for skinning
     bone_indices =  None
     bone_weights = None
-    vert_lightmap_texcoord = None
+    lightmap_uv = None
     if armature is not None:
         bone_indices = np.zeros((len(bmesh.vertices), BONES_PER_VERT), dtype=np.int32)
         bone_weights = np.zeros((len(bmesh.vertices), BONES_PER_VERT), dtype=np.float32)
@@ -371,5 +371,5 @@ with open(f"{filename}.jj", 'wb') as f:
 print(f"{filename}.jj written successfully")
 # use this to write "scene.jj" into your working directory
 # & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\bedroomv5.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
-# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\monsterv2.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
+# & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\monsterv4.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"
 # & "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe" "C:\Users\eekgasit\Downloads\playerDOLLv4_modified.blend" --background --python "C:\Users\eekgasit\source\repos\ucsd-cse125-sp25\group4\Exporter\exporter.py"

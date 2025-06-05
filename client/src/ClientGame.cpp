@@ -103,9 +103,8 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 
 	localAnimState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_IDLE;
 	localAnimState.isLoop[0] = true;
-	// TODO runner IDLE anim!
 	for (int i = 1; i < 4; i++) {
-		localAnimState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+		localAnimState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 		localAnimState.curAnims[i] = true;
 	}
 
@@ -392,7 +391,7 @@ void ClientGame::update() {
 					localAnimState.curAnims[i] = remoteAnimState->curAnims[i];
 					localAnimState.isLoop[i] = remoteAnimState->isLoop[i];
 					if (i == 0) {
-						if (remoteAnimState->isLoop) {
+						if (remoteAnimState->isLoop[i]) {
 							renderer.players[i].loopAnimation((HunterAnimation)remoteAnimState->curAnims[i]);
 						}
 						else {
@@ -400,7 +399,7 @@ void ClientGame::update() {
 						}
 					}
 					else {
-						if (remoteAnimState->isLoop) {
+						if (remoteAnimState->isLoop[i]) {
 							renderer.players[i].loopAnimation((RunnerAnimation)remoteAnimState->curAnims[i]);
 						}
 						else {
@@ -592,6 +591,10 @@ bool ClientGame::processMovementInput()
 	if (GetAsyncKeyState('A') & 0x8000) direction[1] -= 1;
 	if (GetAsyncKeyState('D') & 0x8000) direction[1] += 1;
 
+
+	if (GetAsyncKeyState('O') & 0x8000) renderer.nocturnal = false;
+	if (GetAsyncKeyState('P') & 0x8000) renderer.nocturnal = true;
+
 	// if hunter phantom, hold space to fly up and hold control to fly down
 	if (renderer.currPlayer.playerId == 0 && gameState->players[id].isPhantom) 
 	{
@@ -628,7 +631,7 @@ void ClientGame::processAttackInput()
 			renderer.players[0].pos.z
 		};
 		sendAttackPacket(pos, yaw, pitch);
-		renderer.players[id].playAnimationToEnd(HUNTER_ANIMATION_ATTACK); //TODO: MOVE TO ACTION_OK PACKET HANDLING???
+		// renderer.players[id].playAnimationToEnd(HUNTER_ANIMATION_ATTACK);
 	}
 	attackWasDown = attackNowDown;
 }

@@ -137,8 +137,8 @@ bool Renderer::Init(HWND window_handle) {
 	{
 		// frame-independent and textures
 		m_scene.ReadToCPU(L"bedroomv5.jj");
-		m_hunterRenderBuffers.ReadToCPU(L"monsterv2.jj");
-		m_runnerRenderBuffers.ReadToCPU(L"playerDOLLv4_modified.jj");
+		m_hunterRenderBuffers.ReadToCPU(L"monsterv4.jj");
+		m_runnerRenderBuffers.ReadToCPU(L"playerDOLLv5.jj");
 
 	}
 	// ----------------------------------------------------------------------------------------------------------------
@@ -591,12 +591,14 @@ bool Renderer::Init(HWND window_handle) {
 	// create buffers for animation
 	{
 		// animation data
-		m_hunterAnimations[HUNTER_ANIMATION_IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Idle.janim");
+		m_hunterAnimations[HUNTER_ANIMATION_IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"HunterIdle.janim");
 		m_hunterAnimations[HUNTER_ANIMATION_CHASE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Chase.janim");
 		m_hunterAnimations[HUNTER_ANIMATION_ATTACK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Attack.janim");
 
+		m_runnerAnimations[RUNNER_ANIMATION_IDLE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"RunnerIdle.janim");
 		m_runnerAnimations[RUNNER_ANIMATION_WALK].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Walk.janim");
 		m_runnerAnimations[RUNNER_ANIMATION_DODGE].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Dodge.janim");
+		m_runnerAnimations[RUNNER_ANIMATION_DEAD].Init(m_device.Get(), &m_resourceDescriptorAllocator, L"Dead.janim");
 	}
 	
 	// create depth stencil buffer 
@@ -652,10 +654,10 @@ bool Renderer::Init(HWND window_handle) {
 
 	// record start times
 	auto time = std::chrono::steady_clock::now();
-	for (PlayerRenderState& state : players) {
+	for (PlayerRenderState& state : players) {// 
 		state.animationStartTime = time;
 	}
-	// players[0].isHunter = true;
+	players[0].isHunter = true;
 	return true;
 }
 
@@ -715,7 +717,7 @@ inline XMMATRIX XM_CALLCONV XMMatrixLookToRHToLH
 
     return M;
 }
-XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
+matAndCam  Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	using namespace DirectX;
 	XMVECTOR model_fwd = { 0, 1, 0, 0 };
     XMVECTOR rotation =
@@ -729,8 +731,11 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	
 	XMMATRIX view = XMMatrixLookToRHToLH(camPos, pos - camPos, model_up);
 	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01f, 100.0f);
-
-	return XMMatrixTranspose(view * proj);
+	matAndCam ret = {
+		.mat = XMMatrixTranspose(view * proj)
+	};
+	XMStoreFloat3(&ret.pos, camPos);
+	return ret;
 }
 
 XMMATRIX Renderer::computeFreecamViewProject(FXMVECTOR camPos, float yaw, float pitch) {
@@ -752,12 +757,14 @@ XMMATRIX Renderer::computeModelMatrix(PlayerRenderState &playerRenderState) {
 	float uniformScale = PLAYER_SCALING_FACTOR;
 	XMMATRIX scale = XMMatrixScaling(uniformScale, uniformScale, uniformScale);
 	XMMATRIX rotate;
+	rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw /* + XM_PI */);
+	/*
 	if (playerRenderState.isHunter) {
 		rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw + XM_PI );
 	}
 	else {
-		rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw /* + XM_PI */);
-	}
+		rotate = XMMatrixRotationZ(playerRenderState.lookDir.yaw );
+	}*/
 	XMMATRIX translate = XMMatrixTranslation(playerRenderState.pos.x, playerRenderState.pos.y, playerRenderState.pos.z - 1.0f * uniformScale);
 	return XMMatrixTranspose(scale * rotate * translate);
 }
@@ -773,21 +780,27 @@ bool Renderer::Render() {
 	
 	// Set necessary state
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
-
+	
+	int numBuffersUsed = 0;
 	if (!m_scene.initialized) {
 		m_scene.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_hunterRenderBuffers.initialized) {
 		m_hunterRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_runnerRenderBuffers.initialized) {
 		m_runnerRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_TimerUI.initialized) {
 		m_TimerUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_ShopUI.initialized) {
 		m_ShopUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_ScreenUI.initialized) {
 		m_ScreenUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
@@ -835,13 +848,16 @@ bool Renderer::Render() {
 	
 	// camera logic
 	XMMATRIX viewProject;
+	XMFLOAT3 camPos;
 	if (detached) {
-		XMVECTOR camPos = XMLoadFloat3(&freecamPos);
-		viewProject = computeFreecamViewProject(camPos, cameraYaw, cameraPitch);
+		viewProject = computeFreecamViewProject(XMLoadFloat3(&freecamPos), cameraYaw, cameraPitch);
+		camPos = freecamPos;
 	}
 	else {
 		XMVECTOR playerPos = XMLoadFloat3(&players[currPlayer.playerId].pos);
-		viewProject = computeViewProject(playerPos, {}); // lookat is not used
+		matAndCam matcam = computeViewProject(playerPos, {}); // lookat is not used
+		viewProject = matcam.mat;
+		camPos = matcam.pos; // AAAA this is a mess
 	}
 
 
@@ -850,16 +866,28 @@ bool Renderer::Render() {
 		PerDrawConstants drawConstants = {
 			.viewProject           = viewProject,
 			.modelMatrix           = XMMatrixIdentity(),
-			.modelInverseTranspose = XMMatrixIdentity(),
 			.vpos_idx              = m_scene.vertexPosition.descriptor.index,
 			.vshade_idx            = m_scene.vertexShading.descriptor.index,
 			.material_ids_idx      = m_scene.materialID.descriptor.index,
 			.materials_idx         = m_scene.materials.descriptor.index,
 			.first_texture_idx     = m_scene.textures.ptr[0].descriptor.index,
 			.lightmap_texcoord_idx = m_scene.vertexLightmapTexcoord.descriptor.index,
-			.lightmap_texture_idx  = m_scene.lightmapTexture.descriptor.index
+			.lightmap_texture_idx  = m_scene.lightmapTexture.descriptor.index,
+			.cubemap_idx = m_scene.cubemap.descriptor.index,
 		};
-	
+		memcpy(&(drawConstants.p1x), &(players[1].pos), 3 * sizeof(float));
+		memcpy(&(drawConstants.p2x), &(players[2].pos), 3 * sizeof(float));
+		memcpy(&(drawConstants.p3x), &(players[3].pos), 3 * sizeof(float));
+		memcpy(&(drawConstants.camx), &camPos, 3 * sizeof(float));
+		if (nocturnal) {
+			if (currPlayer.playerId == 0) {
+				drawConstants.flags |= FLAG_NOCTURNAL_HUNTER;
+			}
+			else {
+				drawConstants.flags |= FLAG_NOCTURNAL_RUNNER;
+			}
+
+		}
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &drawConstants, 0);
 		m_commandList->DrawInstanced(3 * m_scene.vertexPosition.data.len, 1, 0, 0);
 	}
@@ -920,7 +948,6 @@ bool Renderer::Render() {
 		PerDrawConstants dc = {
 			.viewProject = m_TimerUI.ortho,
 			.modelMatrix = XMMatrixIdentity(),
-			.modelInverseTranspose = XMMatrixIdentity(),
 			.vpos_idx = m_TimerUI.vertexBuffer.descriptor.index,
 			.vshade_idx = m_scene.vertexShading.descriptor.index,
 			.first_texture_idx = m_TimerUI.uiTextures.ptr[0].descriptor.index,
@@ -955,7 +982,6 @@ bool Renderer::Render() {
 		PerDrawConstants dc = {
 			.viewProject = m_ShopUI.ortho,
 			.modelMatrix = XMMatrixIdentity(),
-			.modelInverseTranspose = XMMatrixIdentity(),
 			.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index,
 			.vshade_idx = m_scene.vertexShading.descriptor.index,
 		};
@@ -998,7 +1024,6 @@ bool Renderer::Render() {
 		PerDrawConstants dc = {
 				.viewProject = m_ShopUI.ortho,
 				.modelMatrix = XMMatrixIdentity(),
-				.modelInverseTranspose = XMMatrixIdentity(),
 				.vpos_idx = m_ShopUI.cardVertexBuffer.descriptor.index,
 				.vshade_idx = m_scene.vertexShading.descriptor.index,
 		};
@@ -1020,7 +1045,6 @@ bool Renderer::Render() {
 		PerDrawConstants dc = {
 		.viewProject = m_ScreenUI.ortho,
 		.modelMatrix = XMMatrixIdentity(),
-		.modelInverseTranspose = XMMatrixIdentity(),
 		.vpos_idx = m_ScreenUI.screenVertexBuffer.descriptor.index,
 		.vshade_idx = m_scene.vertexShading.descriptor.index,
 		};

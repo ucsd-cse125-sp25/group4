@@ -7,7 +7,7 @@
 
 #define MAX_PACKET_SIZE 1000
 #define NUM_POWERUP_OPTIONS 3 // Number of options that display in the shop each round
-#define ROUND_DURATION 30
+#define ROUND_DURATION 9999
 #define WIN_THRESHOLD 10
 
 #define GRAVITY 0.075f * PLAYER_SCALING_FACTOR
@@ -286,9 +286,11 @@ struct Packet {
 };
 
 enum RunnerAnimation : UINT8 {
+	RUNNER_ANIMATION_IDLE,
 	RUNNER_ANIMATION_WALK,
 	RUNNER_ANIMATION_DODGE,
-	RUNNER_ANIMATION_COUNT
+	RUNNER_ANIMATION_DEAD,
+	RUNNER_ANIMATION_COUNT,
 };
 enum HunterAnimation : UINT8 {
 	HUNTER_ANIMATION_IDLE,
