@@ -204,9 +204,9 @@ struct Texture {
 
 		BYTE* initialData = data.ptr + desc.headerSize;
 
-		if (desc.type != ddspp::Texture2D) {
+		if (!(desc.type == ddspp::Texture2D || desc.type == ddspp::TextureType::Cubemap)) {
 			printf("fuck2\n");
-			return false; // we only support 2D textures
+			return false; // we only support 2D textures or cuemaps
 		}
 		if (desc.arraySize != 1) return false; // we do not support arrays of textures 
 		// describes texture in the default heap
@@ -253,6 +253,34 @@ struct Texture {
 		
 		// copy to upload heap
 		// each mip level gets its own subresource
+		for (UINT64 arrayIndex = 0; arrayIndex < desc.arraySize; arrayIndex++)
+		{
+			for (UINT64 mipIndex = 0; mipIndex < desc.numMips; mipIndex++)
+			{
+				const UINT64 subResourceIndex = mipIndex + (arrayIndex * desc.numMips);
+
+				const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& subResourceLayout = layouts[subResourceIndex];
+				const UINT64 subResourceHeight = numRows[subResourceIndex];
+				const UINT64 subResourcePitch = alignU32(subResourceLayout.Footprint.RowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+				const UINT64 subResourceDepth = subResourceLayout.Footprint.Depth;
+				BYTE* destinationSubResourceMemory = (BYTE*)mapped + subResourceLayout.Offset;
+
+				const UINT cpuDataRowPitch    = ddspp::get_row_pitch(desc, mipIndex);              // row pitch in the CPU buffer
+
+				for (UINT64 sliceIndex = 0; sliceIndex < subResourceDepth; sliceIndex++)
+				{
+					// const DirectX::Image* subImage = imageData->GetImage(mipIndex, arrayIndex, sliceIndex);
+					const BYTE* sourceSubResourceMemory = &initialData[ddspp::get_offset(desc, mipIndex, sliceIndex)]; // in CPU-only memory
+					for (UINT64 height = 0; height < subResourceHeight; height++)
+					{
+						memcpy(destinationSubResourceMemory, sourceSubResourceMemory, min(subResourcePitch, cpuDataRowPitch));
+						destinationSubResourceMemory += subResourcePitch;
+						sourceSubResourceMemory += cpuDataRowPitch;
+					}
+				}
+			}
+		}
+		/*
 		for (UINT mipIndex = 0; mipIndex < desc.numMips; mipIndex++) {
 			const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& subResourceLayout = layouts[mipIndex];
 
@@ -271,7 +299,7 @@ struct Texture {
 				destinationSubResourceMemory += subResourceRowPitch;
 				sourceSubResourceMemory += cpuDataRowPitch; 
 			}
-		}
+		}*/
 
 		// create default heap
 		D3D12_HEAP_PROPERTIES defaultHeapProperties = { .Type = D3D12_HEAP_TYPE_DEFAULT };
@@ -283,9 +311,25 @@ struct Texture {
 										IID_PPV_ARGS(&resource));
 		resource->SetName(filename);
 
-		// we don't need an SRV desc https://alextardif.com/D3D11To12P3.html
+		// we don't need an SRV desc https://alextardif.com/D3D11To12P3.html unless it's a cubemap
 		descriptor = descriptorAllocator->Allocate();
-		device->CreateShaderResourceView(resource.Get(), nullptr, descriptor.cpu);
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC shaderResourceViewDesc = {};
+		if (desc.type == ddspp::TextureType::Cubemap)
+		{
+			assert(desc.arraySize == 6); // cubemaps are essentially an array of 6 textures
+			shaderResourceViewDesc = {
+				.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.TextureCube = {
+					.MostDetailedMip = 0,
+					.MipLevels = (uint32_t)desc.numMips,
+					.ResourceMinLODClamp = 0.0f,
+				}
+			};
+		}
+
+		device->CreateShaderResourceView(resource.Get(), desc.type == ddspp::TextureType::Cubemap ? &shaderResourceViewDesc : nullptr, descriptor.cpu);
 		
 		// copy from upload heap to default heap
 		for (UINT subResourceIndex = 0; subResourceIndex < desc.numMips; subResourceIndex++) {
