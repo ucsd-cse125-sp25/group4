@@ -248,13 +248,13 @@ void ClientGame::update() {
 			printf(">> DODGE granted!\n");
 			break;
 		}
-
 		case PacketType::APP_PHASE:
 		{
 			AppPhasePayload* statusPayload = (AppPhasePayload*)(network_data + HDR_SIZE);
 
 			appState->gamePhase = statusPayload->phase;
 			renderer.gamePhase = statusPayload->phase;
+			renderer.winner = statusPayload->winner;
 
 			ready = false;
 			
@@ -342,11 +342,11 @@ void ClientGame::update() {
 	// ---------------------------------------------------------------	
 	// Client Input Handling 
 
-	if (id != -1 && id != 4) {
-		handleInput();
-	}
-	else if (id == 4) {
+	if (id == 4) {
 		handleSpectatorInput();
+	}
+	else if (id != -1 && id != 4) {
+		handleInput();
 	}
 
 	// ---------------------------------------------------------------	
@@ -687,19 +687,26 @@ void ClientGame::handleInput()
 	}
 	case GamePhase::GAME_PHASE:
 	{
+		if (gameState->players[id].isDead && appState->gamePhase == GamePhase::GAME_PHASE) {
+			processSpectatorKeyboardInput();
+			processSpectatorCameraInput();
+		}
+		else {
+			renderer.detached = false;
+			renderer.currPlayer.playerId = id;
+			// camera is always allowed (even dead players can spectate)
+			processCameraInput();
 
-		// camera is always allowed (even dead players can spectate)
-		processCameraInput();
+			// if you’re dead, no movement or attack
+			if (localDead) return;
 
-		// if you’re dead, no movement or attack
-		if (localDead) return;
-
-		// movement & attack for the living
-		processMovementInput();
-		processAttackInput();
-		processDodgeInput();
-		processBearInput();
-		processPhantomInput();
+			// movement & attack for the living
+			processMovementInput();
+			processAttackInput();
+			processDodgeInput();
+			processBearInput();
+			processPhantomInput();
+		}
 		break;
 	}
 	default:

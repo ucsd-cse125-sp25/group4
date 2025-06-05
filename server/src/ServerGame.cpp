@@ -347,18 +347,6 @@ void ServerGame::startARound(int seconds) {
 
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
-		// check if it is a tiebreaker round
-		if (tiebreaker) {
-			// the points will never be the same for both teams.
-			if (runner_points > hunter_points) {
-				printf("[round %d] Tiebreaker round ended, survivors win!\n", round_id);
-			}
-			else {
-				printf("[round %d] Tiebreaker round ended, hunter wins!\n", round_id);
-			}
-			tiebreaker = false; // reset tiebreaker
-			return;
-		}
 		
 		state_mu.lock();
 
@@ -403,7 +391,17 @@ void ServerGame::startARound(int seconds) {
 				printf("[round %d] Hunter %d coins: %d\n", round_id, id, state->players[id].coins);
 			}
 		}
-
+		// check if it is a tiebreaker round
+		if (tiebreaker) {
+			// the points will never be the same for both teams.
+			if (runner_points > hunter_points) {
+				printf("[round %d] Tiebreaker round ended, survivors win!\n", round_id);
+			}
+			else {
+				printf("[round %d] Tiebreaker round ended, hunter wins!\n", round_id);
+			}
+			tiebreaker = false; // reset tiebreaker
+		}
 		// Don't send packets in timer!
 		// Socket wrapper isn't thread safe...
 		// sendAppPhaseUpdates();
@@ -530,8 +528,9 @@ void ServerGame::handleGamePhase() {
 				startShopPhase();
 			}
 			else {
-				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= WIN_THRESHOLD) ? "survivors" : "hunter");
+				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= WIN_THRESHOLD) ? "runners" : "hunter");
 				appState->gamePhase = GamePhase::GAME_END;
+				appState->winners = (runner_points >= WIN_THRESHOLD) ? 2 : 1;
 				sendAppPhaseUpdates();
 			}
 		}
@@ -945,7 +944,8 @@ void ServerGame::sendAppPhaseUpdates() {
 	char packet_data[HDR_SIZE + sizeof(AppPhasePayload)];
 
 	AppPhasePayload* data = new AppPhasePayload{
-		.phase = appState->gamePhase
+		.phase = appState->gamePhase,
+		.winner = appState->winners,
 	};
 
 	printf("GAME PHASE = %d\n", appState->gamePhase);

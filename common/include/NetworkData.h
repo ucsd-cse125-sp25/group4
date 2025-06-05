@@ -183,6 +183,7 @@ struct GameState {
 struct AppState {
 	GameState* gameState;
 	GamePhase gamePhase;
+	uint8_t winners;
 };
 
 struct IDPayload {
@@ -218,6 +219,7 @@ struct PlayerReadyPayload {
 
 struct AppPhasePayload {
 	GamePhase phase;
+	uint8_t winner; // 0 nobody wins, 1 hunter wins, 2 runner wins
 };
 
 struct PlayerPowerupPayload {

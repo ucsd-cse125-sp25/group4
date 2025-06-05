@@ -169,12 +169,17 @@ bool Renderer::Init(HWND window_handle) {
 
 		uint32_t numTimerUITextures = 3; // clock base, hand, top
 		uint32_t numTimerUIVertexBuffers = 3;
+
 		uint32_t numShopUIVertexBuffers = 2;
 		uint32_t numShopUITextures = PowerupInfo.size() + 20; // 10 for each counter of souls and coins
+
+		uint32_t numScreenVertexBuffers = 1;
+		uint32_t numScreenUITextures = 3; // win, lose, start
 		uint32_t capacity = 
 			  numSceneDescriptors + numHunterDescriptors + numRunnerDescriptors + 
 			+ numTimerUITextures + numTimerUIVertexBuffers
-			+ numShopUITextures + numShopUIVertexBuffers;
+			+ numShopUITextures + numShopUIVertexBuffers
+			+ numScreenVertexBuffers + numScreenUITextures;
 		// all resource descriptors go here.
 		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(
@@ -531,6 +536,13 @@ bool Renderer::Init(HWND window_handle) {
 	{
 		m_ShopUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------
+	// create vertex buffer for screenUI
+
+	{
+		m_ScreenUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
+	}
 	// create buffers for animation
 	{
 		// animation data
@@ -731,6 +743,9 @@ bool Renderer::Render() {
 	}
 	if (!m_ShopUI.initialized) {
 		m_ShopUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
+	if (!m_ScreenUI.initialized) {
+		m_ScreenUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
 	}
 	
 	// set heaps for constant buffer
@@ -954,6 +969,31 @@ bool Renderer::Render() {
 				m_commandList->DrawInstanced(m_ShopUI.cardVertexBuffer.data.len, 1, 0, 0);
 			}
 		}
+	}
+
+	if (gamePhase == GamePhase::START_MENU || gamePhase == GamePhase::GAME_END) {
+		PerDrawConstants dc = {
+		.viewProject = m_ScreenUI.ortho,
+		.modelMatrix = XMMatrixIdentity(),
+		.modelInverseTranspose = XMMatrixIdentity(),
+		.vpos_idx = m_ScreenUI.screenVertexBuffer.descriptor.index,
+		.vshade_idx = m_scene.vertexShading.descriptor.index,
+		};
+		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+
+		uint8_t texIdx = 0;
+		switch (gamePhase) {
+		case GamePhase::START_MENU:
+			texIdx = 0;
+			break;
+		case GamePhase::GAME_END:
+			if (winner == 1) texIdx = 1;
+			else texIdx = 2;
+			break;
+		}
+		dc.first_texture_idx = m_ScreenUI.screenTextures.ptr[texIdx].descriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_ScreenUI.screenVertexBuffer.data.len, 1, 0, 0);
 	}
 	
 	// barrier BEFORE presenting the back buffer 
