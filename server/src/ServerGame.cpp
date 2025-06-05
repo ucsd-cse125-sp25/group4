@@ -583,8 +583,8 @@ void ServerGame::startShopPhase() {
 			std::iota(v.begin(), v.end(), (int)Powerup::HUNTER_POWERUPS + 1);
 			std::shuffle(v.begin(), v.end(), rng);
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = (uint8_t) v[p];
-				printf("Hunter option %d: %d %s\n", p+1, v[p], PowerupInfo[(Powerup)v[p]].name.c_str());
+				options->options[id][p] = (uint8_t) v[p];
+				printf("Hunter option %d: %d %s\n", p+1, options->options[id][p], PowerupInfo[(Powerup)options->options[id][p]].name.c_str());
 			}
 		}
 		else
@@ -593,8 +593,8 @@ void ServerGame::startShopPhase() {
 			std::iota(v.begin(), v.end(), (int)Powerup::RUNNER_POWERUPS + 1);
 			std::shuffle(v.begin(), v.end(), rng);
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = (uint8_t) v[p];
-				printf("Runner %d option %d: %d %s\n", id, p+1, v[p], PowerupInfo[(Powerup)v[p]].name.c_str());
+				options->options[id][p] = (uint8_t)v[p];
+				printf("Runner %d option %d: %d %s\n", id, p+1, options->options[id][p], PowerupInfo[(Powerup)options->options[id][p]].name.c_str());
 
 			}
 		}

@@ -238,7 +238,7 @@ struct DodgePayload { float yaw, pitch; };
 struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a placeholder for now
 
 struct ShopOptionsPayload {
-	uint8_t options[NUM_POWERUP_OPTIONS];
+	uint8_t options[4][NUM_POWERUP_OPTIONS]; //hardcoded for 4 players
 	uint8_t runner_score;
 	uint8_t hunter_score;
 };

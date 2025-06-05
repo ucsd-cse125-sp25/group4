@@ -276,7 +276,8 @@ void ClientGame::update() {
 
 			for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
 			{
-				Powerup powerup = (Powerup)optionsPayload->options[i];
+				if (id > 3) { break; }
+				Powerup powerup = (Powerup)optionsPayload->options[id][i];
 				shopOptions[i].item = powerup;
 				shopOptions[i].isSelected = false;
 				shopOptions[i].isBuyable = (PowerupInfo[powerup].cost <= gameState->players[id].coins);
