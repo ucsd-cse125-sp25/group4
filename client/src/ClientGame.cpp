@@ -252,8 +252,6 @@ void ClientGame::update() {
 			for (int i = 0; i < 4; ++i) {
 				renderer.players[i].isDead = gameState->players[i].isDead;
 				renderer.players[i].isBear = gameState->players[i].isBear;
-			
-				renderer.players[2].isBear = true;
 			}
 			break;
 		}
