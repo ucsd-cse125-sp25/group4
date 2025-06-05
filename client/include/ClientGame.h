@@ -109,5 +109,6 @@ private:
 	const string a_darkness = "./SFX/darkness.wav"; //TODO
 
 	void playAudio();
+	int bgmChannel;
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);

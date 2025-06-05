@@ -85,7 +85,7 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	audioEngine->LoadSound(a_round_start, true, false);
 	audioEngine->LoadSound(a_darkness, true, false);
 
-	audioEngine->PlayOneSound(a_music, { 0, 0, 0 }, 0.5f);
+	bgmChannel = audioEngine->PlayOneSound(a_music, { 0, 0, 0 }, 0.5f);
 
 	uint8_t initPowerups[4][20];
 	
@@ -310,7 +310,10 @@ void ClientGame::update() {
 			}
 			else if (statusPayload->phase == GamePhase::GAME_END) {
 				audioEngine->PlayOneSound(a_round_end, { 0,0,0 }, 1);
-				// todo: stop playing bgm?
+				audioEngine->StopChannel(bgmChannel);
+			}
+			else if (statusPayload->phase == GamePhase::START_MENU) {
+				bgmChannel = audioEngine->PlayOneSound(a_music, { 0,0,0 }, 0.5f);
 			}
 
 			ready = false;
