@@ -927,10 +927,10 @@ void ServerGame::sendPlayerPowerups() {
 	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
 	PlayerPowerupPayload data;
 	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
+	hasPhantom = 0;
 	for (auto [id, powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
 		hasBear[id] = 0;
-		hasPhantom = 0;
 		int idx = 0;
 		for (auto p : powerups) {
 			if (idx >= 20) break;
