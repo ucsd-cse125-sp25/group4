@@ -1045,7 +1045,6 @@ bool Renderer::Render() {
 		PerDrawConstants dc = {
 		.viewProject = m_ScreenUI.ortho,
 		.modelMatrix = XMMatrixIdentity(),
-		.modelInverseTranspose = XMMatrixIdentity(),
 		.vpos_idx = m_ScreenUI.screenVertexBuffer.descriptor.index,
 		.vshade_idx = m_scene.vertexShading.descriptor.index,
 		};

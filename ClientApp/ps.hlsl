@@ -222,7 +222,8 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     
     Texture2D lightmap = ResourceDescriptorHeap[drawConstants.lightmap_texture_idx];
     float3 lightmapColor = lightmap.Sample(g_sampler, input.lightmap_texcoord).rgb;
-    
+    // lightmapColor *= 1.5;
+    lightmapColor = max(lightmapColor, 0.01);
     if ((drawConstants.flags & FLAG_NOCTURNAL_RUNNER) != 0)
     {
         lightmapColor *= 0.001;
