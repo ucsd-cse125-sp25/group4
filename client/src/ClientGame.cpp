@@ -519,7 +519,7 @@ bool ClientGame::processMovementInput()
 	{
 		bool jumpNowDown = (GetAsyncKeyState(' ') & 0x8000) != 0;
 
-	if (jumpNowDown && (!jumpWasDown || bunnyhop))      // rising edge
+	if (jumpNowDown && (!jumpWasDown || bunnyhop)) {     // rising edge
 		jump = true;
 		audioEngine->PlayOneSound("jump.wav", { 0, 0, 0 }, 0.2f);
 	}
