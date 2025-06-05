@@ -411,11 +411,11 @@ void ServerGame::startARound(int seconds) {
 		// Survivors each get ${3-sum_survivors} coins, Hunter gets ${sum_survivors}.
 		for (unsigned int id = 0; id < num_players; ++id) {
 			if (!state->players[id].isHunter) {
-				state->players[id].coins += 3 - num_survivors;
+				state->players[id].coins += 4 - num_survivors;
 				printf("[round %d] Player %d coins: %d\n", round_id, id, state->players[id].coins);
 			}
 			else {
-				state->players[id].coins += num_survivors; // hunter gets more coins if more survivors are alive
+				state->players[id].coins += num_survivors + 1; // hunter gets more coins if more survivors are alive
 				//printf("adding %d coins to hunter %d\n", 3 - num_survivors, id);
 				printf("[round %d] Hunter %d coins: %d\n", round_id, id, state->players[id].coins);
 			}
@@ -962,8 +962,8 @@ void ServerGame::sendPlayerPowerups() {
 	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
 	PlayerPowerupPayload data;
 	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
-	hasPhantom = 1;//TODO REMOVE
-	hasNocturnal = 1;
+	hasPhantom = 0;
+	hasNocturnal = 0;
 	for (auto [id, powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
 		hasBear[id] = 0;

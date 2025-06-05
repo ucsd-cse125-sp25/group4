@@ -4,7 +4,7 @@
 #include <iostream>
 using namespace std;
 const wchar_t CLASS_NAME[] = L"Window Class";
-const wchar_t GAME_NAME[] = L"$GAME_NAME";
+const wchar_t GAME_NAME[] = L"Tiny Terrors";
 
 
 ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
