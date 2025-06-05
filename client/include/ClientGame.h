@@ -70,6 +70,7 @@ public:
 	AnimationState localAnimState;
 
 private:
+	uint64_t instinctExpireTick;
 	HWND hwnd;
 	int id = -1; // -1 is pre-initialization. 0 should be hunter. 4 should be spectator
 	ClientNetwork* network;

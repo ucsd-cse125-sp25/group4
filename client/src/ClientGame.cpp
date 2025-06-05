@@ -212,6 +212,11 @@ void ClientGame::update() {
 
 			// update timer
 			renderer.updateTimer(gameState->timerFrac);
+
+			// update instinct
+			if (gameState->tick >= instinctExpireTick) {
+				renderer.instinct = false;
+			}
 			
 			break;
 		}
@@ -330,6 +335,13 @@ void ClientGame::update() {
 					}
 				}
 			}
+			break;
+		}
+		case PacketType::INSTINCT:
+		{
+			InstinctPayload* insP = (InstinctPayload*)(network_data + HDR_SIZE);
+			renderer.instinct = true; // trigger instinct when receive
+			instinctExpireTick = insP->nextInstinctEnd;
 			break;
 		}
 		default:

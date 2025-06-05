@@ -500,6 +500,51 @@ bool Renderer::Init(HWND window_handle) {
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateTimerUI)));
 		}
 		
+		{
+			// --------------------------------------------------------------------
+			// describe Player PSO during INSTINCT (red see-through)
+
+			Slice<BYTE> vertexShaderBytecode;
+			if (DX::ReadDataToSlice(L"skin_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			Slice<BYTE> pixelShaderBytecode;
+			if (DX::ReadDataToSlice(L"instinct_ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+
+
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
+				.pRootSignature = m_rootSignature.Get(),
+				.VS = {
+					.pShaderBytecode = vertexShaderBytecode.ptr,
+					.BytecodeLength = vertexShaderBytecode.len,
+				},
+				.PS = {
+					.pShaderBytecode = pixelShaderBytecode.ptr,
+					.BytecodeLength = pixelShaderBytecode.len,
+				},
+				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+				.SampleMask = UINT_MAX,
+				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+				// NO DEPTH for INSTINCT
+				.DepthStencilState = {
+					.DepthEnable = FALSE,
+					.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+					.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+					.StencilEnable = FALSE,
+				},
+				.InputLayout = {},
+				.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+				.NumRenderTargets = 1,
+				.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+				.DSVFormat = DXGI_FORMAT_D32_FLOAT,
+				.SampleDesc = {
+					.Count = 1,
+				},
+			};
+			psoDesc.RasterizerState.FrontCounterClockwise = true;
+			// psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
+
+			// create the pipeline state object
+			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateInstinct)));
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------
@@ -995,6 +1040,36 @@ bool Renderer::Render() {
 		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
 		m_commandList->DrawInstanced(m_ScreenUI.screenVertexBuffer.data.len, 1, 0, 0);
 	}
+
+	// draw INSTINCT only if powerup and hunter
+	if (instinct && currPlayer.playerId == 0) {
+		m_commandList->SetPipelineState(m_pipelineStateInstinct.Get());
+		for (UINT8 i = 1; i < 4; ++i) {
+			XMMATRIX modelMatrix = computeModelMatrix(players[i]);
+			XMMATRIX modelInverseTranspose = XMMatrixInverse(nullptr, XMMatrixTranspose(modelMatrix));
+			bool loop = players[i].loop;
+				UINT8 animationIdx = players[i].runnerAnimation;
+				PlayerDrawConstants drawConstants = {
+					.viewProject = viewProject,
+					.modelMatrix = modelMatrix,
+					.modelInverseTranspose = modelInverseTranspose,
+					.vpos_idx = m_runnerRenderBuffers.vertexPosition.descriptor.index,
+					.vshade_idx = m_runnerRenderBuffers.vertexShading.descriptor.index ,
+					.material_ids_idx = m_runnerRenderBuffers.materialID.descriptor.index,
+					.materials_idx = m_runnerRenderBuffers.materials.descriptor.index,
+					.first_texture_idx = m_runnerRenderBuffers.textures.ptr[0].descriptor.index,
+					.vbone_idx = m_runnerRenderBuffers.vertexBoneIdx.descriptor.index,
+					.vweight_idx = m_runnerRenderBuffers.vertexBoneWeight.descriptor.index,
+					.bone_transforms_idx = m_runnerAnimations[animationIdx].invBindTransform.descriptor.index,
+					.bone_adj_transforms_idx = m_runnerAnimations[animationIdx].invBindAdjTransform.descriptor.index,
+					.frame_number = m_runnerAnimations[animationIdx].getFrame(players[i].animationStartTime, time, loop),
+					.num_bones = m_runnerRenderBuffers.header->numBones,
+				};
+				m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_PLAYER_NUM_DWORDS, &drawConstants, 0);
+				m_commandList->DrawInstanced(3 * m_runnerRenderBuffers.vertexPosition.data.len, 1, 0, 0);
+		}
+	}
+	
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {

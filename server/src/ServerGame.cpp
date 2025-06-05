@@ -75,6 +75,7 @@ void ServerGame::update() {
 			applyPhysics();
 			applyAttacks();
 			applyDodge();
+			applyInstinct();
 			sendGameStateUpdates();
 			handleGamePhase();
 			break;
@@ -440,6 +441,9 @@ void ServerGame::newGame()
 	hunter_points = 0;
 	attackRange = ATTACK_DEFAULT_RANGE;
 	attackCooldownTicks = cdDefaultTicks;
+	prevInstinctTickStart = 0;
+	prevInstinctTickEnd = 0;
+	hasInstinct = false;
 
 	for (int i = 0; i < num_players; i++) {
 		state->players[i].coins = PLAYER_INIT_COINS;
@@ -614,7 +618,8 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
 		break;
 	case Powerup::H_INCREASE_VISION:
-		printf("[POWERUP] Player %d increase vision (place holder)", id);
+		hasInstinct = true;
+		printf("[POWERUP] Hunter granted instinct\n");
 		break;
 	case Powerup::H_MULTI_JUMPS:
 		state->players[id].jumpCounts++;
@@ -885,6 +890,17 @@ void ServerGame::applyDodge()
 	}
 }
 
+void ServerGame::applyInstinct() {
+	if (!hasInstinct) return;
+	if (state->tick > prevInstinctTickEnd && state->tick - prevInstinctTickEnd > INSTINCT_INTERVAL) {
+		// trigger new instinct after interval passed since last instinct
+		prevInstinctTickStart = state->tick;
+		prevInstinctTickEnd = state->tick + INSTINCT_DURATION;
+		printf("[INSTINCT] instinct granted at %llu, lasting until %llu\n", state->tick, prevInstinctTickEnd);
+		sendInstinctUpdate(prevInstinctTickEnd);
+	}
+}
+
 // -----------------------------------------------------------------------------
 // NETWORK
 // -----------------------------------------------------------------------------
@@ -961,6 +977,18 @@ void ServerGame::sendShopOptions(ShopOptionsPayload* data, int dest) {
 	NetworkServices::buildPacket<ShopOptionsPayload>(PacketType::SHOP_INIT, *data, packet_data);
 
 	network->sendToClient(dest, packet_data, HDR_SIZE + sizeof(ShopOptionsPayload));
+}
+
+void ServerGame::sendInstinctUpdate(uint64_t nextInstinctEnd) {
+	char packet_data[HDR_SIZE + sizeof(InstinctPayload)];
+
+	InstinctPayload* data = new InstinctPayload{
+		.nextInstinctEnd = nextInstinctEnd
+	};
+
+	NetworkServices::buildPacket<InstinctPayload>(PacketType::INSTINCT, *data, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(InstinctPayload));
 }
 
 // -----------------------------------------------------------------------------

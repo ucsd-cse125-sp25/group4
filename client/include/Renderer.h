@@ -990,6 +990,8 @@ public:
 	// spectator camera settings
 	bool detached = false;
 	XMFLOAT3 freecamPos = {};
+
+	bool instinct = false;
 private:
 	DebugCubes debugCubes;
 
@@ -1030,6 +1032,9 @@ private:
 
 	// for scoreboard
 	uint8_t powerupInfo[4][20];
+
+	// for instinct powerup
+	ComPtr<ID3D12PipelineState> m_pipelineStateInstinct;
 
 	// syncrhonization objects
 	UINT m_frameIndex;

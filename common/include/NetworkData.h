@@ -43,7 +43,8 @@ enum class PacketType : uint32_t {
 	PLAYER_POWERUPS,		// powerup information of all players
 	BEAR,
 	ANIMATION_STATE,
-	PHANTOM
+	PHANTOM,
+	INSTINCT
 };
 
 // when adding powerups
@@ -244,6 +245,10 @@ struct ShopOptionsPayload {
 struct BearPayload {};
 
 struct PhantomPayload {};
+
+struct InstinctPayload {
+	uint64_t nextInstinctEnd;
+};
 
 struct Packet {
 	unsigned int packet_type;
