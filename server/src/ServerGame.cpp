@@ -708,15 +708,14 @@ void ServerGame::applyMovements() {
 		if (!latestMovement.count(id)) {
 			if (id == 0) {
 				bool wasChasing = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE);
-				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
+				bool canLeaveAttack = (state->tick >= hunterEndSlowdown);
 				if ((wasChasing || canLeaveAttack) && lastAnimationState[id]) {
 					// reset animation back to idle only if it was previouslly moving
 					lastAnimationTime[id] = state->tick;
 					printf("H IDLE TICK SAVED\n");
 
 				}
-				if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS && !lastAnimationState[id] && canLeaveAttack) {
-					printf("%d\n", canLeaveAttack);
+				if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS && (!lastAnimationState[id] && canLeaveAttack)) {
 					animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
 					animationState.isLoop[id] = true;
 				}
@@ -746,25 +745,15 @@ void ServerGame::applyMovements() {
 			// set movement ONLY IF at idle or attack is finished
 			if (id == 0) {
 				bool wasIdle = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE);
-				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
-				if ((wasIdle || canLeaveAttack) && !lastAnimationState[id]) {
-					lastAnimationTime[id] = state->tick;
-					printf("H RUN TICK SAVED\n");
-
-				}
-				if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS) {
-					if (lastAnimationState[id] && canLeaveAttack) {
-						animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_CHASE;
-						animationState.isLoop[0] = true;
-					}
+				bool canLeaveAttack = (state->tick >= hunterEndSlowdown);
+				if (wasIdle || canLeaveAttack)
+				{
+					animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_CHASE;
+					animationState.isLoop[0] = true;
+					
 				}
 			}         
-			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_IDLE && !lastAnimationState[id]) {
-				lastAnimationTime[id] = state->tick;
-				printf("R RUN TICK SAVED\n");
-
-			}
-			else if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS && lastAnimationState[id]) {
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_IDLE) {
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
 				animationState.isLoop[id] = true;
 			}
