@@ -242,9 +242,12 @@ void ClientGame::update() {
 
 			//playAudio();
 
-      // update instinct
+			// update client side powerups
 			if (gameState->tick >= instinctExpireTick) {
 				renderer.instinct = false;
+			}
+			if (gameState->tick >= nocturnalExpireTick) {
+				renderer.nocturnal = false;
 			}
 			
 			break;
@@ -302,6 +305,8 @@ void ClientGame::update() {
 				audioEngine->PlayOneSound(a_purchase, { 0,0,0 }, 1);
 				break;
 			case NOCTURNAL:
+				renderer.nocturnal = true;
+				nocturnalExpireTick = ok->endTick;
 				audioEngine->PlayOneSound(a_darkness, { 0,0,0 }, 1);
 				break;
 			case PHANTOM:
@@ -592,9 +597,7 @@ bool ClientGame::processMovementInput()
 	if (GetAsyncKeyState('D') & 0x8000) direction[1] += 1;
 
 
-	if (GetAsyncKeyState('O') & 0x8000) renderer.nocturnal = false;
-	if (GetAsyncKeyState('P') & 0x8000) renderer.nocturnal = true;
-
+	
 	// if hunter phantom, hold space to fly up and hold control to fly down
 	if (renderer.currPlayer.playerId == 0 && gameState->players[id].isPhantom) 
 	{

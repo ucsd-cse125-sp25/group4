@@ -170,6 +170,11 @@ private:
 	int phantomTicks = 0;
 	static constexpr int PHANTOM_TICKS = TICKS_PER_SEC * 5;
 	int hasPhantom = 0;
+	
+	int nocturnalTicks = 0;
+	static constexpr int NOCTURNAL_TICKS = TICKS_PER_SEC * 5;
+	int hasNocturnal = 0;
+	bool isNocturnal = false;
 
 	bool hasInstinct = false;
 	uint64_t prevInstinctTickStart;

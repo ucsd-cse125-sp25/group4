@@ -300,6 +300,27 @@ void ServerGame::receiveFromClients()
 				}
 				break;
 			}
+			case PacketType::NOCTURNAL:
+			{
+				// payload is empty
+				//PhantomPayload* phantom = (PhantomPayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] NOCTURNAL_PACKET\n", id);
+				// drop if player doesn't have the powerup
+				if (!state->players[id].isHunter || !hasNocturnal)
+					break;
+				// drop if nocturnal is already active
+				if (isNocturnal)
+					break;
+				else 
+				{
+					isNocturnal = true;
+					nocturnalTicks = state->tick + (NOCTURNAL_TICKS * hasNocturnal);
+					hasNocturnal = 0; // reset nocturnal powerup
+					sendActionOk(Actions::NOCTURNAL, nocturnalTicks, id, true, 0);
+					printf("IT'S NOCTURNAL TIME!!!\n");
+				}
+				break;
+			}
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
 				break;
@@ -450,6 +471,7 @@ void ServerGame::newGame()
 	prevInstinctTickStart = 0;
 	prevInstinctTickEnd = 0;
 	hasInstinct = false;
+	isNocturnal = false;
 
 	for (int i = 0; i < num_players; i++) {
 		state->players[i].coins = PLAYER_INIT_COINS;
@@ -939,7 +961,8 @@ void ServerGame::sendPlayerPowerups() {
 	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
 	PlayerPowerupPayload data;
 	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
-	hasPhantom = 0;
+	hasPhantom = 1;//TODO REMOVE
+	hasNocturnal = 1;
 	for (auto [id, powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
 		hasBear[id] = 0;
@@ -955,6 +978,11 @@ void ServerGame::sendPlayerPowerups() {
 			{
 				// reset phantom status for the next round
 				hasPhantom += 1;
+			}
+			if (p == Powerup::H_NOCTURNAL)
+			{
+				// reset nocturnal status for the next round
+				hasNocturnal += 1;
 			}
 			printf("%s, ", PowerupInfo[p].name.c_str());
 			data.powerupInfo[id][idx] = (uint8_t) p;
