@@ -174,7 +174,7 @@ bool Renderer::Init(HWND window_handle) {
 		uint32_t capacity = 
 			  numSceneDescriptors + numHunterDescriptors + numRunnerDescriptors + 
 			+ numTimerUITextures + numTimerUIVertexBuffers
-			+ numShopUITextures + numShopUIVertexBuffers + 4;
+			+ numShopUITextures + numShopUIVertexBuffers;
 		// all resource descriptors go here.
 		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(

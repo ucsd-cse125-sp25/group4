@@ -313,7 +313,7 @@ void ClientGame::update() {
 					localAnimState.curAnims[i] = remoteAnimState->curAnims[i];
 					localAnimState.isLoop[i] = remoteAnimState->isLoop[i];
 					if (i == 0) {
-						if (remoteAnimState->isLoop) {
+						if (remoteAnimState->isLoop[i]) {
 							renderer.players[i].loopAnimation((HunterAnimation)remoteAnimState->curAnims[i]);
 						}
 						else {
@@ -321,7 +321,7 @@ void ClientGame::update() {
 						}
 					}
 					else {
-						if (remoteAnimState->isLoop) {
+						if (remoteAnimState->isLoop[i]) {
 							renderer.players[i].loopAnimation((RunnerAnimation)remoteAnimState->curAnims[i]);
 						}
 						else {

@@ -178,6 +178,10 @@ void ServerGame::receiveFromClients()
 			{
 				if (id != 0) break;                               // not the hunter
 				if (state->tick < hunterEndSlowdown) break;         // still in pipeline
+				
+				// animation state
+				animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_ATTACK;
+				animationState.isLoop[0] = false;
 
 				auto* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
 				pendingSwing = DelayedAttack{ *atk, state->tick + windupTicks };
@@ -673,10 +677,14 @@ void ServerGame::applyMovements() {
 
 		// reset to idle ONLY FROM MOVEMENT if no input
 		if (!latestMovement.count(id)) {
-			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE) {
-				// reset animation back to idle only if it was previouslly moving
-				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
-				animationState.isLoop[id] = true;
+			if (id == 0) {
+				bool wasChasing = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE);
+				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
+				if (wasChasing || canLeaveAttack) {
+					// reset animation back to idle only if it was previouslly moving
+					animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
+					animationState.isLoop[id] = true;
+				}
 			}
 			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
 				// TODO idle instead of walk
@@ -693,12 +701,15 @@ void ServerGame::applyMovements() {
 
 		float dx = 0, dy = 0, dz = 0;
 		if (latestMovement.count(id)) {
-			// set movement ONLY IF at idle
-			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE) {
-				// reset animation back to idle only if it was previouslly moving
-				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_CHASE;
-				animationState.isLoop[id] = true;
-			}
+			// set movement ONLY IF at idle or attack is finished
+			if (id == 0) {
+				bool wasIdle = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE);
+				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
+				if (wasIdle || canLeaveAttack) {
+					animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_CHASE;
+					animationState.isLoop[0] = true;
+				}
+			}         
 			// TODO check idle instead of walk
 			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
@@ -820,9 +831,6 @@ void ServerGame::applyAttacks()
 		pendingSwing->attack.yaw = state->players[0].yaw;
 		// leave range unchanged
 		
-		// animation state
-		animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_ATTACK;
-		animationState.isLoop[0] = false;
 
 		for (unsigned victimId = 1; victimId < 4; ++victimId)      // only survivors
 		{
