@@ -270,7 +270,8 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     float3 camToFrag = normalize(fragPosWS - camPos);
     float3 reflectionDir = camToFrag - 2 * dot(camToFrag, shadenormal) * shadenormal;
     
-    const uint SAMPLE_COUNT = 16u;
+    const uint SAMPLE_COUNT = 128u;
+    // const uint SAMPLE_COUNT = 1;
     float totalWeight = 0.0;
     float3 reflCol = float3(0, 0, 0);
     for (uint i = 0u; i < SAMPLE_COUNT; ++i)
@@ -284,11 +285,15 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
             reflCol += SampleCubeMap(cubemap, fragPosWS, L, roughness) * NdotL;
             // float3 schlicked = reflCol * fresnelSchlick(NdotL);
             // reflCol = 0.5 * schlicked + 0.5 * reflCol;
-            reflCol *= fresnelSchlick(NdotL, roughness);
+            // return float4(fresnelSchlick(NdotL, roughness), 1);
+            //reflCol *= fresnelSchlick(NdotL, roughness);
             totalWeight += NdotL;
         }
     }
-    reflCol *= 1.5;
+    reflCol *= 0.15;
+    reflCol /= totalWeight;
+    // return float4(reflCol, 1);
+
     
     
     // float diffuseStrength = clamp(dot(lightDir, normalize(input.normal)), 0.3, 1);
