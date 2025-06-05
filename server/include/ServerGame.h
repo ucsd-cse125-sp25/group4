@@ -166,6 +166,9 @@ private:
 
 	// animation
 	AnimationState animationState;
+	bool lastAnimationState[4]{ false, false, false, false }; // last movement reading
+	int lastAnimationTime[4]{ 0,0,0,0 }; // last tick of movement change
+	static constexpr int DEBOUNCE_TICKS = 5;
 	
 	int phantomTicks = 0;
 	static constexpr int PHANTOM_TICKS = TICKS_PER_SEC * 5;

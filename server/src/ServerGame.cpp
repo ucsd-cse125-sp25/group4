@@ -708,18 +708,30 @@ void ServerGame::applyMovements() {
 		if (!latestMovement.count(id)) {
 			if (id == 0) {
 				bool wasChasing = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE);
-				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
-				if (wasChasing || canLeaveAttack) {
+				bool canLeaveAttack = (state->tick >= hunterEndSlowdown);
+				if ((wasChasing || canLeaveAttack) && lastAnimationState[id]) {
 					// reset animation back to idle only if it was previouslly moving
-					printf("[HUNTER ANIMATION] transferring to idle. wasIdle: %d ; canLeaveAttack: %d\n", wasChasing, canLeaveAttack);
+					lastAnimationTime[id] = state->tick;
+					printf("H IDLE TICK SAVED\n");
+
+				}
+				if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS && (!lastAnimationState[id] && canLeaveAttack)) {
 					animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
 					animationState.isLoop[id] = true;
 				}
 			}
-			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK && lastAnimationState[id]) {
+				
+				lastAnimationTime[id] = state->tick;
+				printf("R IDLE TICK SAVED\n");
+
+			}
+			else if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS && !lastAnimationState[id]) {
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 				animationState.isLoop[id] = true;
 			}
+
+			lastAnimationState[id] = false;
 		}
 
 		// check if phantom power runs out
@@ -733,11 +745,12 @@ void ServerGame::applyMovements() {
 			// set movement ONLY IF at idle or attack is finished
 			if (id == 0) {
 				bool wasIdle = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE);
-				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
-				if (wasIdle || canLeaveAttack) {
-					printf("[HUNTER ANIMATION] transferring to walk. wasIdle: %d ; canLeaveAttack: %d\n", wasIdle, canLeaveAttack);
+				bool canLeaveAttack = (state->tick >= hunterEndSlowdown);
+				if (wasIdle || canLeaveAttack)
+				{
 					animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_CHASE;
 					animationState.isLoop[0] = true;
+					
 				}
 			}         
 			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_IDLE) {
@@ -745,6 +758,8 @@ void ServerGame::applyMovements() {
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
 				animationState.isLoop[id] = true;
 			}
+
+			lastAnimationState[id] = true;
 
 			auto& mv = latestMovement[id];
 			// update direction regardless of collision
