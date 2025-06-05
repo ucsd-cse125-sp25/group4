@@ -93,7 +93,7 @@ static std::map<Powerup, PowerupMetadata> PowerupInfo{
 	{ Powerup::H_REDUCE_ATTACK_CD,	{4, 3, "H_SNIPER",		L"textures\\cards\\h_sniper.dds"} },
 	{ Powerup::H_INC_ATTACK_RANGE,	{5, 3, "H_HUSTLER",		L"textures\\cards\\h_hustler.dds"} },
 	{ Powerup::H_BUNNY_HOP,			{6, 3, "H_HUSTLER",		L"textures\\cards\\r_bhopp.dds"} }, 
-	{ Powerup::H_PHANTOM,			{7, 1, "H_PHANTOM",	L"textures\\cards\\h_sniper.dds"} },//TODO CHANGE TEXTURE
+	{ Powerup::H_PHANTOM,			{7, 3, "H_PHANTOM",	L"textures\\cards\\h_phantom.dds"} },
 	{ Powerup::H_INCREASE_ROUND_TIME,{8, 2, "H_TIMER",      L"textures\\cards\\h_hustler.dds"} }, //TODO CHANGE TEXTURE
 	{ Powerup::R_INCREASE_SPEED,	{9, 2, "R_SWIFTIES",	L"textures\\cards\\r_swifties.dds"} },
 	{ Powerup::R_INCREASE_JUMP,		{10, 1, "R_HOPPERS",		L"textures\\cards\\r_hoppers.dds"} },
