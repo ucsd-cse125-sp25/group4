@@ -179,6 +179,10 @@ void ServerGame::receiveFromClients()
 			{
 				if (id != 0) break;                               // not the hunter
 				if (state->tick < hunterEndSlowdown) break;         // still in pipeline
+				
+				// animation state
+				animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_ATTACK;
+				animationState.isLoop[0] = false;
 
 				auto* atk = (AttackPayload*)&network_data[i + HDR_SIZE];
 				pendingSwing = DelayedAttack{ *atk, state->tick + windupTicks };
@@ -199,7 +203,7 @@ void ServerGame::receiveFromClients()
 
 				// grant!
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_DODGE;
-				animationState.isLoop[id] = false; // TODO this is for debug, change to false in production
+				animationState.isLoop[id] = false; 
 				lastDodgeTick[id] = state->tick;
 				invulTicks[id] = INVUL_TICKS;
 				dashTicks[id] = INVUL_TICKS;                   // dash lasts same 30 ticks
@@ -208,7 +212,7 @@ void ServerGame::receiveFromClients()
 				state->players[id].speed *= DASH_SPEED_MULTIPLIER;
 
 				// notify the client
-				sendActionOk(PacketType::DODGE, 0, id, true, 0);
+				sendActionOk(Actions::DODGE, 0, id, true, 0);
 
 				printf("[DODGE] survivor %u granted at tick %llu\n", id, state->tick);
 				break;
@@ -223,7 +227,7 @@ void ServerGame::receiveFromClients()
 				if (appState->gamePhase == GamePhase::SHOP_PHASE)
 				{
 					printf("Selection: %d\n", status->selection);
-					sendActionOk(PacketType::SHOP_UPDATE, 0, id, true, 0);
+					sendActionOk(Actions::SHOP_UPDATE, 0, id, true, 0);
 					// Only save if they selected a powerup
 					if (status->selection != 0) 
 					{
@@ -267,7 +271,7 @@ void ServerGame::receiveFromClients()
 					state->players[id].z += 5.0f * PLAYER_SCALING_FACTOR; // bear is taller
 					hasBear[id] = 0;
 
-					sendActionOk(PacketType::BEAR, bearTicks, id, true, 0);
+					sendActionOk(Actions::BEAR, bearTicks, id, true, 0);
 					
 					printf("IT'S BEAR TIME!!!\n");
 				}
@@ -291,7 +295,29 @@ void ServerGame::receiveFromClients()
 					state->players[id].isPhantom = true;
 					phantomTicks = state->tick + (PHANTOM_TICKS * hasPhantom);
 					hasPhantom = 0; // reset phantom powerup
+					sendActionOk(Actions::PHANTOM, phantomTicks, id, true, 0);
 					printf("IT'S PHANTOM TIME!!!\n");
+				}
+				break;
+			}
+			case PacketType::NOCTURNAL:
+			{
+				// payload is empty
+				//PhantomPayload* phantom = (PhantomPayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] NOCTURNAL_PACKET\n", id);
+				// drop if player doesn't have the powerup
+				if (!state->players[id].isHunter || !hasNocturnal)
+					break;
+				// drop if nocturnal is already active
+				if (isNocturnal)
+					break;
+				else 
+				{
+					isNocturnal = true;
+					nocturnalTicks = state->tick + (NOCTURNAL_TICKS * hasNocturnal);
+					hasNocturnal = 0; // reset nocturnal powerup
+					sendActionOk(Actions::NOCTURNAL, nocturnalTicks, id, true, 0);
+					printf("IT'S NOCTURNAL TIME!!!\n");
 				}
 				break;
 			}
@@ -312,6 +338,7 @@ void ServerGame::receiveFromClients()
 void ServerGame::startARound(int seconds) {
 	round_id++;
 	sendPlayerPowerups();
+	isNocturnal = false;
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
 
@@ -445,6 +472,7 @@ void ServerGame::newGame()
 	prevInstinctTickStart = 0;
 	prevInstinctTickEnd = 0;
 	hasInstinct = false;
+	isNocturnal = false;
 
 	for (int i = 0; i < num_players; i++) {
 		state->players[i].coins = PLAYER_INIT_COINS;
@@ -460,9 +488,8 @@ void ServerGame::newGame()
 
 	animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_IDLE;
 	animationState.isLoop[0] = true;
-	// TODO runner IDLE anim!
 	for (int i = 1; i < 4; i++) {
-		animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+		animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 		animationState.curAnims[i] = true;
 	}
 }
@@ -679,14 +706,17 @@ void ServerGame::applyMovements() {
 
 		// reset to idle ONLY FROM MOVEMENT if no input
 		if (!latestMovement.count(id)) {
-			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE) {
-				// reset animation back to idle only if it was previouslly moving
-				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
-				animationState.isLoop[id] = true;
+			if (id == 0) {
+				bool wasChasing = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE);
+				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
+				if (wasChasing || canLeaveAttack) {
+					// reset animation back to idle only if it was previouslly moving
+					animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
+					animationState.isLoop[id] = true;
+				}
 			}
 			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
-				// TODO idle instead of walk
-				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 				animationState.isLoop[id] = true;
 			}
 		}
@@ -699,14 +729,16 @@ void ServerGame::applyMovements() {
 
 		float dx = 0, dy = 0, dz = 0;
 		if (latestMovement.count(id)) {
-			// set movement ONLY IF at idle
-			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE) {
-				// reset animation back to idle only if it was previouslly moving
-				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_CHASE;
-				animationState.isLoop[id] = true;
-			}
-			// TODO check idle instead of walk
-			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+			// set movement ONLY IF at idle or attack is finished
+			if (id == 0) {
+				bool wasIdle = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE);
+				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
+				if (wasIdle || canLeaveAttack) {
+					animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_CHASE;
+					animationState.isLoop[0] = true;
+				}
+			}         
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_IDLE) {
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
 				animationState.isLoop[id] = true;
 			}
@@ -756,7 +788,7 @@ void ServerGame::applyMovements() {
 				player.zVelocity += BEAR_JUMP_BOOST;
 			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
-			sendActionOk(PacketType::MOVE, 0, id, true, 0);
+			sendActionOk(Actions::JUMP, 0, id, true, 0);
 		}
 
 		// gravity
@@ -819,7 +851,7 @@ void ServerGame::applyAttacks()
 	if (pendingSwing && state->tick >= pendingSwing->hitTick)
 	{
 		printf("[HUNTER] resolving atk\n");
-		sendActionOk(PacketType::ATTACK, 0, 0, true, 0);
+		sendActionOk(ATTACK, 0, 0, true, 0);
 		// update the pending swing to the latest received movements
 		pendingSwing->attack.originX = state->players[0].x;
 		pendingSwing->attack.originY = state->players[0].y;
@@ -827,6 +859,7 @@ void ServerGame::applyAttacks()
 		pendingSwing->attack.pitch = state->players[0].pitch;
 		pendingSwing->attack.yaw = state->players[0].yaw;
 		// leave range unchanged
+		
 
 		for (unsigned victimId = 1; victimId < 4; ++victimId)      // only survivors
 		{
@@ -887,8 +920,7 @@ void ServerGame::applyDodge()
 			dashTicks[i] = -1; // prevents from happening multiple times
 			state->players[i].speed /= DASH_COOLDOWN_PENALTY;
 
-			// TODO replace walk with idle
-			animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+			animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 			animationState.isLoop[i] = true;
 		}
 	}
@@ -931,7 +963,8 @@ void ServerGame::sendPlayerPowerups() {
 	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
 	PlayerPowerupPayload data;
 	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
-	hasPhantom = 0;
+	hasPhantom = 1;//TODO REMOVE
+	hasNocturnal = 1;
 	for (auto [id, powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
 		hasBear[id] = 0;
@@ -947,6 +980,11 @@ void ServerGame::sendPlayerPowerups() {
 			{
 				// reset phantom status for the next round
 				hasPhantom += 1;
+			}
+			if (p == Powerup::H_NOCTURNAL)
+			{
+				// reset nocturnal status for the next round
+				hasNocturnal += 1;
 			}
 			printf("%s, ", PowerupInfo[p].name.c_str());
 			data.powerupInfo[id][idx] = (uint8_t) p;
@@ -998,7 +1036,7 @@ void ServerGame::sendInstinctUpdate(uint64_t nextInstinctEnd) {
 // source: trigger id of action
 // all: send to all clients
 // id: if it's not sending to all clients, which to send to
-void ServerGame::sendActionOk(PacketType type, int ticks, int source, bool all, int id) {
+void ServerGame::sendActionOk(Actions type, int ticks, int source, bool all, int id) {
 	ActionOkPayload ok{ (uint32_t)type, ticks, source };
 	char buf[HDR_SIZE + sizeof ok];
 	NetworkServices::buildPacket(PacketType::ACTION_OK, ok, buf);
@@ -1095,6 +1133,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 				if (state->players[clientId].isBear && state->players[c].isHunter) {
 					hunterBearStunTicks = state->tick + BEAR_STUN_TIME;
 					state->players[clientId].isBear = false;
+					sendActionOk(Actions::BEAR_IMPACT, 0, clientId, true, 0);
 					printf("HUNTER STUNNED\n");
 				}
 			}

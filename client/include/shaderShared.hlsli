@@ -27,6 +27,10 @@ using uint     = uint32_t;
 #define SEMANTIC(sem) : sem
 #endif
 
+// define flags here
+#define FLAG_NOCTURNAL_RUNNER 0x00000001
+#define FLAG_NOCTURNAL_HUNTER 0x00000002
+
 struct PSInput
 {
 	// divided by w in the by the rasterizer between the vertex and fragment shaders
@@ -42,7 +46,7 @@ struct PerDrawConstants
 {
     matrix   viewProject;           
 	matrix   modelMatrix;           // positions model to global
-	matrix   modelInverseTranspose; // normals model to global
+    // runner positions
     uint     vpos_idx;              // vertex positions in model space
     uint     vshade_idx;            // normals and texcoords
     uint     material_ids_idx;
@@ -50,7 +54,22 @@ struct PerDrawConstants
     uint     first_texture_idx;
     uint     lightmap_texcoord_idx;
     uint     lightmap_texture_idx;
-	// 55 DWORDS
+    uint     cubemap_idx;
+    uint     flags;
+    // placed as individual floats because of packing rules
+    float camx;
+    float camy;
+    float camz;
+    float p1x;
+    float p1y;
+    float p1z;
+    float p2x;
+    float p2y;
+    float p2z;
+    float p3x;
+    float p3y;
+    float p3z;
+	// 40 DWORDS
 };
 struct PlayerDrawConstants
 {
@@ -68,6 +87,7 @@ struct PlayerDrawConstants
     uint     bone_adj_transforms_idx;
     uint     frame_number;
     uint     num_bones;
+    uint     flags;
 	// 57 DWORDS
 };
 struct VertexPosition

@@ -24,7 +24,7 @@ public:
 	void sendAppPhaseUpdates();
 	void sendShopOptions(ShopOptionsPayload*);
 	void sendPlayerPowerups();
-	void sendActionOk(PacketType type, int ticks, int source, bool all, int id);
+	void sendActionOk(Actions type, int ticks, int source, bool all, int id);
 
 	void applyMovements();
 	void applyCamera();
@@ -170,6 +170,11 @@ private:
 	int phantomTicks = 0;
 	static constexpr int PHANTOM_TICKS = TICKS_PER_SEC * 5;
 	int hasPhantom = 0;
+	
+	int nocturnalTicks = 0;
+	static constexpr int NOCTURNAL_TICKS = TICKS_PER_SEC * 5;
+	int hasNocturnal = 0;
+	bool isNocturnal = false;
 
 	bool hasInstinct = false;
 	uint64_t prevInstinctTickStart;

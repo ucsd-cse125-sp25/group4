@@ -12,15 +12,14 @@ PSInput VSMain(uint vid : SV_VertexID)
     
     
     StructuredBuffer<VertexShadingData> shadebuffer = ResourceDescriptorHeap[drawConstants.vshade_idx];
-    float4 normal = float4(shadebuffer[vid].normal, 0);
     float2 texcoord = float2(shadebuffer[vid].texcoord);
     
     StructuredBuffer<VertexLightmapTexcoord> lightmapTexcoordBuffer = ResourceDescriptorHeap[drawConstants.lightmap_texcoord_idx];
     float2 lightmap_texcoord = lightmapTexcoordBuffer[vid].texcoord;
-    
+     
     PSInput result;
     result.positionGlobal = mul(position_homogeneous , drawConstants.modelMatrix);
-    result.normal = normalize(mul(normal, drawConstants.modelInverseTranspose).xyz);
+    result.normal = shadebuffer[vid].normal;
     result.positionNDC    = mul(result.positionGlobal, drawConstants.viewProject);
     result.texcoord = texcoord;
     result.lightmap_texcoord = lightmap_texcoord;

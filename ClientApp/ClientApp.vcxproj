@@ -88,12 +88,6 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="..\Assets\monsterv2.jj">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="..\Assets\Idle.janim">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
     <CopyFileToFolders Include="..\Assets\RestPose.janim">
       <FileType>Document</FileType>
     </CopyFileToFolders>
@@ -113,6 +107,21 @@
       <FileType>Document</FileType>
     </CopyFileToFolders>
     <CopyFileToFolders Include="..\Assets\bedroomv5.jj">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\monsterv4.jj">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\Dead.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\HunterIdle.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\RunnerIdle.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\playerDOLLv5.jj">
       <FileType>Document</FileType>
     </CopyFileToFolders>
     <None Include="..\client\include\shaderShared.hlsli">
