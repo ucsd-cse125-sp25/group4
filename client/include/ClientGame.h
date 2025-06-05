@@ -92,5 +92,21 @@ private:
 	uint8_t powerups[20];
 
 	bool bunnyhop = false; // allow holding jump
+
+	// sounds
+	const string a_music = "./SFX/music.wav";
+	const string a_jump = "./SFX/jump.wav";
+	const string a_attack = "./SFX/attack.wav"; //TODO
+	const string a_bear = "./SFX/bear_growl.wav";
+	const string a_dodge = "./SFX/dodge.wav"; //TODO
+	const string a_move_1 = "./SFX/move_1.wav"; //TODO
+	const string a_move_2 = "./SFX/move_2.wav"; // TODO
+	const string a_move_3 = "./SFX/move_3.wav"; // TODO
+	const string a_move_4 = "./SFX/move_4.wav"; //TODO
+	const string a_purchase = "./SFX/purchase.wav";
+	const string a_round_end = "./SFX/round_end.wav"; //TODO
+	const string a_round_start = "./SFX/round_start.wav"; //TODO
+
+	void playAudio();
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);

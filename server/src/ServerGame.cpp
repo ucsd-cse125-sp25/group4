@@ -207,9 +207,9 @@ void ServerGame::receiveFromClients()
 				state->players[id].speed *= DASH_SPEED_MULTIPLIER;
 
 				// notify the client
-				DodgeOkPayload ok{ INVUL_TICKS };
+				ActionOkPayload ok{ (uint32_t)PacketType::DODGE };
 				char buf[HDR_SIZE + sizeof ok];
-				NetworkServices::buildPacket(PacketType::DODGE_OK, ok, buf);
+				NetworkServices::buildPacket(PacketType::ACTION_OK, ok, buf);
 				network->sendToClient(id, buf, sizeof buf);
 
 				printf("[DODGE] survivor %u granted at tick %llu\n", id, state->tick);

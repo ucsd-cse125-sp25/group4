@@ -71,10 +71,20 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 
 	audioEngine->Init();
 
-	audioEngine->LoadSound("music.wav", true, true);
-	audioEngine->LoadSound("jump.wav", true, false);
+	audioEngine->LoadSound(a_music, true, true);
+	audioEngine->LoadSound(a_jump, true, false);
+	audioEngine->LoadSound(a_attack, true, false);
+	audioEngine->LoadSound(a_bear, true, false);
+	audioEngine->LoadSound(a_dodge, true, false);
+	audioEngine->LoadSound(a_move_1, true, false);
+	audioEngine->LoadSound(a_move_2, true, false);
+	audioEngine->LoadSound(a_move_3, true, false);
+	audioEngine->LoadSound(a_move_4, true, false);
+	audioEngine->LoadSound(a_purchase, true, false);
+	audioEngine->LoadSound(a_round_end, true, false);
+	audioEngine->LoadSound(a_round_start, true, false);
 
-	audioEngine->PlayOneSound("music.wav", { 0, 0, 0 }, 1);
+	audioEngine->PlayOneSound(a_music, { 0, 0, 0 }, 1);
 
 	uint8_t initPowerups[4][20];
 	
@@ -142,6 +152,7 @@ void ClientGame::sendReadyStatusPacket(uint8_t selection = 0) {
 	if (appState->gamePhase == GamePhase::SHOP_PHASE)
 	{
 		status.selection = selection;
+		audioEngine->PlayOneSound(a_purchase, { 0,0,0 }, 1);
 	}
 
 	char buf[HDR_SIZE + sizeof(status)];
@@ -221,6 +232,8 @@ void ClientGame::update() {
 
 			// update timer
 			renderer.updateTimer(gameState->timerFrac);
+
+			playAudio();
 			
 			break;
 		}
@@ -249,12 +262,18 @@ void ClientGame::update() {
 
 			break;
 		}
-		case PacketType::DODGE_OK:
+		case PacketType::ACTION_OK:
 		{
-			DodgeOkPayload* ok = reinterpret_cast<DodgeOkPayload*>(network_data + HDR_SIZE);
-			//invulFrames_ = ok->invulTicks;        // usually 30
+			ActionOkPayload* ok = reinterpret_cast<ActionOkPayload*>(network_data + HDR_SIZE);
+			PacketType action = (PacketType)ok->packetType;
+			// THIS MIGHT NEED TO BE CHANGED
+			if (action == PacketType::DODGE) {
+				audioEngine->PlayOneSound(a_dodge, { 0,0,0 }, 1);
+			}
+			// attack goes here
+			
 			// Optional: kick off a local dash animation / speed buff here.
-			printf(">> DODGE granted!\n");
+			printf(">> %d granted!\n", action);
 			break;
 		}
 
@@ -521,7 +540,7 @@ bool ClientGame::processMovementInput()
 
 	if (jumpNowDown && (!jumpWasDown || bunnyhop)) {     // rising edge
 		jump = true;
-		audioEngine->PlayOneSound("jump.wav", { 0, 0, 0 }, 0.2f);
+		audioEngine->PlayOneSound(a_jump, { 0, 0, 0 }, 0.2f);
 	}
 
 	jumpWasDown = jumpNowDown;
@@ -546,7 +565,7 @@ void ClientGame::processAttackInput()
 			renderer.players[0].pos.z
 		};
 		sendAttackPacket(pos, yaw, pitch);
-		renderer.players[id].playAnimationToEnd(HUNTER_ANIMATION_ATTACK);
+		renderer.players[id].playAnimationToEnd(HUNTER_ANIMATION_ATTACK); //TODO: MOVE TO ACTION_OK PACKET HANDLING???
 	}
 	attackWasDown = attackNowDown;
 }
@@ -659,6 +678,32 @@ void ClientGame::handleShopItemSelection(int choice) {
 			tempCoins -= cost;
 		}
 	}
+}
+
+void ClientGame::playAudio()
+{
+	static bool wasBear = false;
+	static bool wasPhantom = false;
+	bool isBear = false;
+	bool isPhantom = false;
+
+	for (int i = 0; i < 4; i++) {
+		if (gameState->players[i].isBear)
+			isBear = true;
+		if (gameState->players[i].isPhantom)
+			isPhantom = true;
+	}
+
+	if (!wasBear && isBear)
+	{
+		audioEngine->PlayOneSound(a_bear, { 0,0,0 }, 1);
+	}
+	if (!wasPhantom && isPhantom)
+	{
+		// play phantom audio
+	}
+	wasBear = isBear;
+	wasPhantom = isPhantom;
 }
 
 void ClientGame::handleInput()

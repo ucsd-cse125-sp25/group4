@@ -29,12 +29,12 @@
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\client\src\AudioEngine.cpp" />
     <ClCompile Include="..\client\src\ClientGame.cpp" />
     <ClCompile Include="..\client\src\ClientMain.cpp" />
     <ClCompile Include="..\client\src\ClientNetwork.cpp" />
     <ClCompile Include="..\client\src\InputDialog.cpp" />
     <ClCompile Include="..\client\src\Renderer.cpp" />
-    <ClCompile Include="AudioEngine.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="dbg_cube_ps.hlsl">
