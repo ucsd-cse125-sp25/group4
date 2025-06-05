@@ -45,7 +45,8 @@ enum class PacketType : uint32_t {
 	BEAR,
 	ANIMATION_STATE,
 	PHANTOM,
-	INSTINCT
+	INSTINCT,
+	NOCTURNAL
 };
 
 // when adding powerups
@@ -84,7 +85,7 @@ struct PowerupMetadata {
 	std::string name;
 	std::wstring fileLocation;
 };
-
+//TODO
 // KEEP THIS IN SAME ORDER AS ENUM
 // map is sorted based on key, which is crucial for loading in correct textures
 static std::map<Powerup, PowerupMetadata> PowerupInfo{
@@ -235,6 +236,22 @@ struct AnimationState {
 
 struct DodgePayload { float yaw, pitch; };
 
+enum Actions {
+	GAME_STATE,
+	MOVE,
+	PLAYER_READY,
+	ATTACK,
+	BEAR_IMPACT,
+	DODGE,
+	SHOP_INIT,			
+	SHOP_UPDATE,			
+	BEAR,
+	PHANTOM,
+	INSTINCT,
+	JUMP,
+	NOCTURNAL
+};
+
 struct ActionOkPayload { 
 	uint32_t packetType; 
 	int endTick = 0;
@@ -250,6 +267,7 @@ struct ShopOptionsPayload {
 struct BearPayload {};
 
 struct PhantomPayload {};
+struct NocturnalPayload {};
 
 struct InstinctPayload {
 	uint64_t nextInstinctEnd;

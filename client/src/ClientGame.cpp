@@ -200,6 +200,14 @@ void ClientGame::sendPhantomPacket()
 	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
 }
 
+void ClientGame::sendNocturnalPacket()
+{
+	NocturnalPayload pp{ };
+	char buf[HDR_SIZE + sizeof pp];
+	NetworkServices::buildPacket(PacketType::NOCTURNAL, pp, buf);
+	NetworkServices::sendMessage(network->ConnectSocket, buf, sizeof buf);
+}
+
 void ClientGame::update() {
 
 	// check for server updates and process them accordingly
@@ -270,33 +278,39 @@ void ClientGame::update() {
 		case PacketType::ACTION_OK:
 		{
 			ActionOkPayload* ok = reinterpret_cast<ActionOkPayload*>(network_data + HDR_SIZE);
-			PacketType action = (PacketType)ok->packetType;
+			Actions action = (Actions)ok->packetType;
 			switch (action) {
-			case PacketType::DODGE:
+			case DODGE:
 				if (ok->id == renderer.currPlayer.playerId) {
 					audioEngine->PlayOneSound(a_dodge, { 0,0,0 }, 1);
 				}
 				break;
-			case PacketType::ATTACK:
+			case ATTACK:
 				audioEngine->PlayOneSound(a_attack, { 0,0,0 }, 1);
 				break;
-			case PacketType::BEAR:
+			case BEAR:
 				audioEngine->PlayOneSound(a_bear, { 0,0,0 }, 1);
 				break;
-			case PacketType::MOVE:
+			case BEAR_IMPACT:
+				audioEngine->PlayOneSound(a_bear_impact, { 0,0,0 }, 1);
+				break;
+			case JUMP:
 				if (ok->id == renderer.currPlayer.playerId) {
 					audioEngine->PlayOneSound(a_jump, { 0,0,0 }, 1);
 				}
 				break;
-			case PacketType::SHOP_UPDATE:
+			case SHOP_UPDATE:
 				audioEngine->PlayOneSound(a_purchase, { 0,0,0 }, 1);
+				break;
+			case NOCTURNAL:
+				audioEngine->PlayOneSound(a_darkness, { 0,0,0 }, 1);
+				break;
+			case PHANTOM:
+				audioEngine->PlayOneSound(a_phantom, { 0,0,0 }, 1);
 				break;
 			default:
 				break;
 			}
-			//if (action == PacketType::NOCTURNAL) {
-			//	audioEngine->PlayOneSound(a_darkness, { 0,0,0 }, 1);
-			//}
 			
 			// Optional: kick off a local dash animation / speed buff here.
 			printf(">> %d granted!\n", action);
@@ -657,6 +671,16 @@ void ClientGame::processPhantomInput()
 	rWasDown = rNowDown;
 }
 
+void ClientGame::processNocturnalInput()
+{
+	if (renderer.currPlayer.playerId != 0) return;   // runner cannot phantom
+	static bool rWasDown = false;
+	bool rNowDown = (GetAsyncKeyState('R') & 0x8000) != 0;
+	if (rNowDown && !rWasDown)      // rising edge
+		sendNocturnalPacket();
+	rWasDown = rNowDown;
+}
+
 void ClientGame::processShopInputs() {
 	// if ready, player is locked in and cannot change
 	if (ready)
@@ -812,6 +836,7 @@ void ClientGame::handleInput()
 			processDodgeInput();
 			processBearInput();
 			processPhantomInput();
+			processNocturnalInput();
 		}
 		break;
 	}

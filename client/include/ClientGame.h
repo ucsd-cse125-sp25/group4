@@ -33,6 +33,7 @@ public:
 	void processDodgeInput();
 	void processBearInput();
 	void processPhantomInput();
+	void processNocturnalInput();
 	bool processCameraInput();
 	bool processMovementInput();
 	void processShopInputs();
@@ -51,6 +52,7 @@ public:
 	void sendDodgePacket();
 	void sendBearPacket();
 	void sendPhantomPacket();
+	void sendNocturnalPacket();
 	void sendReadyStatusPacket(uint8_t selection);
 	void update();
 
@@ -110,6 +112,8 @@ private:
 	const string a_round_end = "./SFX/round_end.wav"; 
 	const string a_round_start = "./SFX/round_start.wav"; 
 	const string a_darkness = "./SFX/darkness.wav"; //TODO
+	const string a_bear_impact = "./SFX/bear_impact.wav";
+	const string a_phantom = "./SFX/phantom.wav";
 
 	void playAudio();
 	int bgmChannel;

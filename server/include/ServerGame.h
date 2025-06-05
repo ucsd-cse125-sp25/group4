@@ -24,7 +24,7 @@ public:
 	void sendAppPhaseUpdates();
 	void sendShopOptions(ShopOptionsPayload*);
 	void sendPlayerPowerups();
-	void sendActionOk(PacketType type, int ticks, int source, bool all, int id);
+	void sendActionOk(Actions type, int ticks, int source, bool all, int id);
 
 	void applyMovements();
 	void applyCamera();

@@ -208,7 +208,7 @@ void ServerGame::receiveFromClients()
 				state->players[id].speed *= DASH_SPEED_MULTIPLIER;
 
 				// notify the client
-				sendActionOk(PacketType::DODGE, 0, id, true, 0);
+				sendActionOk(Actions::DODGE, 0, id, true, 0);
 
 				printf("[DODGE] survivor %u granted at tick %llu\n", id, state->tick);
 				break;
@@ -223,7 +223,7 @@ void ServerGame::receiveFromClients()
 				if (appState->gamePhase == GamePhase::SHOP_PHASE)
 				{
 					printf("Selection: %d\n", status->selection);
-					sendActionOk(PacketType::SHOP_UPDATE, 0, id, true, 0);
+					sendActionOk(Actions::SHOP_UPDATE, 0, id, true, 0);
 					// Only save if they selected a powerup
 					if (status->selection != 0) 
 					{
@@ -267,7 +267,7 @@ void ServerGame::receiveFromClients()
 					state->players[id].z += 5.0f * PLAYER_SCALING_FACTOR; // bear is taller
 					hasBear[id] = 0;
 
-					sendActionOk(PacketType::BEAR, bearTicks, id, true, 0);
+					sendActionOk(Actions::BEAR, bearTicks, id, true, 0);
 					
 					printf("IT'S BEAR TIME!!!\n");
 				}
@@ -291,6 +291,7 @@ void ServerGame::receiveFromClients()
 					state->players[id].isPhantom = true;
 					phantomTicks = state->tick + (PHANTOM_TICKS * hasPhantom);
 					hasPhantom = 0; // reset phantom powerup
+					sendActionOk(Actions::PHANTOM, phantomTicks, id, true, 0);
 					printf("IT'S PHANTOM TIME!!!\n");
 				}
 				break;
@@ -755,7 +756,7 @@ void ServerGame::applyMovements() {
 				player.zVelocity += BEAR_JUMP_BOOST;
 			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
-			sendActionOk(PacketType::MOVE, 0, id, true, 0);
+			sendActionOk(Actions::JUMP, 0, id, true, 0);
 		}
 
 		// gravity
@@ -818,7 +819,7 @@ void ServerGame::applyAttacks()
 	if (pendingSwing && state->tick >= pendingSwing->hitTick)
 	{
 		printf("[HUNTER] resolving atk\n");
-		sendActionOk(PacketType::ATTACK, 0, 0, true, 0);
+		sendActionOk(ATTACK, 0, 0, true, 0);
 		// update the pending swing to the latest received movements
 		pendingSwing->attack.originX = state->players[0].x;
 		pendingSwing->attack.originY = state->players[0].y;
@@ -997,7 +998,7 @@ void ServerGame::sendInstinctUpdate(uint64_t nextInstinctEnd) {
 // source: trigger id of action
 // all: send to all clients
 // id: if it's not sending to all clients, which to send to
-void ServerGame::sendActionOk(PacketType type, int ticks, int source, bool all, int id) {
+void ServerGame::sendActionOk(Actions type, int ticks, int source, bool all, int id) {
 	ActionOkPayload ok{ (uint32_t)type, ticks, source };
 	char buf[HDR_SIZE + sizeof ok];
 	NetworkServices::buildPacket(PacketType::ACTION_OK, ok, buf);
@@ -1094,6 +1095,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 				if (state->players[clientId].isBear && state->players[c].isHunter) {
 					hunterBearStunTicks = state->tick + BEAR_STUN_TIME;
 					state->players[clientId].isBear = false;
+					sendActionOk(Actions::BEAR_IMPACT, 0, clientId, true, 0);
 					printf("HUNTER STUNNED\n");
 				}
 			}
