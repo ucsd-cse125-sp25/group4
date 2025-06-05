@@ -203,13 +203,17 @@ struct Texture {
 		}
 
 		BYTE* initialData = data.ptr + desc.headerSize;
-
-		if (!(desc.type == ddspp::Texture2D || desc.type == ddspp::TextureType::Cubemap)) {
+		
+		bool isCubemap = desc.type == ddspp::TextureType::Cubemap;
+		if (!(desc.type == ddspp::Texture2D || isCubemap)) {
 			printf("fuck2\n");
 			return false; // we only support 2D textures or cuemaps
 		}
-		if (desc.arraySize != 1) return false; // we do not support arrays of textures 
+		// if (desc.arraySize != 1) return false; // we do not support arrays of textures 
 		// describes texture in the default heap
+		// override the array size because NVTT does not export correct cubemap array sizes maybe
+		desc.arraySize = isCubemap ? 6 : 1;
+		assert(desc.depth == 1);
 		D3D12_RESOURCE_DESC textureDesc = {
 			.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 			.Alignment        = 0,
@@ -224,7 +228,7 @@ struct Texture {
 		};
 	
 		
-		constexpr UINT MAX_TEXTURE_SUBRESOURCE_COUNT = 16; // enough for 4k textures; may need more for a lightmap
+		constexpr UINT MAX_TEXTURE_SUBRESOURCE_COUNT = 60; // enough for 4k textures; may need more for a lightmap
 		UINT64 textureMemorySize = 0;
 		UINT numRows[MAX_TEXTURE_SUBRESOURCE_COUNT];
 		UINT64 rowSizesInBytes[MAX_TEXTURE_SUBRESOURCE_COUNT];
@@ -267,16 +271,13 @@ struct Texture {
 
 				const UINT cpuDataRowPitch    = ddspp::get_row_pitch(desc, mipIndex);              // row pitch in the CPU buffer
 
-				for (UINT64 sliceIndex = 0; sliceIndex < subResourceDepth; sliceIndex++)
+				// const DirectX::Image* subImage = imageData->GetImage(mipIndex, arrayIndex, sliceIndex);
+				const BYTE* sourceSubResourceMemory = &initialData[ddspp::get_offset(desc, mipIndex, arrayIndex)]; // in CPU-only memory
+				for (UINT64 height = 0; height < subResourceHeight; height++)
 				{
-					// const DirectX::Image* subImage = imageData->GetImage(mipIndex, arrayIndex, sliceIndex);
-					const BYTE* sourceSubResourceMemory = &initialData[ddspp::get_offset(desc, mipIndex, sliceIndex)]; // in CPU-only memory
-					for (UINT64 height = 0; height < subResourceHeight; height++)
-					{
-						memcpy(destinationSubResourceMemory, sourceSubResourceMemory, min(subResourcePitch, cpuDataRowPitch));
-						destinationSubResourceMemory += subResourcePitch;
-						sourceSubResourceMemory += cpuDataRowPitch;
-					}
+					memcpy(destinationSubResourceMemory, sourceSubResourceMemory, min(subResourcePitch, cpuDataRowPitch));
+					destinationSubResourceMemory += subResourcePitch;
+					sourceSubResourceMemory += cpuDataRowPitch;
 				}
 			}
 		}
@@ -333,10 +334,10 @@ struct Texture {
 			};
 		}
 
-		device->CreateShaderResourceView(resource.Get(), desc.type == ddspp::TextureType::Cubemap ? &shaderResourceViewDesc : nullptr, descriptor.cpu);
+		device->CreateShaderResourceView(resource.Get(), isCubemap ? &shaderResourceViewDesc : nullptr, descriptor.cpu);
 		
 		// copy from upload heap to default heap
-		for (UINT subResourceIndex = 0; subResourceIndex < desc.numMips; subResourceIndex++) {
+		for (UINT subResourceIndex = 0; subResourceIndex < numSubResources; subResourceIndex++) {
 			D3D12_TEXTURE_COPY_LOCATION destination = {
 				.pResource        = resource.Get(),
 				.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
@@ -384,6 +385,7 @@ struct Scene {
 		struct {
 			Buffer<XMFLOAT2>          vertexLightmapTexcoord;
 			Texture                   lightmapTexture;
+			Texture cubemap;
 		};
 		// header->numBones > 0:
 		struct {
@@ -393,7 +395,6 @@ struct Scene {
 	};
 
 	Slice<Texture> textures;
-	Texture cubemap;
 
 	bool initialized = false;
 
@@ -408,8 +409,7 @@ struct Scene {
 			// lightmap texture
 			// lightmap texcoord
 			// cubemap
-			// mystery (2)
-			return 9; 
+			return 7; 
 		}
 		else {
 			// main buffers
@@ -514,8 +514,11 @@ struct Scene {
 			}
 			vertexLightmapTexcoord.Init(vertexLightmapTexcoordSlice, device, descriptorAllocator, L"Lightmap Texcoord Buffer");
 
-			// TODO: read lightmap texture
 			lightmapTexture.Init(device, descriptorAllocator, commandList, L"./textures/lightmap32.dds");
+			bool success = cubemap.Init(device, descriptorAllocator, commandList, L"./textures/cubemap.dds");
+			if (!success) {
+				printf("aw man\n");
+			}
 		}
 		else {
 			// dynamic scenes need skinning info
@@ -532,10 +535,6 @@ struct Scene {
 			vertexBoneWeight.Init(vertexBoneWeightSlice, device, descriptorAllocator, L"Vertex Bone Weight Buffer");
 		}
 
-		bool success = cubemap.Init(device, descriptorAllocator, commandList, L"./textures/cubemap.dds");
-		if (!success) {
-			printf("aw man\n");
-		}
 
 
 		initialized = true;

@@ -16,7 +16,7 @@ PSInput VSMain(uint vid : SV_VertexID)
     
     StructuredBuffer<VertexLightmapTexcoord> lightmapTexcoordBuffer = ResourceDescriptorHeap[drawConstants.lightmap_texcoord_idx];
     float2 lightmap_texcoord = lightmapTexcoordBuffer[vid].texcoord;
-    
+     
     PSInput result;
     result.positionGlobal = mul(position_homogeneous , drawConstants.modelMatrix);
     result.normal = shadebuffer[vid].normal;

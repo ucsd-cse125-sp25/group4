@@ -813,6 +813,7 @@ bool Renderer::Render() {
 			.first_texture_idx     = m_scene.textures.ptr[0].descriptor.index,
 			.lightmap_texcoord_idx = m_scene.vertexLightmapTexcoord.descriptor.index,
 			.lightmap_texture_idx  = m_scene.lightmapTexture.descriptor.index,
+			.cubemap_idx = m_scene.cubemap.descriptor.index,
 		};
 		memcpy(&(drawConstants.p1x), &(players[1].pos), 3 * sizeof(float));
 		memcpy(&(drawConstants.p2x), &(players[2].pos), 3 * sizeof(float));
