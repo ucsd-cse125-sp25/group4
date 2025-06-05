@@ -598,7 +598,7 @@ bool Renderer::Init(HWND window_handle) {
 	for (PlayerRenderState& state : players) {
 		state.animationStartTime = time;
 	}
-	// players[0].isHunter = true;
+	players[0].isHunter = true;
 	return true;
 }
 
