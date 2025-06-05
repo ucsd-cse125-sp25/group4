@@ -83,8 +83,9 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	audioEngine->LoadSound(a_purchase, true, false);
 	audioEngine->LoadSound(a_round_end, true, false);
 	audioEngine->LoadSound(a_round_start, true, false);
+	audioEngine->LoadSound(a_darkness, true, false);
 
-	audioEngine->PlayOneSound(a_music, { 0, 0, 0 }, 1);
+	audioEngine->PlayOneSound(a_music, { 0, 0, 0 }, 0.5f);
 
 	uint8_t initPowerups[4][20];
 	
@@ -152,7 +153,6 @@ void ClientGame::sendReadyStatusPacket(uint8_t selection = 0) {
 	if (appState->gamePhase == GamePhase::SHOP_PHASE)
 	{
 		status.selection = selection;
-		audioEngine->PlayOneSound(a_purchase, { 0,0,0 }, 1);
 	}
 
 	char buf[HDR_SIZE + sizeof(status)];
@@ -266,11 +266,32 @@ void ClientGame::update() {
 		{
 			ActionOkPayload* ok = reinterpret_cast<ActionOkPayload*>(network_data + HDR_SIZE);
 			PacketType action = (PacketType)ok->packetType;
-			// THIS MIGHT NEED TO BE CHANGED
-			if (action == PacketType::DODGE) {
-				audioEngine->PlayOneSound(a_dodge, { 0,0,0 }, 1);
+			switch (action) {
+			case PacketType::DODGE:
+				if (ok->id == renderer.currPlayer.playerId) {
+					audioEngine->PlayOneSound(a_dodge, { 0,0,0 }, 1);
+				}
+				break;
+			case PacketType::ATTACK:
+				audioEngine->PlayOneSound(a_attack, { 0,0,0 }, 1);
+				break;
+			case PacketType::BEAR:
+				audioEngine->PlayOneSound(a_bear, { 0,0,0 }, 1);
+				break;
+			case PacketType::MOVE:
+				if (ok->id == renderer.currPlayer.playerId) {
+					audioEngine->PlayOneSound(a_jump, { 0,0,0 }, 1);
+				}
+				break;
+			case PacketType::SHOP_UPDATE:
+				audioEngine->PlayOneSound(a_purchase, { 0,0,0 }, 1);
+				break;
+			default:
+				break;
 			}
-			// attack goes here
+			//if (action == PacketType::NOCTURNAL) {
+			//	audioEngine->PlayOneSound(a_darkness, { 0,0,0 }, 1);
+			//}
 			
 			// Optional: kick off a local dash animation / speed buff here.
 			printf(">> %d granted!\n", action);
@@ -283,6 +304,14 @@ void ClientGame::update() {
 
 			appState->gamePhase = statusPayload->phase;
 			renderer.gamePhase = statusPayload->phase;
+
+			if (statusPayload->phase == GamePhase::GAME_PHASE) {
+				audioEngine->PlayOneSound(a_round_start, { 0,0,0 }, 1);
+			}
+			else if (statusPayload->phase == GamePhase::GAME_END) {
+				audioEngine->PlayOneSound(a_round_end, { 0,0,0 }, 1);
+				// todo: stop playing bgm?
+			}
 
 			ready = false;
 			
@@ -540,7 +569,6 @@ bool ClientGame::processMovementInput()
 
 	if (jumpNowDown && (!jumpWasDown || bunnyhop)) {     // rising edge
 		jump = true;
-		audioEngine->PlayOneSound(a_jump, { 0, 0, 0 }, 0.2f);
 	}
 
 	jumpWasDown = jumpNowDown;

@@ -231,7 +231,11 @@ struct AnimationState {
 
 struct DodgePayload { float yaw, pitch; };
 
-struct ActionOkPayload { uint32_t packetType; };	
+struct ActionOkPayload { 
+	uint32_t packetType; 
+	int endTick = 0;
+	int id; // which player did the action
+};
 
 struct ShopOptionsPayload {
 	uint8_t options[NUM_POWERUP_OPTIONS];
