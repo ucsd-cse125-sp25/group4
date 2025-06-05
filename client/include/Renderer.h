@@ -912,6 +912,64 @@ struct ShopUI {
 	}
 };
 
+struct ScreenUI {
+	Slice<Texture> screenTextures;
+	Buffer<UIVertex> screenVertexBuffer;
+
+	float screenW = 1920.0f, screenH = 1080.0f;
+
+	XMMATRIX ortho;
+
+	bool initialized = false;
+
+	bool Init(ID3D12Device* device, DescriptorAllocator* descriptorAllocator) {
+		// patchwork fix for upside-down textures... just invert UV coordinates.
+		UIVertex screenVerts[6] = {
+			{{0,     0,     0}, {0, 1}},
+			{{0,     screenH, 0}, {0, 0}},
+			{{screenW, screenH, 0}, {1, 0}},
+
+			{{0,     0,     0}, {0, 1}},
+			{{screenW, screenH, 0}, {1, 0}},
+			{{screenW, 0,     0}, {1, 1}},
+		};
+		Slice<UIVertex> screenSlice = { screenVerts, _countof(screenVerts) };
+
+		ortho = XMMatrixTranspose(XMMatrixOrthographicOffCenterLH(
+			0.0f, screenW,
+			0.0f, screenH,
+			0.0f, 1.0f
+		));
+
+		screenVertexBuffer.Init(screenSlice, device, descriptorAllocator, L"Screen Vertex Buffer");
+		return true;
+	}
+
+	bool SendToGPU(ID3D12Device* device, DescriptorAllocator* descriptorAllocator, ID3D12GraphicsCommandList* commandList) {
+		screenTextures = { reinterpret_cast<Texture*>(calloc(3, sizeof(Texture))), 3 };
+		const wchar_t* clockFiles[3] = {
+			L"textures\\screens\\titlescreen.dds",
+			L"textures\\screens\\losescreen.dds",
+			L"textures\\screens\\winscreen.dds"
+		};
+		for (uint32_t i = 0; i < 3; ++i) {
+			bool ok = screenTextures.ptr[i].Init(
+				device,
+				descriptorAllocator,
+				commandList,
+				clockFiles[i]);
+			if (!ok) return false;
+		}
+		initialized = true;
+		return true;
+	}
+
+	void Release() {
+		screenTextures.release();
+		screenVertexBuffer.Release();
+	}
+};
+
 struct matAndCam {
 	XMMATRIX mat;
 	XMFLOAT3 pos;
@@ -1003,6 +1061,7 @@ public:
 	}
 
 	GamePhase gamePhase;
+	uint8_t winner;
 	bool activeScoreboard = true;
 
 	// spectator camera settings
@@ -1011,6 +1070,8 @@ public:
 
 	// nocturnal powerup
 	bool nocturnal = false;
+
+	bool instinct = false;
 private:
 	DebugCubes debugCubes;
 
@@ -1046,8 +1107,14 @@ private:
 	// for shop UI
 	ShopUI						m_ShopUI;
 
+	// for screen UI
+	ScreenUI					m_ScreenUI;
+
 	// for scoreboard
 	uint8_t powerupInfo[4][20];
+
+	// for instinct powerup
+	ComPtr<ID3D12PipelineState> m_pipelineStateInstinct;
 
 	// syncrhonization objects
 	UINT m_frameIndex;

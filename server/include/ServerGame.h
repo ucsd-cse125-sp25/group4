@@ -22,8 +22,9 @@ public:
 	void receiveFromClients();
 	void sendGameStateUpdates();
 	void sendAppPhaseUpdates();
-	void sendShopOptions(ShopOptionsPayload *data, int dest);
+	void sendShopOptions(ShopOptionsPayload*);
 	void sendPlayerPowerups();
+	void sendActionOk(PacketType type, int ticks, int source, bool all, int id);
 
 	void applyMovements();
 	void applyCamera();
@@ -45,6 +46,8 @@ public:
 	bool anyWinners();
 
 	void sendAnimationUpdates();
+	void applyInstinct();
+	void sendInstinctUpdate(uint64_t);
 
 private:
 	static constexpr int TICKS_PER_SEC = 64;
@@ -110,7 +113,7 @@ private:
 
 	/* Attack */
 	std::unordered_map<unsigned, AttackPayload> latestAttacks;
-	static constexpr uint32_t windupTicks = 32;                    // 0.5 s
+	static constexpr uint32_t windupTicks = 25;                    // <0.5 s, matches animation
 	static constexpr uint32_t cdDefaultTicks = TICKS_PER_SEC * 2;     // 2 s
 	static constexpr uint32_t slowTicks = 32;                    // 0.5 s
 	static constexpr float hunterSlowFactor = 0.2f;
@@ -125,6 +128,9 @@ private:
 	float attackRange;
 	static constexpr float REDUCE_ATTACK_CD_MULTIPLIER = 0.5f;
 	int attackCooldownTicks;
+
+	static constexpr int INSTINCT_INTERVAL = 2 * TICKS_PER_SEC;
+	static constexpr int INSTINCT_DURATION = 4 * TICKS_PER_SEC;
 
 	bool isHit_(const AttackPayload& a, const PlayerState& victim);
 
@@ -164,6 +170,10 @@ private:
 	int phantomTicks = 0;
 	static constexpr int PHANTOM_TICKS = TICKS_PER_SEC * 5;
 	int hasPhantom = 0;
+
+	bool hasInstinct = false;
+	uint64_t prevInstinctTickStart;
+	uint64_t prevInstinctTickEnd;
 };
 
 static bool checkCollision(BoundingBox, BoundingBox);

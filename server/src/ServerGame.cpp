@@ -75,6 +75,7 @@ void ServerGame::update() {
 			applyPhysics();
 			applyAttacks();
 			applyDodge();
+			applyInstinct();
 			sendGameStateUpdates();
 			handleGamePhase();
 			break;
@@ -211,10 +212,7 @@ void ServerGame::receiveFromClients()
 				state->players[id].speed *= DASH_SPEED_MULTIPLIER;
 
 				// notify the client
-				DodgeOkPayload ok{ INVUL_TICKS };
-				char buf[HDR_SIZE + sizeof ok];
-				NetworkServices::buildPacket(PacketType::DODGE_OK, ok, buf);
-				network->sendToClient(id, buf, sizeof buf);
+				sendActionOk(PacketType::DODGE, 0, id, true, 0);
 
 				printf("[DODGE] survivor %u granted at tick %llu\n", id, state->tick);
 				break;
@@ -229,6 +227,7 @@ void ServerGame::receiveFromClients()
 				if (appState->gamePhase == GamePhase::SHOP_PHASE)
 				{
 					printf("Selection: %d\n", status->selection);
+					sendActionOk(PacketType::SHOP_UPDATE, 0, id, true, 0);
 					// Only save if they selected a powerup
 					if (status->selection != 0) 
 					{
@@ -271,6 +270,9 @@ void ServerGame::receiveFromClients()
 					bearTicks = state->tick + (BEAR_TICKS * hasBear[id]);
 					state->players[id].z += 5.0f * PLAYER_SCALING_FACTOR; // bear is taller
 					hasBear[id] = 0;
+
+					sendActionOk(PacketType::BEAR, bearTicks, id, true, 0);
+					
 					printf("IT'S BEAR TIME!!!\n");
 				}
 
@@ -351,18 +353,6 @@ void ServerGame::startARound(int seconds) {
 
 	timer->startTimer(seconds, [this]() {
 		// This code runs after the timer completes
-		// check if it is a tiebreaker round
-		if (tiebreaker) {
-			// the points will never be the same for both teams.
-			if (runner_points > hunter_points) {
-				printf("[round %d] Tiebreaker round ended, survivors win!\n", round_id);
-			}
-			else {
-				printf("[round %d] Tiebreaker round ended, hunter wins!\n", round_id);
-			}
-			tiebreaker = false; // reset tiebreaker
-			return;
-		}
 		
 		state_mu.lock();
 
@@ -407,7 +397,17 @@ void ServerGame::startARound(int seconds) {
 				printf("[round %d] Hunter %d coins: %d\n", round_id, id, state->players[id].coins);
 			}
 		}
-
+		// check if it is a tiebreaker round
+		if (tiebreaker) {
+			// the points will never be the same for both teams.
+			if (runner_points > hunter_points) {
+				printf("[round %d] Tiebreaker round ended, survivors win!\n", round_id);
+			}
+			else {
+				printf("[round %d] Tiebreaker round ended, hunter wins!\n", round_id);
+			}
+			tiebreaker = false; // reset tiebreaker
+		}
 		// Don't send packets in timer!
 		// Socket wrapper isn't thread safe...
 		// sendAppPhaseUpdates();
@@ -446,6 +446,9 @@ void ServerGame::newGame()
 	hunter_points = 0;
 	attackRange = ATTACK_DEFAULT_RANGE;
 	attackCooldownTicks = cdDefaultTicks;
+	prevInstinctTickStart = 0;
+	prevInstinctTickEnd = 0;
+	hasInstinct = false;
 
 	for (int i = 0; i < num_players; i++) {
 		state->players[i].coins = PLAYER_INIT_COINS;
@@ -533,8 +536,9 @@ void ServerGame::handleGamePhase() {
 				startShopPhase();
 			}
 			else {
-				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= WIN_THRESHOLD) ? "survivors" : "hunter");
+				printf("[round %d] Game over! Winners: %s\n", round_id, (runner_points >= WIN_THRESHOLD) ? "runners" : "hunter");
 				appState->gamePhase = GamePhase::GAME_END;
+				appState->winners = (runner_points >= WIN_THRESHOLD) ? 2 : 1;
 				sendAppPhaseUpdates();
 			}
 		}
@@ -575,16 +579,16 @@ void ServerGame::handleShopPhase() {
 
 void ServerGame::startShopPhase() {
 	// send each client their powerups
+	ShopOptionsPayload* options = new ShopOptionsPayload();
 	for (int id = 0; id < num_players; id++) {
-		ShopOptionsPayload* options = new ShopOptionsPayload();
 		if (state->players[id].isHunter)
 		{
 			std::vector<int> v((int)Powerup::NUM_HUNTER_POWERUPS - (int)Powerup::HUNTER_POWERUPS - 1);
 			std::iota(v.begin(), v.end(), (int)Powerup::HUNTER_POWERUPS + 1);
 			std::shuffle(v.begin(), v.end(), rng);
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = (uint8_t) v[p];
-				printf("Hunter option %d: %d %s\n", p+1, v[p], PowerupInfo[(Powerup)v[p]].name.c_str());
+				options->options[id][p] = (uint8_t) v[p];
+				printf("Hunter option %d: %d %s\n", p+1, options->options[id][p], PowerupInfo[(Powerup)options->options[id][p]].name.c_str());
 			}
 		}
 		else
@@ -593,15 +597,15 @@ void ServerGame::startShopPhase() {
 			std::iota(v.begin(), v.end(), (int)Powerup::RUNNER_POWERUPS + 1);
 			std::shuffle(v.begin(), v.end(), rng);
 			for (int p = 0; p < NUM_POWERUP_OPTIONS; p++) {
-				options->options[p] = (uint8_t) v[p];
-				printf("Runner %d option %d: %d %s\n", id, p+1, v[p], PowerupInfo[(Powerup)v[p]].name.c_str());
+				options->options[id][p] = (uint8_t)v[p];
+				printf("Runner %d option %d: %d %s\n", id, p+1, options->options[id][p], PowerupInfo[(Powerup)options->options[id][p]].name.c_str());
 
 			}
 		}
-		options->runner_score = runner_points;
-		options->hunter_score = hunter_points;
-		sendShopOptions(options, id);
 	}
+	options->runner_score = runner_points;
+	options->hunter_score = hunter_points;
+	sendShopOptions(options);
 }
 
 void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
@@ -618,7 +622,8 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		printf("[POWERUP] Player %d jump height increased by %.2f\n", id, extraJumpPowerup[id]);
 		break;
 	case Powerup::H_INCREASE_VISION:
-		printf("[POWERUP] Player %d increase vision (place holder)", id);
+		hasInstinct = true;
+		printf("[POWERUP] Hunter granted instinct\n");
 		break;
 	case Powerup::H_MULTI_JUMPS:
 		state->players[id].jumpCounts++;
@@ -758,6 +763,7 @@ void ServerGame::applyMovements() {
 				player.zVelocity += BEAR_JUMP_BOOST;
 			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
+			sendActionOk(PacketType::MOVE, 0, id, true, 0);
 		}
 
 		// gravity
@@ -820,6 +826,7 @@ void ServerGame::applyAttacks()
 	if (pendingSwing && state->tick >= pendingSwing->hitTick)
 	{
 		printf("[HUNTER] resolving atk\n");
+		sendActionOk(PacketType::ATTACK, 0, 0, true, 0);
 		// update the pending swing to the latest received movements
 		pendingSwing->attack.originX = state->players[0].x;
 		pendingSwing->attack.originY = state->players[0].y;
@@ -866,7 +873,7 @@ void ServerGame::applyAttacks()
 	if (allDead) { 
 		printf("[GAME] all survivors dead\n"); 
 		timer->cancelTimer(); 
-	}
+}
 }
 
 void ServerGame::applyDodge()
@@ -891,6 +898,17 @@ void ServerGame::applyDodge()
 			animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 			animationState.isLoop[i] = true;
 		}
+	}
+}
+
+void ServerGame::applyInstinct() {
+	if (!hasInstinct) return;
+	if (state->tick > prevInstinctTickEnd && state->tick - prevInstinctTickEnd > INSTINCT_INTERVAL) {
+		// trigger new instinct after interval passed since last instinct
+		prevInstinctTickStart = state->tick;
+		prevInstinctTickEnd = state->tick + INSTINCT_DURATION;
+		printf("[INSTINCT] instinct granted at %llu, lasting until %llu\n", state->tick, prevInstinctTickEnd);
+		sendInstinctUpdate(prevInstinctTickEnd);
 	}
 }
 
@@ -920,10 +938,10 @@ void ServerGame::sendPlayerPowerups() {
 	char packet_data[HDR_SIZE + sizeof(PlayerPowerupPayload)];
 	PlayerPowerupPayload data;
 	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
+	hasPhantom = 0;
 	for (auto [id, powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
 		hasBear[id] = 0;
-		hasPhantom = 0;
 		int idx = 0;
 		for (auto p : powerups) {
 			if (idx >= 20) break;
@@ -953,7 +971,8 @@ void ServerGame::sendAppPhaseUpdates() {
 	char packet_data[HDR_SIZE + sizeof(AppPhasePayload)];
 
 	AppPhasePayload* data = new AppPhasePayload{
-		.phase = appState->gamePhase
+		.phase = appState->gamePhase,
+		.winner = appState->winners,
 	};
 
 	printf("GAME PHASE = %d\n", appState->gamePhase);
@@ -963,12 +982,41 @@ void ServerGame::sendAppPhaseUpdates() {
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(AppPhasePayload));
 }
 
-void ServerGame::sendShopOptions(ShopOptionsPayload* data, int dest) {
+void ServerGame::sendShopOptions(ShopOptionsPayload* data) {
 	char packet_data[HDR_SIZE + sizeof(ShopOptionsPayload)];
 
 	NetworkServices::buildPacket<ShopOptionsPayload>(PacketType::SHOP_INIT, *data, packet_data);
 
-	network->sendToClient(dest, packet_data, HDR_SIZE + sizeof(ShopOptionsPayload));
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(ShopOptionsPayload));
+}
+
+void ServerGame::sendInstinctUpdate(uint64_t nextInstinctEnd) {
+	char packet_data[HDR_SIZE + sizeof(InstinctPayload)];
+
+	InstinctPayload* data = new InstinctPayload{
+		.nextInstinctEnd = nextInstinctEnd
+	};
+
+	NetworkServices::buildPacket<InstinctPayload>(PacketType::INSTINCT, *data, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(InstinctPayload));
+}
+
+// source: trigger id of action
+// all: send to all clients
+// id: if it's not sending to all clients, which to send to
+void ServerGame::sendActionOk(PacketType type, int ticks, int source, bool all, int id) {
+	ActionOkPayload ok{ (uint32_t)type, ticks, source };
+	char buf[HDR_SIZE + sizeof ok];
+	NetworkServices::buildPacket(PacketType::ACTION_OK, ok, buf);
+
+	if (!all) {
+		network->sendToClient(id, buf, sizeof buf);
+
+	}
+	else {
+		network->sendToAll(buf, sizeof buf);
+	}
 }
 
 // -----------------------------------------------------------------------------

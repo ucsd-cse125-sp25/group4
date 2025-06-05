@@ -409,3 +409,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# In-ignore FMOD
+!FMOD_API/**

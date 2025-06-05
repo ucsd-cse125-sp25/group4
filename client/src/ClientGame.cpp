@@ -1,6 +1,7 @@
 ﻿#include "ClientGame.h"
 #include <algorithm>
 #include <string>
+#include <iostream>
 using namespace std;
 const wchar_t CLASS_NAME[] = L"Window Class";
 const wchar_t GAME_NAME[] = L"$GAME_NAME";
@@ -68,7 +69,26 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	appState->gamePhase = GamePhase::START_MENU;
 	appState->gameState = gameState;
 
+	audioEngine->Init();
+
+	audioEngine->LoadSound(a_music, true, true);
+	audioEngine->LoadSound(a_jump, true, false);
+	audioEngine->LoadSound(a_attack, true, false);
+	audioEngine->LoadSound(a_bear, true, false);
+	audioEngine->LoadSound(a_dodge, true, false);
+	audioEngine->LoadSound(a_move_1, true, false);
+	audioEngine->LoadSound(a_move_2, true, false);
+	audioEngine->LoadSound(a_move_3, true, false);
+	audioEngine->LoadSound(a_move_4, true, false);
+	audioEngine->LoadSound(a_purchase, true, false);
+	audioEngine->LoadSound(a_round_end, true, false);
+	audioEngine->LoadSound(a_round_start, true, false);
+	audioEngine->LoadSound(a_darkness, true, false);
+
+	bgmChannel = audioEngine->PlayOneSound(a_music, { 0, 0, 0 }, 0.5f);
+
 	uint8_t initPowerups[4][20];
+	
 	// debugging, ignore
 	//memset(initPowerups, 1, 20);
 	//memset((&initPowerups[0][0] + 20), 2, 20);
@@ -211,6 +231,13 @@ void ClientGame::update() {
 
 			// update timer
 			renderer.updateTimer(gameState->timerFrac);
+
+			//playAudio();
+
+      // update instinct
+			if (gameState->tick >= instinctExpireTick) {
+				renderer.instinct = false;
+			}
 			
 			break;
 		}
@@ -239,21 +266,59 @@ void ClientGame::update() {
 
 			break;
 		}
-		case PacketType::DODGE_OK:
+		case PacketType::ACTION_OK:
 		{
-			DodgeOkPayload* ok = reinterpret_cast<DodgeOkPayload*>(network_data + HDR_SIZE);
-			//invulFrames_ = ok->invulTicks;        // usually 30
+			ActionOkPayload* ok = reinterpret_cast<ActionOkPayload*>(network_data + HDR_SIZE);
+			PacketType action = (PacketType)ok->packetType;
+			switch (action) {
+			case PacketType::DODGE:
+				if (ok->id == renderer.currPlayer.playerId) {
+					audioEngine->PlayOneSound(a_dodge, { 0,0,0 }, 1);
+				}
+				break;
+			case PacketType::ATTACK:
+				audioEngine->PlayOneSound(a_attack, { 0,0,0 }, 1);
+				break;
+			case PacketType::BEAR:
+				audioEngine->PlayOneSound(a_bear, { 0,0,0 }, 1);
+				break;
+			case PacketType::MOVE:
+				if (ok->id == renderer.currPlayer.playerId) {
+					audioEngine->PlayOneSound(a_jump, { 0,0,0 }, 1);
+				}
+				break;
+			case PacketType::SHOP_UPDATE:
+				audioEngine->PlayOneSound(a_purchase, { 0,0,0 }, 1);
+				break;
+			default:
+				break;
+			}
+			//if (action == PacketType::NOCTURNAL) {
+			//	audioEngine->PlayOneSound(a_darkness, { 0,0,0 }, 1);
+			//}
+			
 			// Optional: kick off a local dash animation / speed buff here.
-			printf(">> DODGE granted!\n");
+			printf(">> %d granted!\n", action);
 			break;
 		}
-
 		case PacketType::APP_PHASE:
 		{
 			AppPhasePayload* statusPayload = (AppPhasePayload*)(network_data + HDR_SIZE);
 
 			appState->gamePhase = statusPayload->phase;
 			renderer.gamePhase = statusPayload->phase;
+			renderer.winner = statusPayload->winner;
+
+			if (statusPayload->phase == GamePhase::GAME_PHASE) {
+				audioEngine->PlayOneSound(a_round_start, { 0,0,0 }, 1);
+			}
+			else if (statusPayload->phase == GamePhase::GAME_END) {
+				audioEngine->PlayOneSound(a_round_end, { 0,0,0 }, 1);
+				audioEngine->StopChannel(bgmChannel);
+			}
+			else if (statusPayload->phase == GamePhase::START_MENU) {
+				bgmChannel = audioEngine->PlayOneSound(a_music, { 0,0,0 }, 0.5f);
+			}
 
 			ready = false;
 			
@@ -262,15 +327,15 @@ void ClientGame::update() {
 		case PacketType::SHOP_INIT:
 		{
 			ShopOptionsPayload* optionsPayload = (ShopOptionsPayload*)(network_data + HDR_SIZE);
-
+			localShopState = *optionsPayload;
 			ready = false;
-			
 			appState->gamePhase = GamePhase::SHOP_PHASE;
 			renderer.gamePhase = GamePhase::SHOP_PHASE;
 
 			for (int i = 0; i < NUM_POWERUP_OPTIONS; i++)
 			{
-				Powerup powerup = (Powerup)optionsPayload->options[i];
+				if (id > 3) { break; }
+				Powerup powerup = (Powerup)optionsPayload->options[id][i];
 				shopOptions[i].item = powerup;
 				shopOptions[i].isSelected = false;
 				shopOptions[i].isBuyable = (PowerupInfo[powerup].cost <= gameState->players[id].coins);
@@ -331,6 +396,13 @@ void ClientGame::update() {
 			}
 			break;
 		}
+		case PacketType::INSTINCT:
+		{
+			InstinctPayload* insP = (InstinctPayload*)(network_data + HDR_SIZE);
+			renderer.instinct = true; // trigger instinct when receive
+			instinctExpireTick = insP->nextInstinctEnd;
+			break;
+		}
 		default:
 			// printf("error in packet type %d, expected GAME_STATE or DEBUG\n", hdr->type);
 			break;
@@ -341,11 +413,11 @@ void ClientGame::update() {
 	// ---------------------------------------------------------------	
 	// Client Input Handling 
 
-	if (id != -1 && id != 4) {
-		handleInput();
-	}
-	else if (id == 4) {
+	if (id == 4) {
 		handleSpectatorInput();
+	}
+	else if (id != -1 && id != 4) {
+		handleInput();
 	}
 
 	// ---------------------------------------------------------------	
@@ -361,6 +433,7 @@ void ClientGame::update() {
 
 ClientGame::~ClientGame() {
 	delete network;
+	delete audioEngine;
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -484,6 +557,12 @@ void ClientGame::processSpectatorKeyboardInput()
 		if (GetAsyncKeyState('D') & 0x8000) {
 			pos = XMVectorAdd(pos, XMVectorScale(right, moveSpeed));
 		}
+		if (GetAsyncKeyState(' ') & 0x8000) {
+			pos = XMVectorAdd(pos, XMVectorScale(model_up, moveSpeed)); // up
+		}
+		if (GetAsyncKeyState(VK_CONTROL) & 0x8000) {
+			pos = XMVectorSubtract(pos, XMVectorScale(model_up, moveSpeed)); // down
+		}
 
 		XMStoreFloat3(&renderer.freecamPos, pos);
 	}
@@ -512,8 +591,9 @@ bool ClientGame::processMovementInput()
 	{
 		bool jumpNowDown = (GetAsyncKeyState(' ') & 0x8000) != 0;
 
-	if (jumpNowDown && (!jumpWasDown || bunnyhop))      // rising edge
+	if (jumpNowDown && (!jumpWasDown || bunnyhop)) {     // rising edge
 		jump = true;
+	}
 
 	jumpWasDown = jumpNowDown;
 	}
@@ -652,10 +732,36 @@ void ClientGame::handleShopItemSelection(int choice) {
 	}
 }
 
+void ClientGame::playAudio()
+{
+	static bool wasBear = false;
+	static bool wasPhantom = false;
+	bool isBear = false;
+	bool isPhantom = false;
+
+	for (int i = 0; i < 4; i++) {
+		if (gameState->players[i].isBear)
+			isBear = true;
+		if (gameState->players[i].isPhantom)
+			isPhantom = true;
+	}
+
+	if (!wasBear && isBear)
+	{
+		audioEngine->PlayOneSound(a_bear, { 0,0,0 }, 1);
+	}
+	if (!wasPhantom && isPhantom)
+	{
+		// play phantom audio
+	}
+	wasBear = isBear;
+	wasPhantom = isPhantom;
+}
+
 void ClientGame::handleInput()
 {
 	if (!isWindowFocused()) return;
-	
+
 	bool tabDown = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
 	if (tabDown && !renderer.activeScoreboard) {
 		renderer.activeScoreboard = true;
@@ -669,7 +775,7 @@ void ClientGame::handleInput()
 	case GamePhase::START_MENU:
 	case GamePhase::GAME_END:
 	{
-		yaw = startYaw;
+		yaw = 0.0f;
 		pitch = startPitch;
 		
 		// Avoid sending multiple ready packets
@@ -690,19 +796,26 @@ void ClientGame::handleInput()
 	}
 	case GamePhase::GAME_PHASE:
 	{
+		if (gameState->players[id].isDead && appState->gamePhase == GamePhase::GAME_PHASE) {
+			processSpectatorKeyboardInput();
+			processSpectatorCameraInput();
+		}
+		else {
+			renderer.detached = false;
+			renderer.currPlayer.playerId = id;
+			// camera is always allowed (even dead players can spectate)
+			processCameraInput();
 
-		// camera is always allowed (even dead players can spectate)
-		processCameraInput();
+			// if you’re dead, no movement or attack
+			if (localDead) return;
 
-		// if you’re dead, no movement or attack
-		if (localDead) return;
-
-		// movement & attack for the living
-		processMovementInput();
-		processAttackInput();
-		processDodgeInput();
-		processBearInput();
-		processPhantomInput();
+			// movement & attack for the living
+			processMovementInput();
+			processAttackInput();
+			processDodgeInput();
+			processBearInput();
+			processPhantomInput();
+		}
 		break;
 	}
 	default:
@@ -737,7 +850,22 @@ void ClientGame::handleSpectatorInput()
 	}
 	case GamePhase::SHOP_PHASE:
 	{
-		//processShopInputs();
+		processSpectatorKeyboardInput();
+
+		if (renderer.currPlayer.playerId != 4) {
+			renderer.updatePowerups((Powerup) localShopState.options[renderer.currPlayer.playerId][0],
+				(Powerup)localShopState.options[renderer.currPlayer.playerId][1],
+				(Powerup)localShopState.options[renderer.currPlayer.playerId][2]);
+
+			if (renderer.currPlayer.playerId == 0) {
+				// really sketch isHunter check...
+				renderer.updateCurrency(gameState->players[id].coins, localShopState.hunter_score);
+			}
+			else {
+				renderer.updateCurrency(gameState->players[id].coins, localShopState.runner_score);
+			}
+		}
+
 		break;
 	}
 	case GamePhase::GAME_PHASE:
