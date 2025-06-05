@@ -497,6 +497,12 @@ void ClientGame::processSpectatorKeyboardInput()
 		if (GetAsyncKeyState('D') & 0x8000) {
 			pos = XMVectorAdd(pos, XMVectorScale(right, moveSpeed));
 		}
+		if (GetAsyncKeyState(' ') & 0x8000) {
+			pos = XMVectorAdd(pos, XMVectorScale(model_up, moveSpeed)); // up
+		}
+		if (GetAsyncKeyState(VK_CONTROL) & 0x8000) {
+			pos = XMVectorSubtract(pos, XMVectorScale(model_up, moveSpeed)); // down
+		}
 
 		XMStoreFloat3(&renderer.freecamPos, pos);
 	}
