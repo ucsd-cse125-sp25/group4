@@ -711,6 +711,7 @@ void ServerGame::applyMovements() {
 				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
 				if (wasChasing || canLeaveAttack) {
 					// reset animation back to idle only if it was previouslly moving
+					printf("[HUNTER ANIMATION] transferring to idle. wasIdle: %d ; canLeaveAttack: %d\n", wasChasing, canLeaveAttack);
 					animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
 					animationState.isLoop[id] = true;
 				}
@@ -734,11 +735,13 @@ void ServerGame::applyMovements() {
 				bool wasIdle = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE);
 				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
 				if (wasIdle || canLeaveAttack) {
+					printf("[HUNTER ANIMATION] transferring to walk. wasIdle: %d ; canLeaveAttack: %d\n", wasIdle, canLeaveAttack);
 					animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_CHASE;
 					animationState.isLoop[0] = true;
 				}
 			}         
 			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_IDLE) {
+				printf("[RUNNER ANIMATION] transferring to walk from idle");
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
 				animationState.isLoop[id] = true;
 			}
@@ -806,7 +809,7 @@ void ServerGame::applyMovements() {
 		if (player.isHunter && state->tick >= hunterStartSlowdown && state->tick < hunterEndSlowdown) {
 			dx *= hunterSlowFactor;
 			dy *= hunterSlowFactor;
-			printf("[HUNTER] hunter %d is now slowed down\n", id);
+			// printf("[HUNTER] hunter %d is now slowed down\n", id);
 		}
 
 		if (player.isBear)
