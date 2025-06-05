@@ -124,6 +124,15 @@
     <CopyFileToFolders Include="..\Assets\playerDOLLv5.jj">
       <FileType>Document</FileType>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\bear.jj">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\BearHop.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\Assets\BearIdle.janim">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
     <None Include="..\client\include\shaderShared.hlsli">
       <FileType>Document</FileType>
     </None>
