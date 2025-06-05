@@ -38,7 +38,7 @@ enum class PacketType : uint32_t {
 	ATTACK = 8,
 	HIT = 9,
 	DODGE = 10,
-	DODGE_OK = 11,
+	ACTION_OK = 11,
 	SHOP_INIT,			// server sends to each client the options
 	SHOP_UPDATE,			// client sends what was purchased
 	PLAYER_POWERUPS,		// powerup information of all players
@@ -235,7 +235,11 @@ struct AnimationState {
 
 struct DodgePayload { float yaw, pitch; };
 
-struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a placeholder for now
+struct ActionOkPayload { 
+	uint32_t packetType; 
+	int endTick = 0;
+	int id; // which player did the action
+};
 
 struct ShopOptionsPayload {
 	uint8_t options[4][NUM_POWERUP_OPTIONS]; //hardcoded for 4 players

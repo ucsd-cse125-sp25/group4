@@ -5,6 +5,9 @@
 #include "ClientNetwork.h"
 #include "NetworkData.h"
 #include "Renderer.h"
+#include "fmod.hpp"
+#include "fmod_errors.h"
+#include "AudioEngine.h"
 #include <string>
 using namespace std;
 
@@ -55,7 +58,9 @@ public:
 	AppState* appState;
 	Renderer renderer;
 
-	ShopOptionsPayload localShopState;
+	CAudioEngine* audioEngine;
+
+  ShopOptionsPayload localShopState;
 
 	struct ShopItem {
 		Powerup item;
@@ -90,5 +95,23 @@ private:
 	uint8_t powerups[20];
 
 	bool bunnyhop = false; // allow holding jump
+
+	// sounds
+	const string a_music = "./SFX/music.wav";
+	const string a_jump = "./SFX/jump.wav"; 
+	const string a_attack = "./SFX/attack.wav"; 
+	const string a_bear = "./SFX/bear_growl.wav";
+	const string a_dodge = "./SFX/dodge.wav";
+	const string a_move_1 = "./SFX/move_1.wav"; //TODO
+	const string a_move_2 = "./SFX/move_2.wav"; // TODO
+	const string a_move_3 = "./SFX/move_3.wav"; // TODO
+	const string a_move_4 = "./SFX/move_4.wav"; //TODO
+	const string a_purchase = "./SFX/purchase.wav";
+	const string a_round_end = "./SFX/round_end.wav"; 
+	const string a_round_start = "./SFX/round_start.wav"; 
+	const string a_darkness = "./SFX/darkness.wav"; //TODO
+
+	void playAudio();
+	int bgmChannel;
 };
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT uMsg, WPARAM wparam, LPARAM lparam);

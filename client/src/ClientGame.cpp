@@ -1,6 +1,7 @@
 ﻿#include "ClientGame.h"
 #include <algorithm>
 #include <string>
+#include <iostream>
 using namespace std;
 const wchar_t CLASS_NAME[] = L"Window Class";
 const wchar_t GAME_NAME[] = L"$GAME_NAME";
@@ -68,7 +69,26 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 	appState->gamePhase = GamePhase::START_MENU;
 	appState->gameState = gameState;
 
+	audioEngine->Init();
+
+	audioEngine->LoadSound(a_music, true, true);
+	audioEngine->LoadSound(a_jump, true, false);
+	audioEngine->LoadSound(a_attack, true, false);
+	audioEngine->LoadSound(a_bear, true, false);
+	audioEngine->LoadSound(a_dodge, true, false);
+	audioEngine->LoadSound(a_move_1, true, false);
+	audioEngine->LoadSound(a_move_2, true, false);
+	audioEngine->LoadSound(a_move_3, true, false);
+	audioEngine->LoadSound(a_move_4, true, false);
+	audioEngine->LoadSound(a_purchase, true, false);
+	audioEngine->LoadSound(a_round_end, true, false);
+	audioEngine->LoadSound(a_round_start, true, false);
+	audioEngine->LoadSound(a_darkness, true, false);
+
+	bgmChannel = audioEngine->PlayOneSound(a_music, { 0, 0, 0 }, 0.5f);
+
 	uint8_t initPowerups[4][20];
+	
 	// debugging, ignore
 	//memset(initPowerups, 1, 20);
 	//memset((&initPowerups[0][0] + 20), 2, 20);
@@ -213,7 +233,9 @@ void ClientGame::update() {
 			// update timer
 			renderer.updateTimer(gameState->timerFrac);
 
-			// update instinct
+			//playAudio();
+
+      // update instinct
 			if (gameState->tick >= instinctExpireTick) {
 				renderer.instinct = false;
 			}
@@ -245,12 +267,39 @@ void ClientGame::update() {
 
 			break;
 		}
-		case PacketType::DODGE_OK:
+		case PacketType::ACTION_OK:
 		{
-			DodgeOkPayload* ok = reinterpret_cast<DodgeOkPayload*>(network_data + HDR_SIZE);
-			//invulFrames_ = ok->invulTicks;        // usually 30
+			ActionOkPayload* ok = reinterpret_cast<ActionOkPayload*>(network_data + HDR_SIZE);
+			PacketType action = (PacketType)ok->packetType;
+			switch (action) {
+			case PacketType::DODGE:
+				if (ok->id == renderer.currPlayer.playerId) {
+					audioEngine->PlayOneSound(a_dodge, { 0,0,0 }, 1);
+				}
+				break;
+			case PacketType::ATTACK:
+				audioEngine->PlayOneSound(a_attack, { 0,0,0 }, 1);
+				break;
+			case PacketType::BEAR:
+				audioEngine->PlayOneSound(a_bear, { 0,0,0 }, 1);
+				break;
+			case PacketType::MOVE:
+				if (ok->id == renderer.currPlayer.playerId) {
+					audioEngine->PlayOneSound(a_jump, { 0,0,0 }, 1);
+				}
+				break;
+			case PacketType::SHOP_UPDATE:
+				audioEngine->PlayOneSound(a_purchase, { 0,0,0 }, 1);
+				break;
+			default:
+				break;
+			}
+			//if (action == PacketType::NOCTURNAL) {
+			//	audioEngine->PlayOneSound(a_darkness, { 0,0,0 }, 1);
+			//}
+			
 			// Optional: kick off a local dash animation / speed buff here.
-			printf(">> DODGE granted!\n");
+			printf(">> %d granted!\n", action);
 			break;
 		}
 		case PacketType::APP_PHASE:
@@ -260,6 +309,17 @@ void ClientGame::update() {
 			appState->gamePhase = statusPayload->phase;
 			renderer.gamePhase = statusPayload->phase;
 			renderer.winner = statusPayload->winner;
+
+			if (statusPayload->phase == GamePhase::GAME_PHASE) {
+				audioEngine->PlayOneSound(a_round_start, { 0,0,0 }, 1);
+			}
+			else if (statusPayload->phase == GamePhase::GAME_END) {
+				audioEngine->PlayOneSound(a_round_end, { 0,0,0 }, 1);
+				audioEngine->StopChannel(bgmChannel);
+			}
+			else if (statusPayload->phase == GamePhase::START_MENU) {
+				bgmChannel = audioEngine->PlayOneSound(a_music, { 0,0,0 }, 0.5f);
+			}
 
 			ready = false;
 			
@@ -374,6 +434,7 @@ void ClientGame::update() {
 
 ClientGame::~ClientGame() {
 	delete network;
+	delete audioEngine;
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -527,8 +588,9 @@ bool ClientGame::processMovementInput()
 	{
 		bool jumpNowDown = (GetAsyncKeyState(' ') & 0x8000) != 0;
 
-	if (jumpNowDown && (!jumpWasDown || bunnyhop))      // rising edge
+	if (jumpNowDown && (!jumpWasDown || bunnyhop)) {     // rising edge
 		jump = true;
+	}
 
 	jumpWasDown = jumpNowDown;
 	}
@@ -552,7 +614,7 @@ void ClientGame::processAttackInput()
 			renderer.players[0].pos.z
 		};
 		sendAttackPacket(pos, yaw, pitch);
-		renderer.players[id].playAnimationToEnd(HUNTER_ANIMATION_ATTACK);
+		renderer.players[id].playAnimationToEnd(HUNTER_ANIMATION_ATTACK); //TODO: MOVE TO ACTION_OK PACKET HANDLING???
 	}
 	attackWasDown = attackNowDown;
 }
@@ -667,10 +729,36 @@ void ClientGame::handleShopItemSelection(int choice) {
 	}
 }
 
+void ClientGame::playAudio()
+{
+	static bool wasBear = false;
+	static bool wasPhantom = false;
+	bool isBear = false;
+	bool isPhantom = false;
+
+	for (int i = 0; i < 4; i++) {
+		if (gameState->players[i].isBear)
+			isBear = true;
+		if (gameState->players[i].isPhantom)
+			isPhantom = true;
+	}
+
+	if (!wasBear && isBear)
+	{
+		audioEngine->PlayOneSound(a_bear, { 0,0,0 }, 1);
+	}
+	if (!wasPhantom && isPhantom)
+	{
+		// play phantom audio
+	}
+	wasBear = isBear;
+	wasPhantom = isPhantom;
+}
+
 void ClientGame::handleInput()
 {
 	if (!isWindowFocused()) return;
-	
+
 	bool tabDown = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
 	if (tabDown && !renderer.activeScoreboard) {
 		renderer.activeScoreboard = true;
