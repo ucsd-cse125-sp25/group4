@@ -87,6 +87,86 @@ float3 agxLook(float3 val)
     return luma + sat * (val - luma);
 }
 
+
+float RadicalInverse_VdC(uint bits)
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10; // / 0x100000000
+}
+float3 ImportanceSampleGGX(float2 Xi, float3 N, float roughness)
+{
+    float a = roughness * roughness;
+    const float PI = 3.14159265359;
+    float phi = 2.0 * PI * Xi.x;
+    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+	
+    // from spherical coordinates to cartesian coordinates
+    float3 H;
+    H.x = cos(phi) * sinTheta;
+    H.y = sin(phi) * sinTheta;
+    H.z = cosTheta;
+	
+    // from tangent-space vector to world-space sample vector
+    float3 up = abs(N.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+    float3 tangent = normalize(cross(up, N));
+    float3 bitangent = cross(N, tangent);
+	
+    float3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
+    return normalize(sampleVec);
+}
+
+
+// ----------------------------------------------------------------------------
+float2 Hammersley(uint i, uint N)
+{
+    return float2(float(i) / float(N), RadicalInverse_VdC(i));
+}
+
+float3 SampleCubeMap(TextureCube cubemap, float3 fragPosWS, float3 reflectionDir, float roughness)
+{
+    // hardcoded to the scene
+    const float3 boxMax = float3(2.81567, 2.79589, 3.06254);
+    const float3 boxMin = float3(-2.68159, -1.78544, 0);
+    const float3 cubeMapPos = float3(0, 0, 1);
+    
+    // Following is the parallax-correction code
+    // Find the ray intersection with box plane
+    float3 FirstPlaneIntersect = (boxMax - fragPosWS) / reflectionDir;
+    float3 SecondPlaneIntersect = (boxMin - fragPosWS) / reflectionDir;
+    
+    // Get the furthest of these intersections along the ray
+    // (Ok because x/0 give +inf and -x/0 give ï¿½inf )
+    float3 FurthestPlane = max(FirstPlaneIntersect, SecondPlaneIntersect);
+    // Find the closest far intersection
+    float Distance = min(min(FurthestPlane.x, FurthestPlane.y), FurthestPlane.z);
+    
+   // Get the intersection position
+    float3 IntersectPositionWS = fragPosWS + reflectionDir * Distance;
+    // Get corrected reflection
+    reflectionDir = IntersectPositionWS - cubeMapPos;
+    // End parallax-correction code 
+   
+    float3 BoxDiff = (boxMax - boxMin);
+    float minDim = min(BoxDiff.z, min(BoxDiff.x, BoxDiff.y));
+    float3 BoxScale = minDim / BoxDiff;
+    reflectionDir *= BoxScale;
+    reflectionDir.x *= -1;
+    
+    float3 reflectionColor = cubemap.Sample(g_sampler, reflectionDir, roughness * 3) * 0.1;
+    return reflectionColor;
+}
+
+float3 Specular_Fresnel_Schlick(float3 SpecularColor, float3 PixelNormal, float3 LightDir)
+{
+    float NdotL = max(0, dot(PixelNormal, LightDir));
+    return SpecularColor + (1 - SpecularColor) * pow((1 - NdotL), 5);
+}
+
 float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
 {
     // return float4(normalize(input.normal), 1);
@@ -178,46 +258,38 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     normalTangentSpace.z *= max(1.0e-10f, meanTangentLength);
     float3 shadenormal = normalize(mul(tangent_to_world_space, normalTangentSpace));
     
-    
+    // DBG
+    // shadenormal = input.normal;
     
 
-    const float3 boxMax = float3(2.81567, 2.79589, 3.06254);
-    const float3 boxMin = float3(-2.68159, -1.78544, 0);
-    const float3 cubeMapPos = float3(0, 0, 1);
     float3 fragPosWS = input.positionGlobal.xyz;
     float3 camPos = float3(drawConstants.camx, drawConstants.camy, drawConstants.camz);
     TextureCube cubemap = ResourceDescriptorHeap[drawConstants.cubemap_idx];
     
     // from https://interplayoflight.wordpress.com/2013/04/29/parallax-corrected-cubemapping-with-any-cubemap/
-    float3 camToFrag = fragPosWS - camPos;
+    float3 camToFrag = normalize(fragPosWS - camPos);
     float3 reflectionDir = camToFrag - 2 * dot(camToFrag, shadenormal) * shadenormal;
     
-    
-    // Following is the parallax-correction code
-    // Find the ray intersection with box plane
-    float3 FirstPlaneIntersect = (boxMax - fragPosWS) / reflectionDir;
-    float3 SecondPlaneIntersect = (boxMin - fragPosWS) / reflectionDir;
-    
-    // Get the furthest of these intersections along the ray
-    // (Ok because x/0 give +inf and -x/0 give –inf )
-    float3 FurthestPlane = max(FirstPlaneIntersect, SecondPlaneIntersect);
-    // Find the closest far intersection
-    float Distance = min(min(FurthestPlane.x, FurthestPlane.y), FurthestPlane.z);
-    
-   // Get the intersection position
-    float3 IntersectPositionWS = fragPosWS + reflectionDir * Distance;
-    // Get corrected reflection
-    reflectionDir = IntersectPositionWS - cubeMapPos;
-    // End parallax-correction code 
-   
-    float3 BoxDiff = (boxMax - boxMin);
-    float minDim = min(BoxDiff.z, min(BoxDiff.x, BoxDiff.y));
-    float3 BoxScale = minDim / BoxDiff;
-    reflectionDir *= BoxScale;
-    reflectionDir.x *= -1;
+    const uint SAMPLE_COUNT = 16u;
+    float totalWeight = 0.0;
+    float3 reflCol = float3(0, 0, 0);
+    for (uint i = 0u; i < SAMPLE_COUNT; ++i)
+    {
+        float2 Xi = Hammersley(i, SAMPLE_COUNT);
+        float3 H = ImportanceSampleGGX(Xi, shadenormal, roughness);
+        // float3 L = normalize(2.0 * dot(camToFrag, H) * H - camToFrag);
+        float3 L = camToFrag - 2 * dot(camToFrag, H) * H;
+        
+
+        float NdotL = max(dot(shadenormal, L), 0.0);
+        if (NdotL > 0.0)
+        {
+            reflCol += SampleCubeMap(cubemap,fragPosWS,L, roughness) * NdotL;
+            totalWeight += NdotL;
+        }
+    }
     
     
-    float3 reflectionColor = cubemap.SampleLevel(g_sampler, reflectionDir, roughness * 4) * 0.1;
     // float diffuseStrength = clamp(dot(lightDir, normalize(input.normal)), 0.3, 1);
     
     Texture2D lightmap = ResourceDescriptorHeap[drawConstants.lightmap_texture_idx];
@@ -227,7 +299,7 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     if ((drawConstants.flags & FLAG_NOCTURNAL_RUNNER) != 0)
     {
         lightmapColor *= 0.001;
-        reflectionColor *= 0.001;
+        reflCol *= 0.001;
         float3 playerPositions[3] =
         {
             float3(drawConstants.p1x, drawConstants.p1y, drawConstants.p1z),
@@ -248,7 +320,7 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
 
     } 
     float3 col = lightmapColor * diffuseColor;
-    col += reflectionColor;
+    col += reflCol;
     
     
     

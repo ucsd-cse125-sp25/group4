@@ -28,11 +28,11 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
         Texture2D texture = ResourceDescriptorHeap[drawConstants.first_texture_idx + material.base_color];
         diffuseColor = texture.Sample(g_sampler, input.texcoord).rgb;
     }
-    const float3 lightpos = float3(-2, -2, 2);
+    // const float3 lightpos = float3(-2, -2, 2);
     // const float3 diffuseColor = float3(0.7, 0.1, 0.1);
     
     
-    float3 toLight = lightpos - input.positionGlobal.xyz;
+    float3 toLight = float3(0, 8.59, 3.20);
     float3 lightDir = normalize(toLight);
 
     float diffuseStrength = clamp(dot(lightDir, normalize(input.normal)), 0.3, 1);
