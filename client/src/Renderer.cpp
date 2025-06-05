@@ -169,12 +169,17 @@ bool Renderer::Init(HWND window_handle) {
 
 		uint32_t numTimerUITextures = 3; // clock base, hand, top
 		uint32_t numTimerUIVertexBuffers = 3;
+
 		uint32_t numShopUIVertexBuffers = 2;
 		uint32_t numShopUITextures = PowerupInfo.size() + 20; // 10 for each counter of souls and coins
+
+		uint32_t numScreenVertexBuffers = 1;
+		uint32_t numScreenUITextures = 3; // win, lose, start
 		uint32_t capacity = 
 			  numSceneDescriptors + numHunterDescriptors + numRunnerDescriptors + 
 			+ numTimerUITextures + numTimerUIVertexBuffers
-			+ numShopUITextures + numShopUIVertexBuffers;
+			+ numShopUITextures + numShopUIVertexBuffers
+			+ numScreenVertexBuffers + numScreenUITextures;
 		// all resource descriptors go here.
 		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(
@@ -495,6 +500,51 @@ bool Renderer::Init(HWND window_handle) {
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateTimerUI)));
 		}
 		
+		{
+			// --------------------------------------------------------------------
+			// describe Player PSO during INSTINCT (red see-through)
+
+			Slice<BYTE> vertexShaderBytecode;
+			if (DX::ReadDataToSlice(L"skin_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+			Slice<BYTE> pixelShaderBytecode;
+			if (DX::ReadDataToSlice(L"instinct_ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
+
+
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
+				.pRootSignature = m_rootSignature.Get(),
+				.VS = {
+					.pShaderBytecode = vertexShaderBytecode.ptr,
+					.BytecodeLength = vertexShaderBytecode.len,
+				},
+				.PS = {
+					.pShaderBytecode = pixelShaderBytecode.ptr,
+					.BytecodeLength = pixelShaderBytecode.len,
+				},
+				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+				.SampleMask = UINT_MAX,
+				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+				// NO DEPTH for INSTINCT
+				.DepthStencilState = {
+					.DepthEnable = FALSE,
+					.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+					.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+					.StencilEnable = FALSE,
+				},
+				.InputLayout = {},
+				.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+				.NumRenderTargets = 1,
+				.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
+				.DSVFormat = DXGI_FORMAT_D32_FLOAT,
+				.SampleDesc = {
+					.Count = 1,
+				},
+			};
+			psoDesc.RasterizerState.FrontCounterClockwise = true;
+			// psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
+
+			// create the pipeline state object
+			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateInstinct)));
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------
@@ -530,6 +580,13 @@ bool Renderer::Init(HWND window_handle) {
 
 	{
 		m_ShopUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------
+	// create vertex buffer for screenUI
+
+	{
+		m_ScreenUI.Init(m_device.Get(), &m_resourceDescriptorAllocator);
 	}
 	// create buffers for animation
 	{
@@ -732,6 +789,9 @@ bool Renderer::Render() {
 	if (!m_ShopUI.initialized) {
 		m_ShopUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
 	}
+	if (!m_ScreenUI.initialized) {
+		m_ScreenUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+	}
 	
 	// set heaps for constant buffer
 	ID3D12DescriptorHeap *ppHeaps[] = {m_resourceDescriptorAllocator.heap.Get()};
@@ -890,7 +950,7 @@ bool Renderer::Render() {
 		m_commandList->DrawInstanced(m_TimerUI.vertexBuffer.data.len, 1, 0, 0);
 	}
 
-	// draw SHOP if in shop...
+	// draw SHOP if in shop... AND current player is not a spectator
 	if (gamePhase == GamePhase::SHOP_PHASE) {
 		PerDrawConstants dc = {
 			.viewProject = m_ShopUI.ortho,
@@ -955,6 +1015,61 @@ bool Renderer::Render() {
 			}
 		}
 	}
+
+	if (gamePhase == GamePhase::START_MENU || gamePhase == GamePhase::GAME_END) {
+		PerDrawConstants dc = {
+		.viewProject = m_ScreenUI.ortho,
+		.modelMatrix = XMMatrixIdentity(),
+		.modelInverseTranspose = XMMatrixIdentity(),
+		.vpos_idx = m_ScreenUI.screenVertexBuffer.descriptor.index,
+		.vshade_idx = m_scene.vertexShading.descriptor.index,
+		};
+		m_commandList->SetPipelineState(m_pipelineStateTimerUI.Get());
+
+		uint8_t texIdx = 0;
+		switch (gamePhase) {
+		case GamePhase::START_MENU:
+			texIdx = 0;
+			break;
+		case GamePhase::GAME_END:
+			if (winner == 1) texIdx = 1;
+			else texIdx = 2;
+			break;
+		}
+		dc.first_texture_idx = m_ScreenUI.screenTextures.ptr[texIdx].descriptor.index;
+		m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_NUM_DWORDS, &dc, 0);
+		m_commandList->DrawInstanced(m_ScreenUI.screenVertexBuffer.data.len, 1, 0, 0);
+	}
+
+	// draw INSTINCT only if powerup and hunter
+	if (instinct && currPlayer.playerId == 0) {
+		m_commandList->SetPipelineState(m_pipelineStateInstinct.Get());
+		for (UINT8 i = 1; i < 4; ++i) {
+			XMMATRIX modelMatrix = computeModelMatrix(players[i]);
+			XMMATRIX modelInverseTranspose = XMMatrixInverse(nullptr, XMMatrixTranspose(modelMatrix));
+			bool loop = players[i].loop;
+				UINT8 animationIdx = players[i].runnerAnimation;
+				PlayerDrawConstants drawConstants = {
+					.viewProject = viewProject,
+					.modelMatrix = modelMatrix,
+					.modelInverseTranspose = modelInverseTranspose,
+					.vpos_idx = m_runnerRenderBuffers.vertexPosition.descriptor.index,
+					.vshade_idx = m_runnerRenderBuffers.vertexShading.descriptor.index ,
+					.material_ids_idx = m_runnerRenderBuffers.materialID.descriptor.index,
+					.materials_idx = m_runnerRenderBuffers.materials.descriptor.index,
+					.first_texture_idx = m_runnerRenderBuffers.textures.ptr[0].descriptor.index,
+					.vbone_idx = m_runnerRenderBuffers.vertexBoneIdx.descriptor.index,
+					.vweight_idx = m_runnerRenderBuffers.vertexBoneWeight.descriptor.index,
+					.bone_transforms_idx = m_runnerAnimations[animationIdx].invBindTransform.descriptor.index,
+					.bone_adj_transforms_idx = m_runnerAnimations[animationIdx].invBindAdjTransform.descriptor.index,
+					.frame_number = m_runnerAnimations[animationIdx].getFrame(players[i].animationStartTime, time, loop),
+					.num_bones = m_runnerRenderBuffers.header->numBones,
+				};
+				m_commandList->SetGraphicsRoot32BitConstants(1, DRAW_CONSTANT_PLAYER_NUM_DWORDS, &drawConstants, 0);
+				m_commandList->DrawInstanced(3 * m_runnerRenderBuffers.vertexPosition.data.len, 1, 0, 0);
+		}
+	}
+	
 	
 	// barrier BEFORE presenting the back buffer 
 	D3D12_RESOURCE_BARRIER barrier_present = {
