@@ -338,6 +338,7 @@ void ServerGame::receiveFromClients()
 void ServerGame::startARound(int seconds) {
 	round_id++;
 	sendPlayerPowerups();
+	isNocturnal = false;
 	for (unsigned int id = 0; id < num_players; ++id) {
 		auto& player = state->players[id];
 
