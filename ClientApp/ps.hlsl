@@ -157,16 +157,16 @@ float3 SampleCubeMap(TextureCube cubemap, float3 fragPosWS, float3 reflectionDir
     reflectionDir *= BoxScale;
     reflectionDir.x *= -1;
     
-    float3 reflectionColor = cubemap.Sample(g_sampler, reflectionDir, roughness * 3) * 0.1;
+    float3 reflectionColor = cubemap.Sample(g_sampler, reflectionDir, roughness * 3);
     return reflectionColor;
 }
 
-float3 Specular_Fresnel_Schlick(float3 SpecularColor, float3 PixelNormal, float3 LightDir)
+float3 fresnelSchlick(float cosTheta, float roughness)
 {
-    float NdotL = max(0, dot(PixelNormal, LightDir));
-    return SpecularColor + (1 - SpecularColor) * pow((1 - NdotL), 5);
+    const float3 F0 = float3(0.04, 0.04, 0.04);
+    float invRoughness = 1.0 - roughness;
+    return F0 + (max(float3(invRoughness, invRoughness, invRoughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
-
 float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
 {
     // return float4(normalize(input.normal), 1);
@@ -277,17 +277,18 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     {
         float2 Xi = Hammersley(i, SAMPLE_COUNT);
         float3 H = ImportanceSampleGGX(Xi, shadenormal, roughness);
-        // float3 L = normalize(2.0 * dot(camToFrag, H) * H - camToFrag);
-        float3 L = camToFrag - 2 * dot(camToFrag, H) * H;
-        
-
+        float3 L = normalize(camToFrag - 2 * dot(camToFrag, H) * H);
         float NdotL = max(dot(shadenormal, L), 0.0);
         if (NdotL > 0.0)
         {
-            reflCol += SampleCubeMap(cubemap,fragPosWS,L, roughness) * NdotL;
+            reflCol += SampleCubeMap(cubemap, fragPosWS, L, roughness) * NdotL;
+            // float3 schlicked = reflCol * fresnelSchlick(NdotL);
+            // reflCol = 0.5 * schlicked + 0.5 * reflCol;
+            reflCol *= fresnelSchlick(NdotL, roughness);
             totalWeight += NdotL;
         }
     }
+    reflCol *= 1.5;
     
     
     // float diffuseStrength = clamp(dot(lightDir, normalize(input.normal)), 0.3, 1);
