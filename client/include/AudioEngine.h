@@ -11,6 +11,10 @@
 
 using namespace std;
 
+struct Vector3 {
+    float x, y, z;
+};
+
 struct Implementation {
     Implementation();
     ~Implementation();
@@ -36,8 +40,11 @@ public:
     static void Shutdown();
     static int ErrorCheck(FMOD_RESULT result);
 
-    void LoadSound(const string& strSoundName, bool bLooping = false);
+    void LoadSound(const string& strSoundName, bool b3D = false, bool bLooping = false);
+    int PlayOneSound(const string& strSoundName, const Vector3& vPosition = {0, 0, 0}, float volume = 1);
     int PlayOneSound(const string& strSoundName, float volume = 1);
+    void StopChannel(int channel);
+    FMOD_VECTOR VectorToFmod(const Vector3& vPosition);
 };
 
 #endif

@@ -218,13 +218,6 @@ struct PlayerPowerupPayload {
 	uint8_t powerupInfo[4][20];
 };
 
-struct AudioPayload {
-	uint8_t audioType;
-	float volume;
-	bool directional;
-	float x, y, z;
-};
-
 struct DodgePayload { float yaw, pitch; };
 
 struct DodgeOkPayload { uint8_t invulTicks; };	// invulTicks is more like a placeholder for now

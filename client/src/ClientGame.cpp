@@ -71,10 +71,10 @@ ClientGame::ClientGame(HINSTANCE hInstance, int nCmdShow, string IPAddress) {
 
 	audioEngine->Init();
 
-	audioEngine->LoadSound("music.wav", true);
-	audioEngine->LoadSound("jump.wav");
+	audioEngine->LoadSound("music.wav", true, true);
+	audioEngine->LoadSound("jump.wav", true, false);
 
-	audioEngine->PlayOneSound("music.wav", 0.3f);
+	audioEngine->PlayOneSound("music.wav", { 0, 0, 0 }, 1);
 
 	uint8_t initPowerups[4][20];
 	
@@ -464,7 +464,7 @@ bool ClientGame::processMovementInput()
 	if (rNowDown && (!rWasDown || bunnyhop))      // rising edge
 	{
 		jump = true;
-		audioEngine->PlayOneSound("jump.wav", 0.2f);
+		audioEngine->PlayOneSound("jump.wav", { 0, 0, 0 }, 0.2f);
 	}
 
 	rWasDown = rNowDown;
@@ -596,7 +596,7 @@ void ClientGame::handleShopItemSelection(int choice) {
 void ClientGame::handleInput()
 {
 	if (!isWindowFocused()) return;
-	
+
 	bool tabDown = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
 	if (tabDown && !renderer.activeScoreboard) {
 		renderer.activeScoreboard = true;

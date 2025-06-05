@@ -42,12 +42,13 @@ void CAudioEngine::Update() {
 	sgpImplementation->Update();
 }
 
-void CAudioEngine::LoadSound(const string& strSoundName, bool bLooping) {
+void CAudioEngine::LoadSound(const string& strSoundName, bool b3D, bool bLooping) {
     auto tFoundIt = sgpImplementation->mSounds.find(strSoundName);
     if (tFoundIt != sgpImplementation->mSounds.end())
         return;
 
     FMOD_MODE eMode = FMOD_DEFAULT;
+    eMode |= b3D ? FMOD_3D : FMOD_2D;
     eMode |= bLooping ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF;
 
     FMOD::Sound* pSound = nullptr;
@@ -57,7 +58,7 @@ void CAudioEngine::LoadSound(const string& strSoundName, bool bLooping) {
     }
 }
 
-int CAudioEngine::PlayOneSound(const string& strSoundName, float volume)
+int CAudioEngine::PlayOneSound(const string& strSoundName, const Vector3& vPosition, float volume)
 {
     int nChannelId = sgpImplementation->mnNextChannelId++;
     auto tFoundIt = sgpImplementation->mSounds.find(strSoundName);
@@ -74,10 +75,27 @@ int CAudioEngine::PlayOneSound(const string& strSoundName, float volume)
     CAudioEngine::ErrorCheck(sgpImplementation->mpSystem->playSound(tFoundIt->second, nullptr, true, &pChannel));
     if (pChannel)
     {
+        FMOD_MODE currMode;
+        tFoundIt->second->getMode(&currMode);
+        if (currMode & FMOD_3D) {
+            FMOD_VECTOR position = VectorToFmod(vPosition);
+            CAudioEngine::ErrorCheck(pChannel->set3DAttributes(&position, nullptr));
+        }
         CAudioEngine::ErrorCheck(pChannel->setVolume(volume));
         CAudioEngine::ErrorCheck(pChannel->setPaused(false));
+        sgpImplementation->mChannels[nChannelId] = pChannel;
     }
     return nChannelId;
+}
+
+int CAudioEngine::PlayOneSound(const string& strSoundName, float volume)
+{
+    return PlayOneSound(strSoundName, { 0, 0, 0 }, volume);
+}
+
+void CAudioEngine::StopChannel(int channel)
+{
+    sgpImplementation->mChannels[channel]->stop();
 }
 
 int CAudioEngine::ErrorCheck(FMOD_RESULT result) {
@@ -89,6 +107,14 @@ int CAudioEngine::ErrorCheck(FMOD_RESULT result) {
     // cout << "FMOD all good" << endl;
 
     return 0;
+}
+
+FMOD_VECTOR CAudioEngine::VectorToFmod(const Vector3& vPosition) {
+    FMOD_VECTOR fVec;
+    fVec.x = vPosition.x;
+    fVec.y = vPosition.y;
+    fVec.z = vPosition.z;
+    return fVec;
 }
 
 void CAudioEngine::Shutdown() {
