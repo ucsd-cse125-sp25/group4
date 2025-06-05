@@ -45,11 +45,6 @@ ServerGame::ServerGame(void) :
 	//vector<vector<int>> colors2d;
 
 
-	// TODO: test RNG on the atkinson hall computers
-	//cout << "Entropy: " << dev.entropy() << endl;
-	//for (int i = 0; i < 100; i++) {
-	//	cout << randomHunterPowerupGen(rng) << endl;
-	//}
 	newGame();
 }
 
@@ -105,6 +100,8 @@ void ServerGame::update() {
 		}
 	}
 	state_mu.unlock();
+
+	sendAnimationUpdates();
 }
 
 void ServerGame::receiveFromClients() 
@@ -200,6 +197,8 @@ void ServerGame::receiveFromClients()
 				if (!offCooldown) break;                           // silently ignore spam
 
 				// grant!
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_DODGE;
+				animationState.isLoop[id] = false; // TODO this is for debug, change to false in production
 				lastDodgeTick[id] = state->tick;
 				invulTicks[id] = INVUL_TICKS;
 				dashTicks[id] = INVUL_TICKS;                   // dash lasts same 30 ticks
@@ -274,6 +273,26 @@ void ServerGame::receiveFromClients()
 
 				break;
 			}
+			case PacketType::PHANTOM:
+			{
+				// payload is empty
+				//PhantomPayload* phantom = (PhantomPayload*)&(network_data[i + HDR_SIZE]);
+				printf("[CLIENT %d] PHANTOM_PACKET\n", id);
+				// drop if player doesn't have the powerup
+				if (!hasPhantom)
+					break;
+				// drop if phantom is already active
+				if (state->players[id].isPhantom)
+					break;
+				else 
+				{
+					state->players[id].isPhantom = true;
+					phantomTicks = state->tick + (PHANTOM_TICKS * hasPhantom);
+					hasPhantom = 0; // reset phantom powerup
+					printf("IT'S PHANTOM TIME!!!\n");
+				}
+				break;
+			}
 			default:
 				printf("[CLIENT %d] ERR: Packet type %d\n", id, hdr->type);
 				break;
@@ -318,6 +337,7 @@ void ServerGame::startARound(int seconds) {
 
 		player.isDead = false;
 		player.isBear = false;
+		player.isPhantom = false;
 		// print player coin
 		printf("[round %d] Player %d coins: %d\n", round_id, id, player.coins);
 	}
@@ -404,7 +424,7 @@ void ServerGame::handleStartMenu() {
 		num_players = phaseStatus.size();
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(ROUND_DURATION);
+		startARound(ROUND_DURATION + roundTimeAdjustment);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
@@ -429,7 +449,17 @@ void ServerGame::newGame()
 		state->players[i].isDead = false;
 		state->players[i].isBear = false;
 		state->players[i].dodgeCollide = true;
+		state->players[i].jumpCounts = 1;
+		state->players[i].isPhantom = false;
 		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
+	}
+
+	animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_IDLE;
+	animationState.isLoop[0] = true;
+	// TODO runner IDLE anim!
+	for (int i = 1; i < 4; i++) {
+		animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+		animationState.curAnims[i] = true;
 	}
 }
 
@@ -532,7 +562,7 @@ void ServerGame::handleShopPhase() {
 	if (ready && !phaseStatus.empty()) {
 		appState->gamePhase = GamePhase::GAME_PHASE;
 		sendAppPhaseUpdates();
-		startARound(ROUND_DURATION);
+		startARound(ROUND_DURATION + roundTimeAdjustment);
 		// reset status
 		for (auto& [id, status] : phaseStatus) {
 			status = false;
@@ -595,7 +625,10 @@ void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
 		attackCooldownTicks *= REDUCE_ATTACK_CD_MULTIPLIER;
 		break;
 	case Powerup::H_INC_ATTACK_RANGE:
-		attackRange += 5.0f;
+		attackRange += 5.0f * PLAYER_SCALING_FACTOR;
+		break;
+	case Powerup::H_INCREASE_ROUND_TIME:
+		roundTimeAdjustment += 30; // increase round time by 30 seconds
 		break;
 	case Powerup::R_INCREASE_SPEED:
 		state->players[id].speed *= 1.5f;
@@ -638,8 +671,40 @@ void ServerGame::applyMovements() {
 			player.isBear = false;
 		}
 
-		float dx = 0, dy = 0;
+		// reset to idle ONLY FROM MOVEMENT if no input
+		if (!latestMovement.count(id)) {
+			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE) {
+				// reset animation back to idle only if it was previouslly moving
+				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
+				animationState.isLoop[id] = true;
+			}
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+				// TODO idle instead of walk
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+				animationState.isLoop[id] = true;
+			}
+		}
+
+		// check if phantom power runs out
+		if (player.isPhantom && phantomTicks <= state->tick)
+		{
+			player.isPhantom = false;
+		}
+
+		float dx = 0, dy = 0, dz = 0;
 		if (latestMovement.count(id)) {
+			// set movement ONLY IF at idle
+			if (id == 0 && animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE) {
+				// reset animation back to idle only if it was previouslly moving
+				animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_CHASE;
+				animationState.isLoop[id] = true;
+			}
+			// TODO check idle instead of walk
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+				animationState.isLoop[id] = true;
+			}
+
 			auto& mv = latestMovement[id];
 			// update direction regardless of collision
 			player.yaw = mv.yaw;
@@ -659,6 +724,8 @@ void ServerGame::applyMovements() {
 			dx = ((fx * mv.direction[0]) + (fy * mv.direction[1])) * player.speed;
 
 			dy = ((fy * mv.direction[0]) - (fx * mv.direction[1])) * player.speed;
+
+			dz = mv.direction[2] * player.speed; // vertical movement, if any
 		}
 
 		/* physics logic embedded */
@@ -672,9 +739,11 @@ void ServerGame::applyMovements() {
 			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}*/
-
-		if (latestMovement.count(id) && latestMovement[id].jump && player.availableJumps > 0 && player.zVelocity <= 0) {
+		if (latestMovement.count(id) && latestMovement[id].jump) {
 			printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
+		}
+		if (latestMovement.count(id) && latestMovement[id].jump && player.availableJumps > 0 && player.zVelocity <= 0) {
+			//printf("[CLIENT %d] Jump requested. availableJumps=%d\n", id, player.availableJumps);
 			player.zVelocity += JUMP_VELOCITY + extraJumpPowerup[id];
 			player.availableJumps--;
 			if (player.isBear) {
@@ -682,10 +751,16 @@ void ServerGame::applyMovements() {
 			}
 			printf("[CLIENT %d] Jump registered. zVelocity=%f\n", id, state->players[id].zVelocity);
 		}
+
 		// gravity
-		player.zVelocity -= GRAVITY;
-		if (player.zVelocity < TERMINAL_VELOCITY)
-			player.zVelocity = TERMINAL_VELOCITY;
+		if (player.isHunter && player.isPhantom) {
+			player.zVelocity = dz;
+		}
+		else {
+			player.zVelocity -= GRAVITY;
+			if (player.zVelocity < TERMINAL_VELOCITY)
+				player.zVelocity = TERMINAL_VELOCITY;
+		}
 
 		// apply speed modifiers here:
 		// hunter slow debuff
@@ -803,6 +878,10 @@ void ServerGame::applyDodge()
 			// end of cooldown
 			dashTicks[i] = -1; // prevents from happening multiple times
 			state->players[i].speed /= DASH_COOLDOWN_PENALTY;
+
+			// TODO replace walk with idle
+			animationState.curAnims[i] = RunnerAnimation::RUNNER_ANIMATION_WALK;
+			animationState.isLoop[i] = true;
 		}
 	}
 }
@@ -810,6 +889,14 @@ void ServerGame::applyDodge()
 // -----------------------------------------------------------------------------
 // NETWORK
 // -----------------------------------------------------------------------------
+
+void ServerGame::sendAnimationUpdates() {
+	char packet_data[HDR_SIZE + sizeof(AnimationState)];
+
+	NetworkServices::buildPacket<AnimationState>(PacketType::ANIMATION_STATE, animationState, packet_data);
+
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(AnimationState));
+}
 
 void ServerGame::sendGameStateUpdates() {
 
@@ -827,6 +914,8 @@ void ServerGame::sendPlayerPowerups() {
 	memset(data.powerupInfo, 255, sizeof(data.powerupInfo));
 	for (auto [id, powerups] : playerPowerups) {
 		printf("Player %d Powerups: ", id);
+		hasBear[id] = 0;
+		hasPhantom = 0;
 		int idx = 0;
 		for (auto p : powerups) {
 			if (idx >= 20) break;
@@ -834,6 +923,11 @@ void ServerGame::sendPlayerPowerups() {
 			{
 				// reset bear status for the next round
 				hasBear[id] += 1;
+			}
+			if (p == Powerup::H_PHANTOM)
+			{
+				// reset phantom status for the next round
+				hasPhantom += 1;
 			}
 			printf("%s, ", PowerupInfo[p].name.c_str());
 			data.powerupInfo[id][idx] = (uint8_t) p;
@@ -965,7 +1059,7 @@ void ServerGame::updateClientPositionWithCollision(unsigned int clientId, float 
 			if (dodging && i != 2) continue;
 
 			if (checkCollision(playerBox, boxes2d[b])) {
-				if (i == 2 && playerBox.minZ < boxes2d[b].maxZ && delta[2] < 0) {
+				if (i == 2 && playerBox.minZ <= boxes2d[b].maxZ && delta[2] < 0) {
 					// Landing on top of a box
 					delta[2] = boxes2d[b].maxZ + playerRadius - state->players[clientId].z;
 					state->players[clientId].isGrounded = true;
@@ -1039,9 +1133,9 @@ static bool checkCollision(BoundingBox box1, BoundingBox box2) {
 bool ServerGame::isHit_(const AttackPayload& a, const PlayerState& victim)
 {
 	// forward direction from yaw/pitch → unit vector
-	float fx = cosf(a.pitch) * -sinf(a.yaw);
-	float fy = cosf(a.pitch) * cosf(a.yaw);
-	float fz = sinf(a.pitch);
+	float fx = cosf(0) * -sinf(a.yaw);
+	float fy = cosf(0) * cosf(a.yaw);
+	float fz = sinf(0);
 
 	// vector attacker → victim
 	float vx = victim.x - a.originX;
@@ -1049,6 +1143,15 @@ bool ServerGame::isHit_(const AttackPayload& a, const PlayerState& victim)
 	float vz = victim.z - a.originZ;
 
 	float dist2 = vx * vx + vy * vy + vz * vz;
+
+	// If the victim is within a radius (thus a sphere), always hit regardless of direction
+	float directDist = sqrtf(dist2);
+	float radius = 3e-1f;
+	if (directDist <= radius) {
+		printf("[HIT] victim is within hunter sphere. The attack counts.\n");
+		return true;
+	}
+
 	if (dist2 > attackRange * attackRange) return false;          // out of reach
 
 	float len = sqrtf(dist2);

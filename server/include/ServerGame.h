@@ -44,6 +44,8 @@ public:
 	void applyPowerups(uint8_t, uint8_t);
 	bool anyWinners();
 
+	void sendAnimationUpdates();
+
 private:
 	static constexpr int TICKS_PER_SEC = 64;
 	static constexpr std::chrono::milliseconds TICK_DURATION{ 1000 / TICKS_PER_SEC };
@@ -154,6 +156,14 @@ private:
 	int hunterBearStunTicks = 0;
 	static constexpr int BEAR_STUN_TIME = TICKS_PER_SEC * 3;
 	static constexpr float BEAR_STUN_MULTIPLIER = 0.1f;
+	int roundTimeAdjustment = 0;
+
+	// animation
+	AnimationState animationState;
+	
+	int phantomTicks = 0;
+	static constexpr int PHANTOM_TICKS = TICKS_PER_SEC * 5;
+	int hasPhantom = 0;
 };
 
 static bool checkCollision(BoundingBox, BoundingBox);

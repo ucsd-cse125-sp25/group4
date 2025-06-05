@@ -32,6 +32,7 @@ public:
 	void processAttackInput();
 	void processDodgeInput();
 	void processBearInput();
+	void processPhantomInput();
 	bool processCameraInput();
 	bool processMovementInput();
 	void processShopInputs();
@@ -41,7 +42,6 @@ public:
 	void processSpectatorKeyboardInput();
 
 	void handleShopItemSelection(int choice);
-	void storePowerups(int);
 
 	void sendDebugPacket(const char*);
 	// void sendGameStatePacket(float[4]);
@@ -50,6 +50,7 @@ public:
 	void sendAttackPacket(float origin[3], float yaw, float pitch);
 	void sendDodgePacket();
 	void sendBearPacket();
+	void sendPhantomPacket();
 	void sendReadyStatusPacket(uint8_t selection);
 	void update();
 
@@ -67,6 +68,11 @@ public:
 
 	ShopItem shopOptions[NUM_POWERUP_OPTIONS];
 
+	bool jumpWasDown = false;
+	bool dodgeWasDown = false;
+	bool attackWasDown = false;
+
+	AnimationState localAnimState;
 
 private:
 	HWND hwnd;

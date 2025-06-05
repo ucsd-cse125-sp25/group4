@@ -20,6 +20,7 @@
 #include <system_error>
 #include <vector>
 #include <windows.h>
+#include <assert.h>
 
 template<typename T>
 struct Slice {
@@ -62,8 +63,12 @@ namespace DX
     // a null terminator may optionally be inserted at the end of the buffer
     // the caller is responsible for freeing the memory allocated by this function
     // unless this function does not run successfully
-    inline ReadDataStatus ReadDataToSlice(_In_z_ const wchar_t* name, Slice<BYTE>& slice, bool appendNullTerminator = false)
+    template<typename T>
+    inline ReadDataStatus ReadDataToSlice(_In_z_ const wchar_t* name, Slice<T>& slice, bool appendNullTerminator = false)
     {
+        if (appendNullTerminator) {
+            assert(sizeof(T) == sizeof(BYTE));
+        }
         std::ifstream inFile(name, std::ios::in | std::ios::binary | std::ios::ate);
 
 #if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY == WINAPI_FAMILY_DESKTOP_APP)
@@ -91,9 +96,10 @@ namespace DX
         if (!inFile) return ReadDataStatus::ERROR_GET_READ_POSITION;
         
         size_t sliceLength = appendNullTerminator ? (size_t)len + 1 : (size_t)len;
+        size_t numElems = sliceLength / sizeof(T);
 		slice = {
-			.ptr = (BYTE*)malloc(sliceLength),
-            .len = (uint32_t)sliceLength,
+			.ptr = (T*)malloc(numElems * sizeof(T)),
+            .len = (uint32_t)numElems,
 		};
         if (slice.ptr == nullptr) return ReadDataStatus::ERROR_OOM;
 
@@ -102,13 +108,14 @@ namespace DX
             slice.release();
             return ReadDataStatus::ERROR_SEEK_FILE;
         }
-
-        inFile.read(reinterpret_cast<char*>(slice.ptr), len);
+        
+        char* charptr = reinterpret_cast<char*>(slice.ptr);
+        inFile.read(charptr, len);
         if (!inFile) {
             slice.release();
             return ReadDataStatus::ERROR_READ;
         }
-        if (appendNullTerminator) slice.ptr[slice.len - 1] = '\0';
+        if (appendNullTerminator) charptr[slice.len - 1] = '\0';
 
         inFile.close();
 

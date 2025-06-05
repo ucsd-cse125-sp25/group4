@@ -9,6 +9,7 @@
 #include "NetworkData.h"
 #include "shaderShared.hlsli"
 #include "ddspp.h"
+#include <chrono>
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -20,8 +21,12 @@ using Microsoft::WRL::ComPtr;
 constexpr uint32_t VERTS_PER_TRI = 3;
 constexpr size_t BYTES_PER_DWORD = 4;
 constexpr size_t DRAW_CONSTANT_NUM_DWORDS = sizeof(PerDrawConstants)/BYTES_PER_DWORD;
-
+constexpr size_t DRAW_CONSTANT_PLAYER_NUM_DWORDS = sizeof(PlayerDrawConstants)/BYTES_PER_DWORD;
+constexpr size_t BONES_PER_VERT = 4;
 typedef wchar_t TexturePath_t[256];
+
+typedef uint32_t BoneIndices[BONES_PER_VERT];
+typedef float BoneWeights[BONES_PER_VERT];
 
 inline uint32_t alignU32(uint32_t num, uint32_t alignment) {
 	return ((num + alignment - 1) / alignment) * alignment;
@@ -43,7 +48,36 @@ struct LookDir {
 
 struct PlayerRenderState {
 	XMFLOAT3 pos;
+	std::chrono::time_point<std::chrono::steady_clock> animationStartTime;
 	LookDir lookDir;
+	bool isHunter;
+	union {
+		RunnerAnimation runnerAnimation;
+		HunterAnimation hunterAnimation;
+	};
+	bool loop = true;
+
+	void loopAnimation(UINT8 animation) {
+		loop = true;
+		animationStartTime = std::chrono::steady_clock::now();
+		if (isHunter) {
+			hunterAnimation = (HunterAnimation)animation;
+		}
+		else {
+			runnerAnimation = (RunnerAnimation)animation;
+		}
+	}
+	void playAnimationToEnd(UINT8 animation) {
+		loop = false;
+		animationStartTime = std::chrono::steady_clock::now();
+		if (isHunter) {
+			hunterAnimation = (HunterAnimation)animation;
+		}
+		else {
+			runnerAnimation = (RunnerAnimation)animation;
+		}
+	}
+
 };
 struct CurrPlayerRenderState {
 	UINT8 playerId;
@@ -53,7 +87,6 @@ struct CurrPlayerRenderState {
 constexpr enum RootParameters : UINT8 {
 	ROOT_PARAMETERS_DESCRIPTOR_TABLE,
 	ROOT_PARAMETERS_CONSTANT_PER_CALL,
-	ROOT_PARAMETERS_CONSTANT_DEBUG_CUBE_MATRICES,
 	ROOT_PARAMETERS_COUNT
 };
 
@@ -128,6 +161,7 @@ struct SceneHeader {
 	uint32_t numTriangles;
 	uint32_t numMaterials;
 	uint32_t numTextures;
+	uint32_t numBones;
 };
 
 
@@ -280,27 +314,27 @@ struct Texture {
 };
 
 
-constexpr uint32_t SCENE_VERSION = 000'000'002;
-enum SceneBufferType {
-	SCENE_BUFFER_TYPE_VERTEX_POSITION,
-	SCENE_BUFFER_TYPE_VERTEX_SHADING,
-	SCENE_BUFFER_TYPE_MATERIAL_ID,
-	SCENE_BUFFER_TYPE_MATERIAL,
-	SCENE_BUFFER_TYPE_COUNT
-};
+constexpr uint32_t SCENE_VERSION = 000'000'003;
 struct Scene {
 	// the whole scene file
 	Slice<BYTE> data;
 	SceneHeader *header;
 	// buffers reference the data slice
-	union {
+	Buffer<XMFLOAT3>          vertexPosition;
+	Buffer<VertexShadingData> vertexShading;
+	Buffer<uint16_t>          materialID;
+	Buffer<Material>          materials;
+	union { // rraaaaaaaaagh C++ has no tagged unions
+		// header->numBones == 0:
 		struct {
-			Buffer<XMFLOAT3>          vertexPosition;
-			Buffer<VertexShadingData> vertexShading;
-			Buffer<uint16_t>          materialID;
-			Buffer<Material>          materials;
+			Buffer<XMFLOAT2>          vertexLightmapTexcoord;
+			Texture                   lightmapTexture;
 		};
-		Buffer<BYTE> buffers[SCENE_BUFFER_TYPE_COUNT];
+		// header->numBones > 0:
+		struct {
+			Buffer<BoneIndices>       vertexBoneIdx;
+			Buffer<BoneWeights>       vertexBoneWeight;
+		};
 	};
 
 	Slice<Texture> textures;
@@ -312,10 +346,22 @@ struct Scene {
 	};
 	~Scene() { Release(); }
 	
+	uint32_t getNumBuffers() {
+		if (header->numBones == 0) {
+			return 6; // WARNING: this needs to be updated when there are lightmaps
+		}
+		else {
+			return 6; 
+		}
+	}
+
 	bool ReadToCPU(const wchar_t *filename) {
 		// ------------------------------------------------------------------------------------------------------------
 		// slurp data from file 
-		if (DX::ReadDataToSlice(filename, data) != DX::ReadDataStatus::SUCCESS) return false;
+		if (DX::ReadDataToSlice(filename, data) != DX::ReadDataStatus::SUCCESS) {
+			printf("fuck\n");
+			return false;
+		}
 		
 		header = reinterpret_cast<SceneHeader*>(data.ptr);
 		// sanity checks
@@ -327,7 +373,6 @@ struct Scene {
 			printf("ERROR: scene has no triangles\n");
 			return false;
 		}
-	
 		return true;
 	}
 	bool SendToGPU(ID3D12Device *device, DescriptorAllocator *descriptorAllocator, ID3D12GraphicsCommandList *commandList) {
@@ -362,7 +407,6 @@ struct Scene {
 			.ptr = reinterpret_cast<TexturePath_t*>(materialSlice.after()),
 			.len = header->numTextures,
 		};
-		
 
 		// create buffers from slices
 		vertexPosition.Init(vertexPositionSlice, device, descriptorAllocator, L"Scene Vertex Position Buffer");
@@ -375,42 +419,122 @@ struct Scene {
 		};
 
 		// load in all textures
+		Material defaultMaterial = materialSlice.ptr[0];
 		for (uint32_t i = 0; i < textures.len; ++i) {	
 			bool success = textures.ptr[i].Init(device, descriptorAllocator, commandList, texturePathSlice.ptr[i]);
 			if (!success) {
 				for (int j = 1; j < materialSlice.len; ++j) {
-					Material mat = materialSlice.ptr[j];
-					Material defaultMaterial = materialSlice.ptr[0];
-					if (mat.base_color == i) {
-						mat.base_color = defaultMaterial.base_color;
-					}
-					if (mat.metallic == i) {
-						mat.metallic = defaultMaterial.metallic;
-					}
-					if (mat.roughness == i) {
-						mat.roughness = defaultMaterial.roughness;
-					}
-					if (mat.normal == i) {
-						mat.normal = defaultMaterial.normal;
-					}
+					Material* mat = &materialSlice.ptr[j];
+					if (mat->base_color == i) mat->base_color = defaultMaterial.base_color;
+					if (mat->metallic   == i) mat->metallic   = defaultMaterial.metallic;
+					if (mat->roughness  == i) mat->roughness  = defaultMaterial.roughness;
+					if (mat->normal     == i) mat->normal     = defaultMaterial.normal;
 				}
 			}
 		}
 
-
 		materialID.Init(materialIDSlice, device, descriptorAllocator, L"Scene Material ID Buffer");
+
+		if (header->numBones == 0) {
+			// static scenes need a lightmap
+			Slice<XMFLOAT2> vertexLightmapTexcoordSlice{
+				.ptr = reinterpret_cast<XMFLOAT2*>(texturePathSlice.after()),
+				.len = numVerts,
+			};
+			
+			auto l = vertexLightmapTexcoordSlice.after();
+			auto f = data.after();
+
+			if (l >= f) {
+				printf("fuck\n");
+			}
+			vertexLightmapTexcoord.Init(vertexLightmapTexcoordSlice, device, descriptorAllocator, L"Lightmap Texcoord Buffer");
+
+			// TODO: read lightmap texture
+			lightmapTexture.Init(device, descriptorAllocator, commandList, L"./textures/lightmap32.dds");
+		}
+		else {
+			// dynamic scenes need skinning info
+			Slice<BoneIndices> vertexBoneIdxSlice {
+				.ptr = reinterpret_cast<BoneIndices*>(texturePathSlice.after()),
+				.len = numVerts,
+			};
+			Slice<BoneWeights> vertexBoneWeightSlice{
+				.ptr = reinterpret_cast<BoneWeights*>(vertexBoneIdxSlice.after()),
+				.len = numVerts,
+			};
+			
+			vertexBoneIdx.Init(vertexBoneIdxSlice, device, descriptorAllocator, L"Vertex Bone Index Buffer");
+			vertexBoneWeight.Init(vertexBoneWeightSlice, device, descriptorAllocator, L"Vertex Bone Weight Buffer");
+		}
 		initialized = true;
 		return true;
 	}
 	void Release() {
-		for (Buffer<BYTE> &buf : buffers) {
-			buf.Release();
-		}
+		vertexPosition.Release();
+		vertexShading.Release();
+		materialID.Release();
+		materials.Release();
+		vertexBoneIdx.Release();
+		vertexBoneWeight.Release();
+		vertexLightmapTexcoord.Release();
+
 		if (data.ptr != nullptr) free(data.ptr);
 		memset(this, 0, sizeof(*this));
 	}
 };
 
+struct AnimationHeader {
+	uint32_t numFrames;
+	uint32_t numBones;
+};
+
+struct Animation {
+	Slice<BYTE> data;
+
+	AnimationHeader *header;
+	Buffer<XMFLOAT4X4> invBindTransform;
+	Buffer<XMFLOAT4X4> invBindAdjTransform;
+
+	bool Init(ID3D12Device* device, DescriptorAllocator* descriptorAllocator, const wchar_t* filename) {
+		DX::ReadDataStatus status = DX::ReadDataToSlice(filename, data);
+		if (status != DX::ReadDataStatus::SUCCESS) {
+			return false;
+		}
+		
+		header = reinterpret_cast<AnimationHeader*>(data.ptr);
+
+		uint32_t bufferLength = header->numFrames * header->numBones;
+
+		Slice<XMFLOAT4X4> invBindTransformSlice = {
+			.ptr = reinterpret_cast<XMFLOAT4X4*>(header + 1),
+			.len = bufferLength,
+		};
+		Slice<XMFLOAT4X4> invBindAdjTransformSlice = {
+			.ptr = reinterpret_cast<XMFLOAT4X4*>(invBindTransformSlice.after()),
+			.len = bufferLength,
+		};
+
+		invBindTransform.Init(invBindTransformSlice, device, descriptorAllocator, L"Position Transform Buffer");
+		invBindAdjTransform.Init(invBindAdjTransformSlice, device, descriptorAllocator, L"Normal Transform Buffer");
+		return true;
+	}
+
+	uint32_t getFrame(std::chrono::time_point<std::chrono::steady_clock> start, std::chrono::time_point<std::chrono::steady_clock> current, bool loop) {
+		auto dt = current - start;
+		auto dt_seconds = std::chrono::duration_cast<std::chrono::duration<double>>(dt);
+		constexpr uint32_t FRAMES_PER_SECOND = 60;
+		uint32_t numFramesElapsed = (uint32_t)(dt_seconds.count() * FRAMES_PER_SECOND);
+		if (loop) {
+			uint32_t frame = numFramesElapsed % header->numFrames;
+			return frame;
+		}
+		else {
+			uint32_t frame = min(numFramesElapsed, header->numFrames - 1);
+			return frame;
+		}
+	}
+};
 
 constexpr int MAX_DEBUG_CUBES = 1024;
 struct DebugCubes {
@@ -571,6 +695,7 @@ struct ShopUI {
 
 	XMMATRIX cardModelMatrix[3];
 	XMMATRIX cardSelectedModelMatrix[3];
+	XMMATRIX cardCostModelMatrix[3];
 	XMMATRIX coinsModelMatrix;
 	XMMATRIX soulsModelMatrix;
 	float selectedCardMult = 1.2f;
@@ -583,12 +708,13 @@ struct ShopUI {
 	float screenW = 1920.0f, screenH = 1080.0f;
 	float centerX = screenW * 0.5f, centerY = screenH * 0.5f, spacing = 50.0f;
 
-	float cardW = 724.0f/1.5, cardH = 1236.0f/1.5; // magic numbers for scale!!
+	float cardW = 724.0f/1.5, cardH = 1034.0f/1.5; // magic numbers for scale!!
 	float cardCenterX = cardW / 2, cardCenterY = cardH / 2;
 
 	float counterW = 400.0f/1.5f, counterH = 200.0f/1.5f;
 
 	uint8_t powerupIdxs[3] = {0, 0, 0};
+	uint8_t powerupCosts[3] = { 0, 0, 0 };
 	uint8_t currSelected = 3; // surpasses 0, 1, 2, so that nothing gets highlighted!
 	uint8_t coins;
 	uint8_t souls;
@@ -635,11 +761,13 @@ struct ShopUI {
 
 			XMMATRIX m = XMMatrixTranslation(tx, ty, 0);
 			cardModelMatrix[i] = XMMatrixTranspose(m);
+			cardCostModelMatrix[i] = XMMatrixTranspose(XMMatrixTranslation(tx, screenH-counterH-50, 0));
 			m = XMMatrixTranslation(-cardCenterX, -cardCenterY, 0)
 				* XMMatrixScaling(selectedCardMult, selectedCardMult, 1)
 				* XMMatrixTranslation(cardCenterX, cardCenterY, 0)
 				* m;
 			cardSelectedModelMatrix[i] = XMMatrixTranspose(m);
+
 		}
 		coinsModelMatrix = XMMatrixTranspose(XMMatrixTranslation(screenW - counterW - 20.0f, 20.0f + counterH, 0));
 		soulsModelMatrix = XMMatrixTranspose(XMMatrixTranslation(screenW - counterW - 20.0f, 20.0f, 0));
@@ -753,6 +881,7 @@ public:
 		}
 	};
 	CurrPlayerRenderState currPlayer = { 0 };
+
 	void DBG_DrawCube(XMFLOAT3 min, XMFLOAT3 max);
 
 	static constexpr float CAMERA_DIST = 16.0f * PLAYER_SCALING_FACTOR;
@@ -778,6 +907,9 @@ public:
 		m_ShopUI.powerupIdxs[0] = PowerupInfo[p0].textureIdx;
 		m_ShopUI.powerupIdxs[1] = PowerupInfo[p1].textureIdx;
 		m_ShopUI.powerupIdxs[2] = PowerupInfo[p2].textureIdx;
+		m_ShopUI.powerupCosts[0] = PowerupInfo[p0].cost;
+		m_ShopUI.powerupCosts[1] = PowerupInfo[p1].cost;
+		m_ShopUI.powerupCosts[2] = PowerupInfo[p2].cost;
 	}
 
 	void selectPowerup(uint8_t selection) {
@@ -820,9 +952,11 @@ private:
 	UINT m_rtvDescriptorSize;
 	ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
+	
+	ComPtr<ID3D12PipelineState> m_pipelineStateSkin;
 
 	// for debug drawing
-	ComPtr<ID3D12PipelineState> m_pipelineStateDebug;
+	// ComPtr<ID3D12PipelineState> m_pipelineStateDebug;
 
 	// for timer UI
 	
@@ -849,8 +983,12 @@ private:
 	// ComPtr<ID3D12Resource> m_vertexBuffer;
 	// D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
-	Buffer<Vertex> m_vertexBufferBindless;
 	Scene m_scene;
+	Scene m_runnerRenderBuffers;
+	Scene m_hunterRenderBuffers;
+
+	Animation m_hunterAnimations[HUNTER_ANIMATION_COUNT];
+	Animation m_runnerAnimations[RUNNER_ANIMATION_COUNT];
 	
 
 	// ComPtr<ID3D12DescriptorHeap> m_resourceHeap;
