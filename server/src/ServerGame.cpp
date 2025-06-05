@@ -819,6 +819,10 @@ void ServerGame::applyAttacks()
 		pendingSwing->attack.pitch = state->players[0].pitch;
 		pendingSwing->attack.yaw = state->players[0].yaw;
 		// leave range unchanged
+		
+		// animation state
+		animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_ATTACK;
+		animationState.isLoop[0] = false;
 
 		for (unsigned victimId = 1; victimId < 4; ++victimId)      // only survivors
 		{

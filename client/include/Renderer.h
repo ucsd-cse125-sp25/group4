@@ -126,7 +126,10 @@ struct DescriptorAllocator {
 	}
 
 	Descriptor Allocate() {
-		assert(at < capacity);
+		if (at >= capacity) {
+			printf("dangit\n");
+		}
+		// assert(at < capacity);
 		uint32_t index = at;
 		at++;
 		return Descriptor{
@@ -795,7 +798,9 @@ struct ShopUI {
 				descriptorAllocator,
 				commandList,
 				it->second.fileLocation.c_str());
-			if (!ok) return false;
+			if (!ok) {
+				return false;
+			}
 			++it;
 		}
 

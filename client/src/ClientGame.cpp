@@ -534,7 +534,7 @@ void ClientGame::processAttackInput()
 			renderer.players[0].pos.z
 		};
 		sendAttackPacket(pos, yaw, pitch);
-		renderer.players[id].playAnimationToEnd(HUNTER_ANIMATION_ATTACK);
+		// renderer.players[id].playAnimationToEnd(HUNTER_ANIMATION_ATTACK);
 	}
 	attackWasDown = attackNowDown;
 }

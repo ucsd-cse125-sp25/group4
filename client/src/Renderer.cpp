@@ -174,7 +174,7 @@ bool Renderer::Init(HWND window_handle) {
 		uint32_t capacity = 
 			  numSceneDescriptors + numHunterDescriptors + numRunnerDescriptors + 
 			+ numTimerUITextures + numTimerUIVertexBuffers
-			+ numShopUITextures + numShopUIVertexBuffers;
+			+ numShopUITextures + numShopUIVertexBuffers + 4;
 		// all resource descriptors go here.
 		// THIS SHOULD BE CHANGED WHEN ADDING UI ELEMENTS ..
 		m_resourceDescriptorAllocator.Init(
@@ -595,7 +595,7 @@ bool Renderer::Init(HWND window_handle) {
 
 	// record start times
 	auto time = std::chrono::steady_clock::now();
-	for (PlayerRenderState& state : players) {
+	for (PlayerRenderState& state : players) {// 
 		state.animationStartTime = time;
 	}
 	players[0].isHunter = true;
@@ -716,21 +716,27 @@ bool Renderer::Render() {
 	
 	// Set necessary state
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
-
+	
+	int numBuffersUsed = 0;
 	if (!m_scene.initialized) {
 		m_scene.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_hunterRenderBuffers.initialized) {
 		m_hunterRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_runnerRenderBuffers.initialized) {
 		m_runnerRenderBuffers.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_TimerUI.initialized) {
 		m_TimerUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	if (!m_ShopUI.initialized) {
 		m_ShopUI.SendToGPU(m_device.Get(), &m_resourceDescriptorAllocator, m_commandList.Get());
+		numBuffersUsed = m_resourceDescriptorAllocator.at;
 	}
 	
 	// set heaps for constant buffer
