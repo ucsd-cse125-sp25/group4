@@ -54,8 +54,12 @@ struct PerDrawConstants
     uint     first_texture_idx;
     uint     lightmap_texcoord_idx;
     uint     lightmap_texture_idx;
+    uint     cubemap_idx;
     uint     flags;
     // placed as individual floats because of packing rules
+    float camx;
+    float camy;
+    float camz;
     float p1x;
     float p1y;
     float p1z;
@@ -65,7 +69,7 @@ struct PerDrawConstants
     float p3x;
     float p3y;
     float p3z;
-	// 55 DWORDS
+	// 40 DWORDS
 };
 struct PlayerDrawConstants
 {

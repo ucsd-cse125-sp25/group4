@@ -660,7 +660,7 @@ inline XMMATRIX XM_CALLCONV XMMatrixLookToRHToLH
 
     return M;
 }
-XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
+matAndCam  Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	using namespace DirectX;
 	XMVECTOR model_fwd = { 0, 1, 0, 0 };
     XMVECTOR rotation =
@@ -674,8 +674,11 @@ XMMATRIX Renderer::computeViewProject(FXMVECTOR pos, LookDir lookDir) {
 	
 	XMMATRIX view = XMMatrixLookToRHToLH(camPos, pos - camPos, model_up);
 	XMMATRIX proj = XMMatrixPerspectiveFovLH(m_fov, m_aspectRatio, 0.01f, 100.0f);
-
-	return XMMatrixTranspose(view * proj);
+	matAndCam ret = {
+		.mat = XMMatrixTranspose(view * proj)
+	};
+	XMStoreFloat3(&ret.pos, camPos);
+	return ret;
 }
 
 XMMATRIX Renderer::computeFreecamViewProject(FXMVECTOR camPos, float yaw, float pitch) {
@@ -785,13 +788,16 @@ bool Renderer::Render() {
 	
 	// camera logic
 	XMMATRIX viewProject;
+	XMFLOAT3 camPos;
 	if (detached) {
-		XMVECTOR camPos = XMLoadFloat3(&freecamPos);
-		viewProject = computeFreecamViewProject(camPos, cameraYaw, cameraPitch);
+		viewProject = computeFreecamViewProject(XMLoadFloat3(&freecamPos), cameraYaw, cameraPitch);
+		camPos = freecamPos;
 	}
 	else {
 		XMVECTOR playerPos = XMLoadFloat3(&players[currPlayer.playerId].pos);
-		viewProject = computeViewProject(playerPos, {}); // lookat is not used
+		matAndCam matcam = computeViewProject(playerPos, {}); // lookat is not used
+		viewProject = matcam.mat;
+		camPos = matcam.pos; // AAAA this is a mess
 	}
 
 
@@ -811,6 +817,7 @@ bool Renderer::Render() {
 		memcpy(&(drawConstants.p1x), &(players[1].pos), 3 * sizeof(float));
 		memcpy(&(drawConstants.p2x), &(players[2].pos), 3 * sizeof(float));
 		memcpy(&(drawConstants.p3x), &(players[3].pos), 3 * sizeof(float));
+		memcpy(&(drawConstants.camx), &camPos, 3 * sizeof(float));
 		if (nocturnal) {
 			if (currPlayer.playerId == 0) {
 				drawConstants.flags |= FLAG_NOCTURNAL_HUNTER;

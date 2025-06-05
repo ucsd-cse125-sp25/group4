@@ -317,7 +317,11 @@ struct Texture {
 		D3D12_SHADER_RESOURCE_VIEW_DESC shaderResourceViewDesc = {};
 		if (desc.type == ddspp::TextureType::Cubemap)
 		{
-			assert(desc.arraySize == 6); // cubemaps are essentially an array of 6 textures
+			/*
+			if (desc.arraySize != 6) {
+				printf("whyyyyy\n");
+			}*/
+			// assert(desc.arraySize == 6); // cubemaps are essentially an array of 6 textures
 			shaderResourceViewDesc = {
 				.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
 				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
@@ -389,6 +393,7 @@ struct Scene {
 	};
 
 	Slice<Texture> textures;
+	Texture cubemap;
 
 	bool initialized = false;
 
@@ -399,9 +404,17 @@ struct Scene {
 	
 	uint32_t getNumBuffers() {
 		if (header->numBones == 0) {
-			return 6; // WARNING: this needs to be updated when there are lightmaps
+			// main buffers
+			// lightmap texture
+			// lightmap texcoord
+			// cubemap
+			// mystery (2)
+			return 9; 
 		}
 		else {
+			// main buffers
+			// vertex bone idx 
+			// vertex bone weights 
 			return 6; 
 		}
 	}
@@ -518,6 +531,13 @@ struct Scene {
 			vertexBoneIdx.Init(vertexBoneIdxSlice, device, descriptorAllocator, L"Vertex Bone Index Buffer");
 			vertexBoneWeight.Init(vertexBoneWeightSlice, device, descriptorAllocator, L"Vertex Bone Weight Buffer");
 		}
+
+		bool success = cubemap.Init(device, descriptorAllocator, commandList, L"./textures/cubemap.dds");
+		if (!success) {
+			printf("aw man\n");
+		}
+
+
 		initialized = true;
 		return true;
 	}
@@ -893,6 +913,11 @@ struct ShopUI {
 	}
 };
 
+struct matAndCam {
+	XMMATRIX mat;
+	XMFLOAT3 pos;
+};
+
 class Renderer {
 public:
 	bool Init(HWND window_handle);
@@ -1055,7 +1080,7 @@ private:
 	bool MoveToNextFrame();
 	bool WaitForGpu();
 
-	XMMATRIX computeViewProject(FXMVECTOR pos, LookDir lookDir);
+	matAndCam computeViewProject(FXMVECTOR pos, LookDir lookDir);
 	XMMATRIX computeFreecamViewProject(FXMVECTOR pos, float yaw, float pitch);
 	XMMATRIX computeModelMatrix(PlayerRenderState &playerRenderState);
 	

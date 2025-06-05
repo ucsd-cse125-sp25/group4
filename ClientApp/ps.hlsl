@@ -146,6 +146,10 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     
     float3 col = lightmapColor * diffuseColor;
     
+    TextureCube cubemap = ResourceDescriptorHeap[drawConstants.cubemap_idx];
+    
+    
+    
     col = agx(col);
     col = agxLook(col);
     col = agxEotf(col);
