@@ -709,16 +709,30 @@ void ServerGame::applyMovements() {
 			if (id == 0) {
 				bool wasChasing = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_CHASE);
 				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
-				if (wasChasing || canLeaveAttack) {
+				if ((wasChasing || canLeaveAttack) && lastAnimationState[id]) {
 					// reset animation back to idle only if it was previouslly moving
+					lastAnimationTime[id] = state->tick;
+					printf("H IDLE TICK SAVED\n");
+
+				}
+				if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS && !lastAnimationState[id] && canLeaveAttack) {
+					printf("%d\n", canLeaveAttack);
 					animationState.curAnims[id] = HunterAnimation::HUNTER_ANIMATION_IDLE;
 					animationState.isLoop[id] = true;
 				}
 			}
-			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK) {
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_WALK && lastAnimationState[id]) {
+				
+				lastAnimationTime[id] = state->tick;
+				printf("R IDLE TICK SAVED\n");
+
+			}
+			else if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS && !lastAnimationState[id]) {
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_IDLE;
 				animationState.isLoop[id] = true;
 			}
+
+			lastAnimationState[id] = false;
 		}
 
 		// check if phantom power runs out
@@ -733,15 +747,29 @@ void ServerGame::applyMovements() {
 			if (id == 0) {
 				bool wasIdle = (animationState.curAnims[id] == HunterAnimation::HUNTER_ANIMATION_IDLE);
 				bool canLeaveAttack = (state->tick >= hunterEndSlowdown && animationState.curAnims[0] == HUNTER_ANIMATION_ATTACK);
-				if (wasIdle || canLeaveAttack) {
-					animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_CHASE;
-					animationState.isLoop[0] = true;
+				if ((wasIdle || canLeaveAttack) && !lastAnimationState[id]) {
+					lastAnimationTime[id] = state->tick;
+					printf("H RUN TICK SAVED\n");
+
+				}
+				if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS) {
+					if (lastAnimationState[id] && canLeaveAttack) {
+						animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_CHASE;
+						animationState.isLoop[0] = true;
+					}
 				}
 			}         
-			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_IDLE) {
+			else if (id != 0 && animationState.curAnims[id] == RunnerAnimation::RUNNER_ANIMATION_IDLE && !lastAnimationState[id]) {
+				lastAnimationTime[id] = state->tick;
+				printf("R RUN TICK SAVED\n");
+
+			}
+			else if (state->tick - lastAnimationTime[id] >= DEBOUNCE_TICKS && lastAnimationState[id]) {
 				animationState.curAnims[id] = RunnerAnimation::RUNNER_ANIMATION_WALK;
 				animationState.isLoop[id] = true;
 			}
+
+			lastAnimationState[id] = true;
 
 			auto& mv = latestMovement[id];
 			// update direction regardless of collision
