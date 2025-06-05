@@ -22,7 +22,7 @@ public:
 	void receiveFromClients();
 	void sendGameStateUpdates();
 	void sendAppPhaseUpdates();
-	void sendShopOptions(ShopOptionsPayload *data, int dest);
+	void sendShopOptions(ShopOptionsPayload*);
 	void sendPlayerPowerups();
 
 	void applyMovements();

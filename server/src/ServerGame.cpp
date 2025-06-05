@@ -575,8 +575,8 @@ void ServerGame::handleShopPhase() {
 
 void ServerGame::startShopPhase() {
 	// send each client their powerups
+	ShopOptionsPayload* options = new ShopOptionsPayload();
 	for (int id = 0; id < num_players; id++) {
-		ShopOptionsPayload* options = new ShopOptionsPayload();
 		if (state->players[id].isHunter)
 		{
 			std::vector<int> v((int)Powerup::NUM_HUNTER_POWERUPS - (int)Powerup::HUNTER_POWERUPS - 1);
@@ -598,10 +598,10 @@ void ServerGame::startShopPhase() {
 
 			}
 		}
-		options->runner_score = runner_points;
-		options->hunter_score = hunter_points;
-		sendShopOptions(options, id);
 	}
+	options->runner_score = runner_points;
+	options->hunter_score = hunter_points;
+	sendShopOptions(options);
 }
 
 void ServerGame::applyPowerups(uint8_t id, uint8_t selection)
@@ -971,12 +971,12 @@ void ServerGame::sendAppPhaseUpdates() {
 	network->sendToAll(packet_data, HDR_SIZE + sizeof(AppPhasePayload));
 }
 
-void ServerGame::sendShopOptions(ShopOptionsPayload* data, int dest) {
+void ServerGame::sendShopOptions(ShopOptionsPayload* data) {
 	char packet_data[HDR_SIZE + sizeof(ShopOptionsPayload)];
 
 	NetworkServices::buildPacket<ShopOptionsPayload>(PacketType::SHOP_INIT, *data, packet_data);
 
-	network->sendToClient(dest, packet_data, HDR_SIZE + sizeof(ShopOptionsPayload));
+	network->sendToAll(packet_data, HDR_SIZE + sizeof(ShopOptionsPayload));
 }
 
 void ServerGame::sendInstinctUpdate(uint64_t nextInstinctEnd) {

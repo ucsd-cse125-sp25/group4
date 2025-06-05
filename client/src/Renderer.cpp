@@ -950,7 +950,7 @@ bool Renderer::Render() {
 		m_commandList->DrawInstanced(m_TimerUI.vertexBuffer.data.len, 1, 0, 0);
 	}
 
-	// draw SHOP if in shop...
+	// draw SHOP if in shop... AND current player is not a spectator
 	if (gamePhase == GamePhase::SHOP_PHASE) {
 		PerDrawConstants dc = {
 			.viewProject = m_ShopUI.ortho,

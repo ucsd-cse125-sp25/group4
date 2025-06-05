@@ -55,6 +55,8 @@ public:
 	AppState* appState;
 	Renderer renderer;
 
+	ShopOptionsPayload localShopState;
+
 	struct ShopItem {
 		Powerup item;
 		bool isSelected;

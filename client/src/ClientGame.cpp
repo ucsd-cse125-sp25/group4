@@ -268,9 +268,8 @@ void ClientGame::update() {
 		case PacketType::SHOP_INIT:
 		{
 			ShopOptionsPayload* optionsPayload = (ShopOptionsPayload*)(network_data + HDR_SIZE);
-
+			localShopState = *optionsPayload;
 			ready = false;
-			
 			appState->gamePhase = GamePhase::SHOP_PHASE;
 			renderer.gamePhase = GamePhase::SHOP_PHASE;
 
@@ -760,7 +759,22 @@ void ClientGame::handleSpectatorInput()
 	}
 	case GamePhase::SHOP_PHASE:
 	{
-		//processShopInputs();
+		processSpectatorKeyboardInput();
+
+		if (renderer.currPlayer.playerId != 4) {
+			renderer.updatePowerups((Powerup) localShopState.options[renderer.currPlayer.playerId][0],
+				(Powerup)localShopState.options[renderer.currPlayer.playerId][1],
+				(Powerup)localShopState.options[renderer.currPlayer.playerId][2]);
+
+			if (renderer.currPlayer.playerId == 0) {
+				// really sketch isHunter check...
+				renderer.updateCurrency(gameState->players[id].coins, localShopState.hunter_score);
+			}
+			else {
+				renderer.updateCurrency(gameState->players[id].coins, localShopState.runner_score);
+			}
+		}
+
 		break;
 	}
 	case GamePhase::GAME_PHASE:
