@@ -21,7 +21,7 @@ ServerGame::ServerGame(void) :
 		.tick = 0,
 		//x, y, z, yaw, pitch, zVelocity, speed, coins, isHunter, isDead, isGrounded, jumpCounts, availableJumps
 		.players = {
-			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false, false, 1, 1 },
+			{ 4.0f * PLAYER_SCALING_FACTOR,  4.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, HUNTER_INIT_SPEED, PLAYER_INIT_COINS, true, false, false, false, 1, 1 },
 			{-2.0f * PLAYER_SCALING_FACTOR,  2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
 			{ 2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
 			{-2.0f * PLAYER_SCALING_FACTOR, -2.0f * PLAYER_SCALING_FACTOR, -200.0f * PLAYER_SCALING_FACTOR, 0.0f, 0.0f, 0.0f, PLAYER_INIT_SPEED, PLAYER_INIT_COINS, false, false, false, false, 1, 1 },
@@ -456,6 +456,7 @@ void ServerGame::newGame()
 		state->players[i].isPhantom = false;
 		dodgeCooldownTicks[i] = DODGE_COOLDOWN_DEFAULT_TICKS;
 	}
+	state->players[0].speed = HUNTER_INIT_SPEED;
 
 	animationState.curAnims[0] = HunterAnimation::HUNTER_ANIMATION_IDLE;
 	animationState.isLoop[0] = true;
