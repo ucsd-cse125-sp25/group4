@@ -1,6 +1,6 @@
 #include "shaderShared.hlsli"
 
-ConstantBuffer<PlayerDrawConstants> drawConstants : register(b1);
+ConstantBuffer<PlayerDrawConstants> drawConstants : register(b0);
 
 
 struct BoneIndices 

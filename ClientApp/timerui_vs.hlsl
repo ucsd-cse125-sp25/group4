@@ -1,6 +1,6 @@
 #include "shaderShared.hlsli"
 
-ConstantBuffer<PerDrawConstants> drawConstants : register(b1);
+ConstantBuffer<PerDrawConstants> drawConstants : register(b0);
 
 struct PSInput_UI
 {

@@ -3,12 +3,13 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
-# texture files
-*.dds
 # raw texture files
+Assets/textures_raw/*
 *.png
 # lightmap
 *.exr
+# cubemap
+*.hdr
 
 .helix
 uv.lock

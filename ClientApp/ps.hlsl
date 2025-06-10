@@ -2,7 +2,7 @@
 
 SamplerState g_sampler : register(s0);
 
-ConstantBuffer<PerDrawConstants> drawConstants : register(b1);
+ConstantBuffer<PerDrawConstants> drawConstants : register(b0);
 
 float3 agxDefaultContrastApprox(float3 x)
 {
@@ -97,10 +97,10 @@ float RadicalInverse_VdC(uint bits)
     bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
     return float(bits) * 2.3283064365386963e-10; // / 0x100000000
 }
+
 float3 ImportanceSampleGGX(float2 Xi, float3 N, float roughness)
 {
     float a = roughness * roughness;
-    const float PI = 3.14159265359;
     float phi = 2.0 * PI * Xi.x;
     float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
     float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
@@ -155,7 +155,7 @@ float3 SampleCubeMap(TextureCube cubemap, float3 fragPosWS, float3 reflectionDir
     float minDim = min(BoxDiff.z, min(BoxDiff.x, BoxDiff.y));
     float3 BoxScale = minDim / BoxDiff;
     reflectionDir *= BoxScale;
-    reflectionDir.x *= -1;
+    reflectionDir.x *= -1; // idk why it just works that way
     
     float3 reflectionColor = cubemap.Sample(g_sampler, reflectionDir, roughness * 3);
     return reflectionColor;
@@ -164,6 +164,7 @@ float3 SampleCubeMap(TextureCube cubemap, float3 fragPosWS, float3 reflectionDir
 float3 fresnelSchlick(float cosTheta, float roughness)
 {
     const float3 F0 = float3(0.04, 0.04, 0.04);
+    // return F0 + (1 - F0) * pow(clamp(1.0 - cosTheta, 0, 1), 5);
     float invRoughness = 1.0 - roughness;
     return F0 + (max(float3(invRoughness, invRoughness, invRoughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
@@ -251,15 +252,18 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     float3 normalCrossEdge0 = cross(input.normal, edges[0]);
     float3 Edge1CrossNormal = cross(edges[1], input.normal);
     float3 tangent = Edge1CrossNormal * texcoordEdges[0].x + normalCrossEdge0 * texcoordEdges[1].x;
-    float3 bitangent = Edge1CrossNormal * texcoordEdges[0].y + normalCrossEdge0 * texcoordEdges[1].y;
+    float3 bitangent = Edge1CrossNormal * texcoordEdges[0].y +normalCrossEdge0 * texcoordEdges[1].y;
     float meanTangentLength = sqrt(0.5f * (dot(tangent, tangent) + dot(bitangent, bitangent)));
     
     float3x3 tangent_to_world_space = float3x3(tangent, bitangent, input.normal);
     normalTangentSpace.z *= max(1.0e-10f, meanTangentLength);
-    float3 shadenormal = normalize(mul(tangent_to_world_space, normalTangentSpace));
-    
+    // float3 shadenormal = normalize(mul(tangent_to_world_space, normalTangentSpace));
+    float3 shadenormal = normalize(mul(normalTangentSpace, tangent_to_world_space));
     // DBG
     // shadenormal = input.normal;
+    // return float4(shadenormal, 1);
+    // diffuseColor = float3(.8, .8, .8);
+    // roughness = 0;
     
 
     float3 fragPosWS = input.positionGlobal.xyz;
@@ -270,7 +274,7 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
     float3 camToFrag = normalize(fragPosWS - camPos);
     float3 reflectionDir = camToFrag - 2 * dot(camToFrag, shadenormal) * shadenormal;
     
-    const uint SAMPLE_COUNT = 128u;
+    const uint SAMPLE_COUNT = 64u;
     // const uint SAMPLE_COUNT = 1;
     float totalWeight = 0.0;
     float3 reflCol = float3(0, 0, 0);
@@ -285,13 +289,16 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
             reflCol += SampleCubeMap(cubemap, fragPosWS, L, roughness) * NdotL;
             // float3 schlicked = reflCol * fresnelSchlick(NdotL);
             // reflCol = 0.5 * schlicked + 0.5 * reflCol;
-            // return float4(fresnelSchlick(NdotL, roughness), 1);
-            //reflCol *= fresnelSchlick(NdotL, roughness);
+            // return float4(fs, 1);
+            // reflCol *= fresnelSchlick(dot(-camToFrag, shadenormal), roughness);
+            // reflCol *= fs;
             totalWeight += NdotL;
         }
     }
-    reflCol *= 0.15;
+    // reflCol *= 0.05;
     reflCol /= totalWeight;
+    float3 fs = fresnelSchlick(max(dot(-camToFrag, shadenormal), 0), roughness);
+    reflCol *= fs;
     // return float4(reflCol, 1);
 
     
@@ -325,16 +332,15 @@ float4 PSMain(PSInput input, uint id : SV_PrimitiveID) : SV_TARGET
         }
 
     } 
+    // return float4(reflCol, 1);
     float3 col = lightmapColor * diffuseColor;
-    col += reflCol;
-    
+    col += max(reflCol, float3(0.0001, 0.0001, 0.0001)); // idk man w/o this i get black spots
     
     
     
     col = agx(col);
     col = agxLook(col);
     col = agxEotf(col);
-    
     
     return float4(col, 1);
     

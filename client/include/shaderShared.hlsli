@@ -31,6 +31,9 @@ using uint     = uint32_t;
 #define FLAG_NOCTURNAL_RUNNER 0x00000001
 #define FLAG_NOCTURNAL_HUNTER 0x00000002
 
+
+const float PI = 3.14159265359;
+
 struct PSInput
 {
 	// divided by w in the by the rasterizer between the vertex and fragment shaders

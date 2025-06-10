@@ -228,6 +228,7 @@ bool Renderer::Init(HWND window_handle) {
 		if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
 			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 		}
+		/*
 		D3D12_DESCRIPTOR_RANGE1 ranges[1] = {
 			{
 			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
@@ -237,24 +238,22 @@ bool Renderer::Init(HWND window_handle) {
 			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE,
 			.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
 			}
-		};
+		};*/
 
 		D3D12_ROOT_PARAMETER1 parameters[ROOT_PARAMETERS_COUNT] = {};
-		parameters[ROOT_PARAMETERS_DESCRIPTOR_TABLE] = {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-			.DescriptorTable = {
-				.NumDescriptorRanges = 1,
-				.pDescriptorRanges = &ranges[0],
-			},
-			.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX,
-		};
-		// modelViewProject matrix
 		parameters[ROOT_PARAMETERS_CONSTANT_PER_CALL] = {
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
 			.Constants = {
-				.ShaderRegister = 1,
+				.ShaderRegister = 0,
 				.RegisterSpace = 0,
 				.Num32BitValues = max(DRAW_CONSTANT_NUM_DWORDS, DRAW_CONSTANT_PLAYER_NUM_DWORDS),
+			},
+		};
+		parameters[ROOT_PARAMETERS_DESCRIPTOR_TABLE] = {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+			.Descriptor = {
+				.ShaderRegister = 1,
+				.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE
 			},
 		};
 		// may add more parameters in the future for indices of resources
@@ -398,50 +397,6 @@ bool Renderer::Init(HWND window_handle) {
 			// create the pipeline state object
 			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateSkin)));
 		}
-		/*
-		{
-			// --------------------------------------------------------------------
-			// describe Debug Pipeline State Object (PSO) 
-			
-			Slice<BYTE> vertexShaderBytecode;
-			if (DX::ReadDataToSlice(L"dbg_cube_vs.cso", vertexShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
-			Slice<BYTE> pixelShaderBytecode;
-			if (DX::ReadDataToSlice(L"dbg_cube_ps.cso", pixelShaderBytecode) != DX::ReadDataStatus::SUCCESS) return false;
-
-
-			D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {
-				.pRootSignature = m_rootSignature.Get(),
-				.VS = {
-					.pShaderBytecode = vertexShaderBytecode.ptr,
-					.BytecodeLength = vertexShaderBytecode.len,
-				},
-				.PS = {
-					.pShaderBytecode = pixelShaderBytecode.ptr,
-					.BytecodeLength  = pixelShaderBytecode.len,
-				},
-				.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
-				.SampleMask = UINT_MAX,
-				.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
-				.DepthStencilState = {
-					.DepthEnable = TRUE,
-					.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-					.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
-					.StencilEnable = FALSE,
-				},
-				.InputLayout = {},
-				.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-				.NumRenderTargets = 1,
-				.RTVFormats = {DXGI_FORMAT_R8G8B8A8_UNORM},
-				.DSVFormat = DXGI_FORMAT_D32_FLOAT,
-				.SampleDesc = {
-					.Count = 1,
-				},
-			};
-			psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // DEBUG: disable culling
-
-			// create the pipeline state object
-			UNWRAP(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineStateDebug)));
-		}*/
 		{
 			// --------------------------------------------------------------------
 			// describe Timer UI Pipeline State Object (PSO) 
@@ -822,7 +777,7 @@ bool Renderer::Render() {
 	// set heaps for constant buffer
 	ID3D12DescriptorHeap *ppHeaps[] = {m_resourceDescriptorAllocator.heap.Get()};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	 m_commandList->SetGraphicsRootDescriptorTable(0, m_resourceDescriptorAllocator.gpu_base);
+	// m_commandList->SetGraphicsRootDescriptorTable(0, m_resourceDescriptorAllocator.gpu_base);
 	
 
 
