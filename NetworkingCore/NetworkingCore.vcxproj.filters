@@ -26,5 +26,8 @@
     <ClInclude Include="..\common\include\NetworkServices.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\include\ReadData.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

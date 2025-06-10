@@ -3,6 +3,18 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# raw texture files
+Assets/textures_raw/*
+*.png
+# lightmap
+*.exr
+# cubemap
+*.hdr
+
+.helix
+uv.lock
+.python-version
+
 # User-specific files
 *.rsuser
 *.suo
@@ -398,3 +410,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# In-ignore FMOD
+!FMOD_API/**
