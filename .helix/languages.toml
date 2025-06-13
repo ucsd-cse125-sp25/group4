@@ -1,0 +1,26 @@
+[[language]]
+name = "cpp"
+file-types = ["cpp", "h"]
+language-servers = [ "clangd" ]
+roots = [".git"]
+
+[language-server.clangd]
+command = "clangd"
+
+[[language]]
+name = "python"
+language-servers = [ "ruff" ]
+
+[language-server.ruff]
+command = "ruff"
+args = ["server"]
+
+[[language]]
+name = "hlsl"
+language-servers = ["shader-language-server"]
+scope = "source.hlsl"
+file-types = ["hlsl", ".hlsli"]
+roots = [".git"]
+
+[language-server.shader-language-server]
+command = "shader-language-server"
