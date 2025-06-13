@@ -1,7 +1,7 @@
 # Tiny Terrors
 ## by Visual Studios
 
-This a game built in UCSD's CSE 125 Software System Design and Implementation course.
+Tiny Terrors a game built in UCSD's CSE 125 Software System Design and Implementation course.
 
 The game is a 3v1 game, where 3 runners try to escape a hunter, a cursed evil doll, over multiple rounds. 
 At the end of each round, players can purchase powerups that will modify the game and grant abilies.
@@ -26,7 +26,7 @@ Phantom Powerup - `E`
 Bear Powerup - `E` in vicinity of the Bear  
 
 
-## Group Members
+## Visual Studios (Group 4) Members
 
 Jaiden Ekgasit  
 Jerry Gong  
