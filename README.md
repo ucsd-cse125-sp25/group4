@@ -24,6 +24,8 @@ Dodge - `Right click`
 Nocturnal Powerup - `R`  
 Phantom Powerup - `E`  
 Bear Powerup - `E` in vicinity of the Bear  
+Ready/Purchase - `[Enter]`
+Select powerup for purchase - `[1] [2] [3]`
 
 
 ## Visual Studios (Group 4) Members
